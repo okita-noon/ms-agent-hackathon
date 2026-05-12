@@ -1,0 +1,77 @@
+# =============================================
+# セキュリティ: 秘密情報・認証情報の漏洩防止
+# =============================================
+# このセクションは最重要です。削除・コメントアウトしないでください。
+
+# 環境変数・シークレット
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+*.p12
+
+# Azure 認証・設定
+.azure/
+azureconfig.json
+azure.json
+servicePrincipal.json
+**/local.settings.json
+
+# クラウド認証全般
+credentials.json
+**/secrets/
+*token*.json
+*.credential
+
+# SSH鍵
+id_rsa
+id_ed25519
+*.pub
+
+# =============================================
+# 開発環境
+# =============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.Python
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Terraform / IaC
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Docker
+docker-compose.override.yml
+
+# ログ・一時ファイル
+*.log
+tmp/
+temp/

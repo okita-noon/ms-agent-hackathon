@@ -1,0 +1,48 @@
+#!/bin/bash
+# =============================================
+# pre-commit: 秘密情報の混入を防止するフック
+# =============================================
+# セットアップ: git config core.hooksPath .githooks
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+# コミット対象のファイルをチェック
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+FOUND=0
+
+for FILE in $STAGED_FILES; do
+  # .env ファイルのコミットを拒否 (.env.example は許可)
+  if echo "$FILE" | grep -qE '\.env($|\.)' && ! echo "$FILE" | grep -q '\.env\.example'; then
+    echo -e "${RED}[BLOCKED]${NC} .env ファイルはコミットできません: $FILE"
+    FOUND=1
+  fi
+
+  # 秘密鍵ファイルのコミットを拒否
+  if echo "$FILE" | grep -qE '\.(pem|key|pfx|p12)$'; then
+    echo -e "${RED}[BLOCKED]${NC} 秘密鍵ファイルはコミットできません: $FILE"
+    FOUND=1
+  fi
+
+  # ファイル内容に秘密情報パターンがないかチェック
+  if [ -f "$FILE" ] && git diff --cached -- "$FILE" | grep -qiE '(api[_-]?key|secret|password|token|credential)\s*[:=]\s*["\x27][^"\x27]{8,}'; then
+    echo -e "${RED}[WARNING]${NC} 秘密情報の可能性があります: $FILE"
+    echo "  APIキーやパスワードがハードコードされていないか確認してください。"
+    echo "  問題なければ: git commit --no-verify"
+    FOUND=1
+  fi
+done
+
+if [ $FOUND -ne 0 ]; then
+  echo ""
+  echo "秘密情報を環境変数(.env)で管理してください。"
+  echo "誤検知の場合は git commit --no-verify で回避できます。"
+  exit 1
+fi
+
+exit 0
