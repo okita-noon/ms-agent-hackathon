@@ -1,0 +1,47 @@
+site_name: AI受発注自動一元管理システム
+site_description: ASKNOI_AI木曜会 — Microsoft Agent Hackathon 2026
+repo_url: https://github.com/okita-noon/ms-agent-hackathon
+repo_name: okita-noon/ms-agent-hackathon
+
+theme:
+  name: material
+  language: ja
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: ダークモードに切り替え
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: ライトモードに切り替え
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - ホーム: index.md
+  - アーキテクチャ概要: architecture-overview.md
+  - マルチエージェント設計: multi-agent-design.md
+  - Connector層・マルチテナント: connector-design.md
+  - データフロー: data-flow.md
+  - MVPスコープ: mvp-scope.md
+  - セキュリティ: security.md
