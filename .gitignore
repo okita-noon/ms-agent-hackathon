@@ -75,3 +75,6 @@ docker-compose.override.yml
 *.log
 tmp/
 temp/
+
+# MkDocs build output
+site/
