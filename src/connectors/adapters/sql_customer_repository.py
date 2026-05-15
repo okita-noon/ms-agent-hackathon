@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aioodbc
 
+from src.connectors.adapters._sql_util import to_odbc_dsn
 from src.models.customer import Customer, CustomerDeliveryPreference
 from src.models.order import DeliveryCarrier, DeliveryRoute
 from src.models.tenant import ConnectorConfig
@@ -9,14 +10,14 @@ from src.models.tenant import ConnectorConfig
 
 class SqlCustomerRepository:
     def __init__(self, config: ConnectorConfig):
-        self._conn_str = config.connection or ""
+        self._conn_str = to_odbc_dsn(config.connection or "")
 
     async def _get_connection(self):
         return await aioodbc.connect(dsn=self._conn_str)
 
     async def find_by_identifier(self, tenant_id: str, identifier: str) -> Customer | None:
         query = """
-        SELECT TOP 1 id, tenant_id, name, short_name, line_user_id,
+        SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
                default_time_slot, active
         FROM customers
@@ -35,7 +36,7 @@ class SqlCustomerRepository:
 
     async def find_by_line_user_id(self, tenant_id: str, line_user_id: str) -> Customer | None:
         query = """
-        SELECT id, tenant_id, name, short_name, line_user_id,
+        SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
                default_time_slot, active
         FROM customers
@@ -51,10 +52,10 @@ class SqlCustomerRepository:
 
     async def get_by_id(self, tenant_id: str, customer_id: str) -> Customer | None:
         query = """
-        SELECT id, tenant_id, name, short_name, line_user_id,
+        SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
                default_time_slot, active
-        FROM customers WHERE tenant_id = ? AND id = ?
+        FROM customers WHERE tenant_id = ? AND customer_id = ?
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:

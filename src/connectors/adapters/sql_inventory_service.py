@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aioodbc
 
+from src.connectors.adapters._sql_util import to_odbc_dsn
 from src.connectors.interfaces.inventory_service import (
     Alternative,
     InventoryStatus,
@@ -12,7 +13,7 @@ from src.models.tenant import ConnectorConfig
 
 class SqlInventoryService:
     def __init__(self, config: ConnectorConfig):
-        self._conn_str = config.connection or ""
+        self._conn_str = to_odbc_dsn(config.connection or "")
 
     async def _get_connection(self):
         return await aioodbc.connect(dsn=self._conn_str)
