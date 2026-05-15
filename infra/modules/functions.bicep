@@ -13,10 +13,13 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: 'asp-func-${name}'
   location: location
   tags: tags
-  kind: 'functionapp'
+  kind: 'linux'
   sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
+    name: 'B1'
+    tier: 'Basic'
+  }
+  properties: {
+    reserved: true
   }
 }
 

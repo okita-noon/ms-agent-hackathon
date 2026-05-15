@@ -7,7 +7,7 @@
 CREATE TABLE tenants (
     tenant_id       NVARCHAR(50)   PRIMARY KEY,
     name            NVARCHAR(200)  NOT NULL,
-    plan            NVARCHAR(50)   NOT NULL DEFAULT 'demo',
+    [plan]          NVARCHAR(50)   NOT NULL DEFAULT 'demo',
     active          BIT            NOT NULL DEFAULT 1,
     created_at      DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
 );
@@ -53,6 +53,7 @@ CREATE INDEX IX_products_tenant ON products(tenant_id);
 -- 商品名エイリアス（表記ゆれ対応）
 CREATE TABLE product_aliases (
     alias_id        INT            IDENTITY(1,1) PRIMARY KEY,
+    tenant_id       NVARCHAR(50)   NOT NULL REFERENCES tenants(tenant_id),
     product_id      NVARCHAR(50)   NOT NULL REFERENCES products(product_id),
     alias_name      NVARCHAR(200)  NOT NULL,
     UNIQUE (product_id, alias_name)
@@ -98,7 +99,7 @@ CREATE TABLE connector_registry (
 -- ============================================================
 
 -- テナント
-INSERT INTO tenants (tenant_id, name, plan) VALUES
+INSERT INTO tenants (tenant_id, name, [plan]) VALUES
     (N'T-001', N'デモ環境A（食品卸）', N'demo'),
     (N'T-002', N'デモ環境B（食材メーカー）', N'demo');
 
