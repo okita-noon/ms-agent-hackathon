@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aioodbc
 
+from src.connectors.adapters._sql_util import to_odbc_dsn
 from src.models.product import Product, UnitType
 from src.models.order import TemperatureZone
 from src.models.tenant import ConnectorConfig
@@ -9,18 +10,18 @@ from src.models.tenant import ConnectorConfig
 
 class SqlProductMaster:
     def __init__(self, config: ConnectorConfig):
-        self._conn_str = config.connection or ""
+        self._conn_str = to_odbc_dsn(config.connection or "")
 
     async def _get_connection(self):
         return await aioodbc.connect(dsn=self._conn_str)
 
     async def fuzzy_match(self, tenant_id: str, raw_name: str) -> Product | None:
         query = """
-        SELECT TOP 1 p.id, p.tenant_id, p.name, p.display_name, p.category,
+        SELECT TOP 1 p.product_id, p.tenant_id, p.name, p.display_name, p.category,
                p.default_unit, p.temperature_zone, p.unit_weight_kg,
                p.is_variable_weight, p.price_per_unit, p.active
         FROM products p
-        LEFT JOIN product_aliases pa ON p.id = pa.product_id AND p.tenant_id = pa.tenant_id
+        LEFT JOIN product_aliases pa ON p.product_id = pa.product_id AND p.tenant_id = pa.tenant_id
         WHERE p.tenant_id = ? AND p.active = 1
           AND (p.name LIKE ? OR p.display_name LIKE ? OR pa.alias LIKE ?)
         ORDER BY
@@ -42,10 +43,10 @@ class SqlProductMaster:
 
     async def get_by_id(self, tenant_id: str, product_id: str) -> Product | None:
         query = """
-        SELECT id, tenant_id, name, display_name, category,
+        SELECT product_id, tenant_id, name, display_name, category,
                default_unit, temperature_zone, unit_weight_kg,
                is_variable_weight, price_per_unit, active
-        FROM products WHERE tenant_id = ? AND id = ?
+        FROM products WHERE tenant_id = ? AND product_id = ?
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
@@ -57,7 +58,7 @@ class SqlProductMaster:
 
     async def list_all(self, tenant_id: str) -> list[Product]:
         query = """
-        SELECT id, tenant_id, name, display_name, category,
+        SELECT product_id, tenant_id, name, display_name, category,
                default_unit, temperature_zone, unit_weight_kg,
                is_variable_weight, price_per_unit, active
         FROM products WHERE tenant_id = ? AND active = 1
