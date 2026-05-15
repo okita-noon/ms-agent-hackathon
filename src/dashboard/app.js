@@ -1,7 +1,9 @@
 const API_BASE = '';
 let orders = [];
+let customers = [];
 let statusChart = null;
 let sourceChart = null;
+let currentTab = 'orders';
 
 const STATUS_COLORS = {
   '未処理': { bg: 'bg-yellow-100', text: 'text-yellow-800', chart: '#eab308' },
@@ -235,7 +237,135 @@ function closeModal() {
   document.getElementById('orderModal').classList.add('hidden');
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeCustomerModal(); }
+});
 document.getElementById('orderModal').addEventListener('click', e => { if (e.target.id === 'orderModal') closeModal(); });
+document.getElementById('customerModal').addEventListener('click', e => { if (e.target.id === 'customerModal') closeCustomerModal(); });
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('border-brand-600', 'text-brand-700');
+    btn.classList.add('border-transparent', 'text-gray-500');
+  });
+  const activeBtn = document.getElementById(`tab-${tab}`);
+  activeBtn.classList.add('border-brand-600', 'text-brand-700');
+  activeBtn.classList.remove('border-transparent', 'text-gray-500');
+
+  document.getElementById('panel-orders').classList.toggle('hidden', tab !== 'orders');
+  document.getElementById('panel-customers').classList.toggle('hidden', tab !== 'customers');
+
+  if (tab === 'customers' && customers.length === 0) loadCustomers();
+}
+
+async function loadCustomers() {
+  const btn = document.getElementById('loadCustomersBtn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE}/api/customers`);
+    const data = await resp.json();
+    customers = data.customers || [];
+    renderCustomers();
+  } catch (e) {
+    console.error('Failed to load customers:', e);
+    customers = getDemoCustomers();
+    renderCustomers();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function getDemoCustomers() {
+  return [
+    { id: 'C-001', tenant_id: 'T-001', name: '株式会社テスト', short_name: 'テスト社', line_user_id: null, phone: '03-1234-5678', email: 'test@example.com', active: true },
+    { id: 'C-002', tenant_id: 'T-001', name: '株式会社サンプル', short_name: 'サンプル社', line_user_id: 'U1234567890abcdef', phone: '06-9876-5432', email: null, active: true },
+    { id: 'C-003', tenant_id: 'T-001', name: '有限会社デモ', short_name: 'デモ社', line_user_id: null, phone: null, email: 'demo@example.com', active: true },
+  ];
+}
+
+function renderCustomers() {
+  const tbody = document.getElementById('customerTableBody');
+  const empty = document.getElementById('customerEmptyState');
+  const count = document.getElementById('customerCount');
+
+  count.textContent = `${customers.length}件`;
+
+  if (customers.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  tbody.innerHTML = customers.map(c => {
+    const lineBadge = c.line_user_id
+      ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">${c.line_user_id.substring(0, 10)}...</span>`
+      : `<span class="text-xs text-gray-400">未登録</span>`;
+    const activeBadge = c.active
+      ? '<span class="status-badge bg-green-100 text-green-800">有効</span>'
+      : '<span class="status-badge bg-gray-100 text-gray-600">無効</span>';
+
+    return `
+    <tr class="table-row-hover">
+      <td class="px-5 py-3 font-mono text-xs text-gray-500">${c.id}</td>
+      <td class="px-5 py-3 font-medium text-gray-900">${c.name}</td>
+      <td class="px-5 py-3 text-gray-600">${c.short_name || '-'}</td>
+      <td class="px-5 py-3">${lineBadge}</td>
+      <td class="px-5 py-3 text-gray-600 text-xs">${c.phone || '-'}</td>
+      <td class="px-5 py-3 text-gray-600 text-xs">${c.email || '-'}</td>
+      <td class="px-5 py-3">${activeBadge}</td>
+      <td class="px-5 py-3">
+        <button onclick='editCustomer(${JSON.stringify(c).replace(/'/g, "&#39;")})' class="text-brand-600 hover:text-brand-800 text-xs font-medium">編集</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function editCustomer(customer) {
+  document.getElementById('editCustomerId').value = customer.id;
+  document.getElementById('editName').value = customer.name || '';
+  document.getElementById('editShortName').value = customer.short_name || '';
+  document.getElementById('editLineUserId').value = customer.line_user_id || '';
+  document.getElementById('editPhone').value = customer.phone || '';
+  document.getElementById('editEmail').value = customer.email || '';
+  document.getElementById('customerModal').classList.remove('hidden');
+}
+
+function closeCustomerModal() {
+  document.getElementById('customerModal').classList.add('hidden');
+}
+
+async function saveCustomer(e) {
+  e.preventDefault();
+  const customerId = document.getElementById('editCustomerId').value;
+  const btn = document.getElementById('saveCustomerBtn');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const body = {
+    name: document.getElementById('editName').value,
+    short_name: document.getElementById('editShortName').value || null,
+    line_user_id: document.getElementById('editLineUserId').value || null,
+    phone: document.getElementById('editPhone').value || null,
+    email: document.getElementById('editEmail').value || null,
+  };
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/customers/${customerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    closeCustomerModal();
+    await loadCustomers();
+  } catch (err) {
+    alert('顧客情報の保存に失敗しました。ネットワーク接続を確認して、もう一度お試しください。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存';
+  }
+}
 
 init();
