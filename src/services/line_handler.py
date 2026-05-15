@@ -4,18 +4,47 @@ import base64
 import hashlib
 import hmac
 import logging
-import uuid
+import time
+import threading
 from datetime import datetime, timedelta
+
+import httpx
 
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.order import OrderSource
 from src.models.session import OrderSession
-from src.models.tenant import TenantConfig
 
 logger = logging.getLogger(__name__)
 
 SESSION_TIMEOUT_HOURS = 2
+DEDUP_TTL_SECONDS = 600
+
+
+class _EventDedup:
+    """In-memory TTL cache for webhook event deduplication."""
+
+    def __init__(self, ttl: int = DEDUP_TTL_SECONDS):
+        self._seen: dict[str, float] = {}
+        self._ttl = ttl
+        self._lock = threading.Lock()
+
+    def is_duplicate(self, event_id: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            self._evict(now)
+            if event_id in self._seen:
+                return True
+            self._seen[event_id] = now
+            return False
+
+    def _evict(self, now: float) -> None:
+        expired = [k for k, ts in self._seen.items() if now - ts > self._ttl]
+        for k in expired:
+            del self._seen[k]
+
+
+_dedup = _EventDedup()
 
 
 class LineWebhookHandler:
@@ -44,11 +73,19 @@ class LineWebhookHandler:
         return hmac.compare_digest(expected, signature)
 
     async def handle_webhook(self, body: dict) -> list[dict]:
+        events = [
+            e
+            for e in body.get("events", [])
+            if e.get("type") == "message" and e.get("message", {}).get("type") == "text"
+        ]
+
+        events.sort(key=lambda e: e.get("timestamp", 0))
+
         results = []
-        for event in body.get("events", []):
-            if event.get("type") != "message":
-                continue
-            if event.get("message", {}).get("type") != "text":
+        for event in events:
+            webhook_event_id = event.get("webhookEventId", "")
+            if webhook_event_id and _dedup.is_duplicate(webhook_event_id):
+                logger.info("Skipping duplicate event %s", webhook_event_id)
                 continue
 
             user_id = event["source"]["userId"]
@@ -63,6 +100,8 @@ class LineWebhookHandler:
     async def _process_message(
         self, user_id: str, text: str, reply_token: str | None
     ) -> dict:
+        logger.info("Processing message from %s: %s", user_id, text[:100])
+
         session_repo = self._ctx.get_connector("ISessionRepository")
 
         session = await session_repo.find_active_session(
@@ -72,9 +111,7 @@ class LineWebhookHandler:
         if session and session.status == "awaiting_reply":
             session.last_message_at = datetime.utcnow()
             await session_repo.update_session(session)
-            logger.info(
-                "Continuing session %s for user %s", session.id, user_id
-            )
+            logger.info("Continuing session %s for user %s", session.id, user_id)
         elif not session:
             session = OrderSession(
                 id=f"sess-{user_id[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
@@ -87,15 +124,51 @@ class LineWebhookHandler:
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
 
-        result = await self._orchestrator.process_order_message(
-            message=text,
-            line_user_id=user_id,
-            reply_token=reply_token,
-            source=OrderSource.LINE,
-        )
+        try:
+            result = await self._orchestrator.process_order_message(
+                message=text,
+                line_user_id=user_id,
+                reply_token=reply_token,
+                source=OrderSource.LINE,
+            )
+        except Exception:
+            logger.exception("Agent processing failed for user %s", user_id)
+            await self._send_line_push(
+                user_id,
+                "ご注文を受け付けました。担当者が確認いたします。",
+            )
+            return {
+                "session_id": session.id,
+                "user_id": user_id,
+                "error": "agent_processing_failed",
+            }
 
         return {
             "session_id": session.id,
             "user_id": user_id,
             "result": result,
         }
+
+    async def _send_line_push(self, user_id: str, message: str) -> bool:
+        token = self._ctx.config.line_channel_access_token
+        if not token:
+            logger.error("LINE access token not configured")
+            return False
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "to": user_id,
+                    "messages": [{"type": "text", "text": message}],
+                },
+            )
+            if resp.status_code == 200:
+                logger.info("LINE push sent to %s", user_id)
+                return True
+            logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
+            return False

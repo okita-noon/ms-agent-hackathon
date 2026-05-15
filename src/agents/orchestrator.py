@@ -7,7 +7,6 @@ from datetime import date, datetime
 from semantic_kernel import Kernel
 from semantic_kernel.agents import ChatCompletionAgent
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
-from semantic_kernel.contents import ChatHistory
 
 from src.agents.definitions import (
     COMMUNICATION_AGENT_INSTRUCTIONS,
@@ -69,8 +68,7 @@ class OrderOrchestrator:
             instructions=ORCHESTRATOR_INSTRUCTIONS,
         )
 
-        history = ChatHistory()
-        history.add_user_message(
+        user_message = (
             f"以下の注文メッセージを処理してください。\n"
             f"チャネル: {source.value}\n"
             f"LINE User ID: {line_user_id}\n"
@@ -80,8 +78,10 @@ class OrderOrchestrator:
         )
 
         result_text = ""
-        async for response in agent.invoke(history):
-            result_text = str(response)
+        thread = None
+        async for response in agent.invoke(messages=user_message, thread=thread):
+            result_text = str(response.content)
+            thread = response.thread
 
         logger.info("Orchestrator result: %s", result_text[:500])
 
