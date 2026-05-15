@@ -16,7 +16,7 @@
 
 | コンポーネント | 責務 | 関数 | 備考 |
 |---|---|---|---|
-| **Learning Service** | 発注パターン学習・統計更新 | `record_pattern`, `update_pattern_confidence`, `build_customer_profile`, `generate_expression_embedding` | Azure Functions で実装。注文確定イベントで非同期起動。LLM推論不要のためAgentにしない（コスト・速度の最適化） |
+| **Learning Service** | 発注パターン学習・統計更新 | `record_pattern`, `update_pattern_confidence`, `build_customer_profile`, `generate_expression_embedding` | Container Apps 内のバックグラウンドタスクとして実装。注文確定イベントで非同期起動。LLM推論不要のためAgentにしない（コスト・速度の最適化） |
 
 ## Agent 間フロー（具体例）
 

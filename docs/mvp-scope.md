@@ -73,14 +73,14 @@
 |---|---|---|
 | **Must（デモ必須）** | Orchestrator + Intake Agent | Azure AI Agent Service + Semantic Kernel |
 | **Must** | Exception Agent（確認質問 + 異常数量検知） | 同上（Agenticらしさのデモの核心） |
-| **Must** | Learning Service（パターン学習 + 自動解釈） | Cosmos DB (Order Intelligence Store) + Azure Functions + Foundry Embedding |
-| **Must** | LINE受信→注文抽出→自動返信 | LINE Webhook + Azure Functions |
+| **Must** | Learning Service（パターン学習 + 自動解釈） | Cosmos DB (Order Intelligence Store) + Container Apps + Foundry Embedding |
+| **Must** | LINE受信→注文抽出→自動返信 | LINE Webhook + Container Apps (FastAPI) |
 | **Must** | 受注一覧ダッシュボード | Azure Container Apps |
 | **Must** | Inventory Agent（在庫照合） | Azure SQL + Semantic Kernel Plugin |
 | **Must** | テナント切り替えデモ | Connector Factory + 2テナント設定 |
-| **Must** | AI Search商品あいまい検索 | Azure AI Search |
-| **Should** | 電話音声→テキスト変換 | ACS Call Automation + Azure AI Speech |
-| **Should** | ピッキングリストPDF生成 | Azure Functions |
+| **Must** | 電話音声→テキスト変換→注文抽出 | ACS Call Automation + Azure AI Speech + Container Apps |
+| **Should** | AI Search商品あいまい検索 | Azure AI Search |
+| **Should** | ピッキングリストPDF生成 | Container Apps (バックグラウンドタスク) |
 | **Could** | メール受信→注文抽出 | Microsoft Graph API (Office 365) |
 | **Could** | メール自動返信 | Azure Communication Services |
 

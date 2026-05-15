@@ -78,3 +78,6 @@ temp/
 
 # MkDocs build output
 site/
+
+# ARM template output (generated from Bicep)
+infra/main.json

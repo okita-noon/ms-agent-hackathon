@@ -2,15 +2,17 @@
 
 > チャネル別処理フロー・セッション管理・スケール戦略
 
-**MVP方針**: Service Bus はスケール時（本番運用・マルチテナント）に導入する。
-MVP段階では Azure Functions が各チャネルの Webhook/イベントを直接受信し、
-Agent を同期呼び出しする構成でシンプルに実装する。
+**MVP方針**: Azure Container Apps に API・Webhook・バックグラウンド処理を統合する。
+FastAPI アプリケーションとして LINE Webhook 受信・Agent 呼び出し・Learning Service を
+1コンテナで実装し、シンプルに運用する。
+Service Bus はスケール時（本番運用・マルチテナント）に導入する。
 
-## LINE チャネル
+## LINE チャネル（MVP実装対象）
 
 ```
 顧客 → LINE メッセージ送信
-    → LINE Webhook → Azure Functions (直接受信)
+    → LINE Webhook → Container Apps (FastAPI: POST /api/line-webhook)
+    → 署名検証（Channel Secret で HMAC-SHA256）
     → テナントID解決（LINE公式アカウント → テナント紐付け）
     → セッション判定（後述「LINE会話セッション管理」）
         ├─ 既存セッションあり → 該当セッションのAgent Threadに返信を追記
@@ -25,12 +27,12 @@ Agent を同期呼び出しする構成でシンプルに実装する。
     → ダッシュボード更新 (リアルタイム)
 ```
 
-## メール チャネル
+## メール チャネル（将来実装）
 
 ```
 顧客 → メール送信
     → Microsoft Graph API (Office 365 Change Notifications)
-    → Azure Functions (通知受信・メール本文取得)
+    → Container Apps (通知受信・メール本文取得)
     → テナントID解決（受信アドレス → テナント紐付け）
     → Orchestrator Agent → 各専門Agent
     → Cosmos DB (保存)
@@ -38,14 +40,14 @@ Agent を同期呼び出しする構成でシンプルに実装する。
     → Learning Service (非同期)
 ```
 
-## 電話（音声）チャネル
+## 電話（音声）チャネル（MVP実装対象）
 
 ```
 顧客 → 電話発信
     → ACS Call Automation (着信受付・音声ストリーム取得)
     → Azure AI Speech (リアルタイム文字起こし)
     → テナントID解決（着信番号 → テナント紐付け）
-    → Azure Functions → Orchestrator Agent → 各専門Agent
+    → Container Apps → Orchestrator Agent → 各専門Agent
     → Cosmos DB (保存) + 担当者ダッシュボードに表示 + SMS通知
     → Learning Service (非同期)
 ```
@@ -80,7 +82,8 @@ Agent を同期呼び出しする構成でシンプルに実装する。
      → 新しいセッション + Agent Thread を作成
      → 新規注文として処理開始
   4. 注文確定 → status=completed に更新
-  5. タイムアウト → Azure Functions (Timer Trigger) で定期的に expired に更新
+  5. タイムアウト → Container Apps のバックグラウンドタスク（APScheduler）で
+     定期的に expired に更新
      → 担当者ダッシュボードに「返信待ちタイムアウト」として通知
 ```
 
@@ -88,15 +91,18 @@ Agent を同期呼び出しする構成でシンプルに実装する。
 
 ```
 MVP構成:
-  LINE Webhook → Azure Functions → Orchestrator Agent（直接呼び出し）
+  LINE Webhook → Container Apps (FastAPI) → Orchestrator Agent（直接呼び出し）
 
 本番構成（マルチテナント・高負荷対応時に移行）:
-  LINE Webhook → Azure Functions → Service Bus (テナント別トピック)
-              → Azure Functions (トリガー) → Orchestrator Agent
+  LINE Webhook → Container Apps → Service Bus (テナント別トピック)
+              → Container Apps (別コンテナ/トリガー) → Orchestrator Agent
 
 ※ Service Bus を挟むことで:
   ・テナント間の負荷分離（1テナントの大量注文が他テナントに影響しない）
   ・デッドレターキューによる障害時のメッセージ保全
   ・ピーク時のバッファリング（朝の注文集中）
   が実現できる。MVP段階では不要。
+
+※ Container Apps は 0→N のオートスケール対応済み（maxReplicas: 5）。
+  朝のピーク時（6:30-8:00）のみスケールアウトし、アイドル時は0にスケールインする。
 ```

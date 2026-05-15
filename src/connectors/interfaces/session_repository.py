@@ -1,0 +1,15 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from src.models.session import OrderSession
+
+
+class ISessionRepository(Protocol):
+    async def find_active_session(
+        self, tenant_id: str, channel: str, channel_user_id: str
+    ) -> OrderSession | None: ...
+
+    async def create_session(self, session: OrderSession) -> OrderSession: ...
+    async def update_session(self, session: OrderSession) -> None: ...
+    async def expire_session(self, session_id: str) -> None: ...
