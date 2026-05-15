@@ -69,7 +69,7 @@ async def line_webhook(
     )
 
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
-        raise HTTPException(status_code=403, detail="Invalid signature")
+        raise HTTPException(status_code=403, detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。")
 
     background_tasks.add_task(_process_line_events, handler, body_json)
 
@@ -99,7 +99,7 @@ async def get_order(order_id: str, tenant_id: str = "T-001"):
     repo = tenant_ctx.get_connector("IOrderRepository")
     order = await repo.find_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。")
     return order.model_dump(mode="json")
 
 
@@ -121,3 +121,23 @@ async def check_inventory(
     svc = tenant_ctx.get_connector("IInventoryService")
     status = await svc.check(tenant_id, product_id, required_qty)
     return status.model_dump()
+
+
+@app.get("/api/customers")
+async def list_customers(tenant_id: str = "T-001"):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("ICustomerRepository")
+    customers = await repo.list_all(tenant_id)
+    return {"customers": [c.model_dump() for c in customers]}
+
+
+@app.put("/api/customers/{customer_id}")
+async def update_customer(customer_id: str, request: Request, tenant_id: str = "T-001"):
+    body = await request.json()
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("ICustomerRepository")
+    customer = await repo.get_by_id(tenant_id, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。")
+    updated = await repo.update(tenant_id, customer_id, body)
+    return updated.model_dump()
