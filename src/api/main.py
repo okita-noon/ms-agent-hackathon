@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
-
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -43,9 +43,19 @@ async def health():
     return {"status": "ok", "service": "orderai-api"}
 
 
+async def _process_line_events(handler: LineWebhookHandler, body_json: dict) -> None:
+    """Process LINE events in the background after returning 200 to LINE."""
+    try:
+        results = await handler.handle_webhook(body_json)
+        logger.info("Processed %d LINE events", len(results))
+    except Exception:
+        logger.exception("Error processing LINE webhook in background")
+
+
 @app.post("/api/line-webhook")
 async def line_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_line_signature: str = Header(None),
 ):
     body_bytes = await request.body()
@@ -61,13 +71,9 @@ async def line_webhook(
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
         raise HTTPException(status_code=403, detail="Invalid signature")
 
-    try:
-        results = await handler.handle_webhook(body_json)
-        logger.info("Processed %d LINE events", len(results))
-        return {"results": results}
-    except Exception:
-        logger.exception("Error processing LINE webhook")
-        return Response(status_code=200)
+    background_tasks.add_task(_process_line_events, handler, body_json)
+
+    return Response(status_code=200)
 
 
 @app.get("/api/orders")
