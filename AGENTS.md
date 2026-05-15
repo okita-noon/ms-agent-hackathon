@@ -44,6 +44,7 @@
 | `docs/connector-design.md` | Connector層・テナント別差し替え・マルチテナント設計 |
 | `docs/data-flow.md` | チャネル別データフロー・セッション管理・スケール戦略 |
 | `docs/mvp-scope.md` | MVPスコープ・ユーザー体験シナリオ・非機能要件 |
+| `docs/business-domain.md` | 業務ドメイン定義（温度帯・配送体系・不定貫・ピッキング分割） |
 
 ## コーディング規約
 

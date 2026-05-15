@@ -1,0 +1,174 @@
+targetScope = 'resourceGroup'
+
+@description('環境名 (dev, staging, prod)')
+@allowed(['dev', 'staging', 'prod'])
+param environment string = 'dev'
+
+@description('プロジェクト名')
+param projectName string = 'orderai'
+
+@description('デプロイリージョン')
+param location string = resourceGroup().location
+
+@description('Azure SQL 管理者ユーザー名')
+param sqlAdminLogin string
+
+@secure()
+@description('Azure SQL 管理者パスワード')
+param sqlAdminPassword string
+
+@description('Azure AI Foundry で使用する OpenAI モデルデプロイ名')
+param openAiModelDeploymentName string = 'gpt-4o'
+
+@description('Embedding モデルデプロイ名')
+param embeddingModelDeploymentName string = 'text-embedding-3-small'
+
+var suffix = '${projectName}-${environment}'
+var tags = {
+  project: projectName
+  environment: environment
+  hackathon: 'ms-agent-2026'
+}
+
+// ============================================================
+// Key Vault
+// ============================================================
+module keyVault 'modules/key-vault.bicep' = {
+  name: 'keyVault'
+  params: {
+    name: 'kv-${suffix}'
+    location: location
+    tags: tags
+  }
+}
+
+// ============================================================
+// Cosmos DB (受注・パターン学習・セッション)
+// ============================================================
+module cosmosDb 'modules/cosmos-db.bicep' = {
+  name: 'cosmosDb'
+  params: {
+    name: 'cosmos-${suffix}'
+    location: location
+    tags: tags
+    keyVaultName: keyVault.outputs.name
+  }
+}
+
+// ============================================================
+// Azure SQL Database (マスタ・在庫)
+// ============================================================
+module sqlDatabase 'modules/sql-database.bicep' = {
+  name: 'sqlDatabase'
+  params: {
+    serverName: 'sql-${suffix}'
+    databaseName: 'db-${suffix}'
+    location: location
+    tags: tags
+    adminLogin: sqlAdminLogin
+    adminPassword: sqlAdminPassword
+    keyVaultName: keyVault.outputs.name
+  }
+}
+
+// ============================================================
+// Azure AI Services (OpenAI / Speech)
+// ============================================================
+module aiServices 'modules/ai-services.bicep' = {
+  name: 'aiServices'
+  params: {
+    name: 'ai-${suffix}'
+    location: location
+    tags: tags
+    openAiModelDeploymentName: openAiModelDeploymentName
+    embeddingModelDeploymentName: embeddingModelDeploymentName
+    keyVaultName: keyVault.outputs.name
+  }
+}
+
+// ============================================================
+// Azure AI Search (商品/顧客あいまい検索)
+// ============================================================
+module aiSearch 'modules/ai-search.bicep' = {
+  name: 'aiSearch'
+  params: {
+    name: 'search-${suffix}'
+    location: location
+    tags: tags
+    keyVaultName: keyVault.outputs.name
+  }
+}
+
+// ============================================================
+// Storage Account (Blob: 音声・メール原本バックアップ)
+// ============================================================
+module storage 'modules/storage.bicep' = {
+  name: 'storage'
+  params: {
+    name: replace('st${suffix}', '-', '')
+    location: location
+    tags: tags
+  }
+}
+
+// ============================================================
+// Log Analytics + Application Insights
+// ============================================================
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
+  params: {
+    name: suffix
+    location: location
+    tags: tags
+  }
+}
+
+// ============================================================
+// Azure Container Apps Environment + App (ダッシュボード・API)
+// ============================================================
+module containerApps 'modules/container-apps.bicep' = {
+  name: 'containerApps'
+  params: {
+    name: suffix
+    location: location
+    tags: tags
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
+  }
+}
+
+// ============================================================
+// Azure Functions (Webhook受信・イベント駆動・Learning Service)
+// ============================================================
+module functions 'modules/functions.bicep' = {
+  name: 'functions'
+  params: {
+    name: suffix
+    location: location
+    tags: tags
+    storageAccountName: storage.outputs.name
+    appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
+    keyVaultName: keyVault.outputs.name
+  }
+}
+
+// ============================================================
+// Communication Services (メール送信・電話)
+// ============================================================
+module communicationServices 'modules/communication-services.bicep' = {
+  name: 'communicationServices'
+  params: {
+    name: 'acs-${suffix}'
+    tags: tags
+  }
+}
+
+// ============================================================
+// Outputs
+// ============================================================
+output keyVaultName string = keyVault.outputs.name
+output cosmosDbEndpoint string = cosmosDb.outputs.endpoint
+output sqlServerFqdn string = sqlDatabase.outputs.serverFqdn
+output aiServicesEndpoint string = aiServices.outputs.endpoint
+output aiSearchEndpoint string = aiSearch.outputs.endpoint
+output containerAppsUrl string = containerApps.outputs.appUrl
+output functionsAppName string = functions.outputs.appName
