@@ -1,0 +1,141 @@
+[
+  {
+    "id": "UID_001",
+    "tenant_id": "T-001",
+    "order_date": "2025-07-14",
+    "preparation_date": "2025-07-15",
+    "delivery_date": "2025-07-16",
+    "customer_id": "C-001",
+    "customer_name": "株式会社A",
+    "source": "Web",
+    "system": "ECサイト",
+    "items": [
+      {
+        "product_id": "P-001",
+        "product_name": "りんご",
+        "quantity": 10,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "北関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "yamato_tracking_number": "YM123456789012",
+    "status": "未処理",
+    "remarks": "備考A"
+  },
+  {
+    "id": "UID_002",
+    "tenant_id": "T-001",
+    "order_date": "2025-07-14",
+    "preparation_date": "2025-07-15",
+    "delivery_date": "2025-07-16",
+    "customer_id": "C-002",
+    "customer_name": "株式会社B",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-002",
+        "product_name": "バナナ",
+        "quantity": 5,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "西日本便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "14:00",
+    "yamato_tracking_number": "YM234567890123",
+    "status": "製造",
+    "remarks": "備考B"
+  },
+  {
+    "id": "UID_003",
+    "tenant_id": "T-001",
+    "order_date": "2025-07-15",
+    "preparation_date": "2025-07-16",
+    "delivery_date": "2025-07-17",
+    "customer_id": "C-003",
+    "customer_name": "株式会社C",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-003",
+        "product_name": "みかん",
+        "quantity": 20,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "unit_price": 8000,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "中部便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "16:00",
+    "yamato_tracking_number": "YM345678901234",
+    "status": "未処理",
+    "remarks": "備考C"
+  },
+  {
+    "id": "UID_005",
+    "tenant_id": "T-001",
+    "order_date": "2025-07-15",
+    "preparation_date": "2025-07-16",
+    "delivery_date": "2025-07-17",
+    "customer_id": "C-005",
+    "customer_name": "株式会社E",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-005",
+        "product_name": "もも",
+        "quantity": 8,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "unit_price": 7200,
+        "is_variable_weight": true,
+        "actual_weight": null
+      }
+    ],
+    "delivery_route": "北海道便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "10:00",
+    "yamato_tracking_number": "YM567890123456",
+    "status": "製造",
+    "remarks": "備考E — 不定貫商品。ピッキング時に実測分割（自社便3箱 + 冷蔵ヤマト3箱 + 冷凍ヤマト2箱）"
+  },
+  {
+    "id": "UID_006",
+    "tenant_id": "T-001",
+    "order_date": "2025-07-15",
+    "preparation_date": "2025-07-16",
+    "delivery_date": "2025-07-17",
+    "customer_id": "C-006",
+    "customer_name": "株式会社F",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-006",
+        "product_name": "いちご",
+        "quantity": 15,
+        "unit": "パック",
+        "temperature_zone": "常温",
+        "unit_price": 9500,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "東北便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "15:00",
+    "yamato_tracking_number": "YM678901234567",
+    "status": "完了",
+    "remarks": "備考F"
+  }
+]
