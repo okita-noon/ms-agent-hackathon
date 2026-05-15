@@ -3,10 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>foogent - AI受発注自動一元管理</title>
-  <link rel="icon" href="favicon.ico" type="image/x-icon">
-  <link rel="icon" href="favicon.png" type="image/png" sizes="192x192">
-  <link rel="apple-touch-icon" href="favicon.png">
+  <title>AI受発注自動一元管理システム</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
@@ -44,7 +41,15 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center gap-3">
-          <img src="logo.png" alt="foogent" class="h-10">
+          <div class="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">AI受発注自動一元管理システム</h1>
+            <p class="text-xs text-blue-300 -mt-0.5">Order Management Dashboard</p>
+          </div>
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2 text-sm text-blue-200">
@@ -220,8 +225,8 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">LINE User ID</label>
-          <input type="text" id="editLineUserId" placeholder="U064d0f5abe71bc0a358c923c3c42599d" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none font-mono">
-          <p class="text-xs text-gray-400 mt-1">「U」で始まる33文字の内部ID（LINE表示名やIDとは異なります。サーバーログで確認できます）</p>
+          <input type="text" id="editLineUserId" placeholder="Uxxxxxxxxxx" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none font-mono">
+          <p class="text-xs text-gray-400 mt-1">LINE Webhook のログから取得した User ID を入力してください</p>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -269,6 +274,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="/dashboard/app.js"></script>
 </body>
 </html>
