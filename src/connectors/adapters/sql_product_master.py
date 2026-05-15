@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
+import unicodedata
+
 import aioodbc
 
 from src.connectors.adapters._sql_util import to_odbc_dsn
-from src.models.product import Product, UnitType
 from src.models.order import TemperatureZone
+from src.models.product import Product, UnitType
 from src.models.tenant import ConnectorConfig
 
 
@@ -21,25 +24,27 @@ class SqlProductMaster:
                p.default_unit, p.temperature_zone, p.unit_weight_kg,
                p.is_variable_weight, p.price_per_unit, p.active
         FROM products p
-        LEFT JOIN product_aliases pa ON p.product_id = pa.product_id AND p.tenant_id = pa.tenant_id
+        LEFT JOIN product_aliases pa
+          ON p.product_id = pa.product_id AND p.tenant_id = pa.tenant_id
         WHERE p.tenant_id = ? AND p.active = 1
-          AND (p.name LIKE ? OR p.display_name LIKE ? OR pa.alias LIKE ?)
+          AND (p.name LIKE ? OR p.display_name LIKE ? OR pa.alias_name LIKE ?)
         ORDER BY
           CASE WHEN p.name = ? THEN 0
-               WHEN pa.alias = ? THEN 1
+               WHEN pa.alias_name = ? THEN 1
                ELSE 2 END
         """
-        pattern = f"%{raw_name}%"
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    query,
-                    (tenant_id, pattern, pattern, pattern, raw_name, raw_name),
-                )
-                row = await cur.fetchone()
-                if not row:
-                    return None
-                return _row_to_product(row)
+                for term in _search_terms(raw_name):
+                    pattern = f"%{term}%"
+                    await cur.execute(
+                        query,
+                        (tenant_id, pattern, pattern, pattern, term, term),
+                    )
+                    row = await cur.fetchone()
+                    if row:
+                        return _row_to_product(row)
+                return None
 
     async def get_by_id(self, tenant_id: str, product_id: str) -> Product | None:
         query = """
@@ -85,3 +90,32 @@ def _row_to_product(row) -> Product:
         price_per_unit=row[9],
         active=bool(row[10]),
     )
+
+
+def _search_terms(raw_name: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", raw_name).strip()
+    if not normalized:
+        return []
+
+    terms = [normalized]
+    stripped = re.sub(
+        (
+            r"[\s,、。:：;；]*\d+(?:\.\d+)?\s*"
+            r"(?:kg|g|箱|個|パック|房|玉|ケース|袋|本|枚)?\s*$"
+        ),
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).strip()
+    if stripped:
+        terms.append(stripped)
+
+    compact = re.sub(r"\s+", "", stripped or normalized)
+    if compact:
+        terms.append(compact)
+
+    deduped: list[str] = []
+    for term in terms:
+        if term and term not in deduped:
+            deduped.append(term)
+    return deduped
