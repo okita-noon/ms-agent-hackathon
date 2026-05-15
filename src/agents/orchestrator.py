@@ -17,7 +17,6 @@ from src.agents.definitions import (
 )
 from src.connectors.context import TenantContext
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
-from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
 from src.plugins.inventory_plugin import InventoryPlugin
@@ -50,7 +49,6 @@ class OrderOrchestrator:
         kernel.add_plugin(IntakePlugin(self._ctx), plugin_name="intake")
         kernel.add_plugin(InventoryPlugin(self._ctx), plugin_name="inventory")
         kernel.add_plugin(ExceptionPlugin(self._ctx), plugin_name="exception")
-        kernel.add_plugin(CommunicationPlugin(self._ctx), plugin_name="communication")
         return kernel
 
     async def process_order_message(
