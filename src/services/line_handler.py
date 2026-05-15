@@ -131,9 +131,6 @@ class LineWebhookHandler:
                 reply_token=reply_token,
                 source=OrderSource.LINE,
             )
-            response_text = result.get("response", "")
-            if response_text:
-                await self._send_line_push(user_id, response_text)
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
             await self._send_line_push(
