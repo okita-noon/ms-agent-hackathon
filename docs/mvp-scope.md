@@ -78,7 +78,7 @@
 | **Must** | 受注一覧ダッシュボード | Azure Container Apps |
 | **Must** | Inventory Agent（在庫照合） | Azure SQL + Semantic Kernel Plugin |
 | **Must** | テナント切り替えデモ | Connector Factory + 2テナント設定 |
-| **Should** | AI Search商品あいまい検索 | Azure AI Search |
+| **Must** | AI Search商品あいまい検索 | Azure AI Search |
 | **Should** | 電話音声→テキスト変換 | ACS Call Automation + Azure AI Speech |
 | **Should** | ピッキングリストPDF生成 | Azure Functions |
 | **Could** | メール受信→注文抽出 | Microsoft Graph API (Office 365) |
