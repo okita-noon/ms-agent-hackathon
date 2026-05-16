@@ -25,7 +25,7 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="foogent" className="h-8" />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="foogent" className="h-8" />
             <span className="hidden sm:block text-[11px] text-brand-300 tracking-widest uppercase font-medium">
               AI Order Management
             </span>
