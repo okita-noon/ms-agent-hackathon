@@ -13,6 +13,9 @@ _TENANT_CACHE: dict[str, TenantConfig] = {}
 # LINE channel ID → tenant ID mapping (for LINE webhook routing)
 _LINE_CHANNEL_TENANT_MAP: dict[str, str] = {}
 
+# ACS phone number → tenant ID mapping (for phone webhook routing)
+_PHONE_TENANT_MAP: dict[str, str] = {}
+
 
 def _get_tenant_config(tenant_id: str) -> TenantConfig:
     """Return TenantConfig for the given tenant_id.
@@ -40,12 +43,18 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
     line_channel_secret = os.environ.get("LINE_CHANNEL_SECRET") if tenant_id == "T-001" else None
     line_channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN") if tenant_id == "T-001" else None
 
+    # T-001 uses the shared ACS phone number for the demo.
+    acs_conn = os.environ.get("ACS_CONNECTION_STRING") if tenant_id == "T-001" else None
+    acs_phone = os.environ.get("ACS_PHONE_NUMBER") if tenant_id == "T-001" else None
+
     config = TenantConfig(
         tenant_id=tenant_id,
         name=tenant_names[tenant_id],
         line_channel_id=line_channel_id,
         line_channel_secret=line_channel_secret,
         line_channel_access_token=line_channel_access_token,
+        acs_connection_string=acs_conn,
+        acs_phone_number=acs_phone,
         auto_confirm_threshold=0.9,
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
@@ -65,6 +74,10 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
     if config.line_channel_id:
         _LINE_CHANNEL_TENANT_MAP[config.line_channel_id] = tenant_id
 
+    # Register ACS phone number → tenant mapping for phone webhook routing
+    if config.acs_phone_number:
+        _PHONE_TENANT_MAP[config.acs_phone_number] = tenant_id
+
     return config
 
 
@@ -81,6 +94,18 @@ def resolve_tenant_for_line(destination: str | None = None) -> TenantContext:
     tenant_id = "T-001"
     if destination and destination in _LINE_CHANNEL_TENANT_MAP:
         tenant_id = _LINE_CHANNEL_TENANT_MAP[destination]
+    config = _get_tenant_config(tenant_id)
+    return TenantContext.from_config(config)
+
+
+def resolve_tenant_for_phone(called_number: str) -> TenantContext:
+    """Resolve tenant from an ACS phone number (the number the customer dialed).
+
+    Falls back to T-001 when the phone number is not mapped.
+    """
+    tenant_id = "T-001"
+    if called_number and called_number in _PHONE_TENANT_MAP:
+        tenant_id = _PHONE_TENANT_MAP[called_number]
     config = _get_tenant_config(tenant_id)
     return TenantContext.from_config(config)
 

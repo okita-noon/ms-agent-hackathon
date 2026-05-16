@@ -18,5 +18,7 @@ class TenantConfig(BaseModel):
     line_channel_id: str | None = None
     line_channel_secret: str | None = None
     line_channel_access_token: str | None = None
+    acs_connection_string: str | None = None
+    acs_phone_number: str | None = None
     auto_confirm_threshold: float = 0.9
     connectors: dict[str, ConnectorConfig] = Field(default_factory=dict)

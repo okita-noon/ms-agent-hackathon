@@ -58,6 +58,7 @@
 | `ai-services-key` | OpenAI APIキー |
 | `ai-search-key` | AI Search管理キー |
 | `speech-service-key` | Speech Servicesキー |
+| `acs-connection-string` | ACS接続文字列 |
 | `line-channel-id` | LINE Channel ID |
 | `line-channel-secret` | LINE Channel Secret |
 | `line-channel-access-token` | LINE Channel Access Token |
@@ -65,7 +66,7 @@
 ### Container Apps 環境変数
 
 `ca-api-orderai-dev` に以下の環境変数が設定済み:
-`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`
+`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`
 
 ## APIエンドポイント
 
@@ -74,6 +75,7 @@
 | GET | `/` | ダッシュボードへリダイレクト |
 | GET | `/api/health` | ヘルスチェック |
 | POST | `/api/line-webhook` | LINE Webhook受信（署名検証付き） |
+| POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |
 | GET | `/api/products?tenant_id=T-001` | 商品マスタ一覧 |

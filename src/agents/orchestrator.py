@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from datetime import date
 
 from semantic_kernel import Kernel
@@ -135,6 +136,7 @@ class OrderOrchestrator:
         line_user_id: str,
         reply_token: str | None = None,
         source: OrderSource = OrderSource.LINE,
+        response_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
@@ -144,12 +146,19 @@ class OrderOrchestrator:
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent()
+        if source == OrderSource.PHONE:
+            lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
+            user_label = f"電話番号: {line_user_id}"
+        else:
+            lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
+            user_label = f"LINE User ID: {line_user_id}"
+
         intake_prompt = (
             f"以下の注文メッセージを処理してください。\n"
             f"チャネル: {source.value}\n"
-            f"LINE User ID: {line_user_id}\n"
+            f"{user_label}\n"
             f"メッセージ: {message}\n\n"
-            f"まず lookup_customer_by_line_id でこの顧客を特定し、"
+            f"まず {lookup_instruction}"
             f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
         )
         intake_text = await self._invoke_agent(intake_agent, intake_prompt)
@@ -165,9 +174,13 @@ class OrderOrchestrator:
                 intake_text=intake_text,
                 exception_text=None,
                 inventory_text=None,
+                source=source,
             )
             result["response"] = response_text
-            await self._send_line_message(response_text, reply_token, line_user_id)
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
         items = intake_draft.get("items", [])
@@ -233,11 +246,15 @@ class OrderOrchestrator:
             intake_text=intake_text,
             exception_text=exception_text,
             inventory_text=inventory_text,
+            source=source,
         )
         result["response"] = response_text
 
-        # ── Step 6: Send LINE message ──────────────────────────────────────────
-        await self._send_line_message(response_text, reply_token, line_user_id)
+        # ── Step 6: Send response ─────────────────────────────────────────────
+        if response_callback:
+            await response_callback(response_text)
+        else:
+            await self._send_line_message(response_text, reply_token, line_user_id)
 
         if needs_confirmation:
             result["session_status"] = "awaiting_reply"
@@ -251,6 +268,7 @@ class OrderOrchestrator:
         intake_text: str | None,
         exception_text: str | None,
         inventory_text: str | None,
+        source: OrderSource = OrderSource.LINE,
     ) -> str:
         orchestrator_agent = self._make_orchestrator_agent()
         context_parts = [
@@ -264,10 +282,19 @@ class OrderOrchestrator:
         if inventory_text:
             context_parts.append(f"[Inventory Agent結果]\n{inventory_text}")
 
-        final_prompt = (
-            "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
-            "返信メッセージのみを出力してください（JSON不要）。\n\n" + "\n\n".join(context_parts)
-        )
+        if source == OrderSource.PHONE:
+            channel_instruction = (
+                "以下の各Agentの処理結果を踏まえて、顧客への音声通話返信メッセージを生成してください。\n"
+                "電話で読み上げるため、簡潔で自然な話し言葉にしてください。\n"
+                "返信メッセージのみを出力してください（JSON不要）。\n\n"
+            )
+        else:
+            channel_instruction = (
+                "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
+                "返信メッセージのみを出力してください（JSON不要）。\n\n"
+            )
+
+        final_prompt = channel_instruction + "\n\n".join(context_parts)
         response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
         return response_text
 
