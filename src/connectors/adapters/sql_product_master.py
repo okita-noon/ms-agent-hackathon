@@ -23,10 +23,10 @@ class SqlProductMaster:
         FROM products p
         LEFT JOIN product_aliases pa ON p.product_id = pa.product_id AND p.tenant_id = pa.tenant_id
         WHERE p.tenant_id = ? AND p.active = 1
-          AND (p.name LIKE ? OR p.display_name LIKE ? OR pa.alias LIKE ?)
+          AND (p.name LIKE ? OR p.display_name LIKE ? OR pa.alias_name LIKE ?)
         ORDER BY
           CASE WHEN p.name = ? THEN 0
-               WHEN pa.alias = ? THEN 1
+               WHEN pa.alias_name = ? THEN 1
                ELSE 2 END
         """
         pattern = f"%{raw_name}%"

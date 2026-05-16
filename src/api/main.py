@@ -28,7 +28,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OrderAI API", lifespan=lifespan)
 
-dashboard_dir = Path(__file__).resolve().parent.parent / "dashboard"
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+legacy_dashboard = Path(__file__).resolve().parent.parent / "dashboard"
+dashboard_dir = frontend_dist if frontend_dist.exists() else legacy_dashboard
 if dashboard_dir.exists():
     app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
 
