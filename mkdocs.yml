@@ -39,6 +39,7 @@ markdown_extensions:
 
 nav:
   - ホーム: index.md
+  - 図解フロー: visual-flows.md
   - アーキテクチャ概要: architecture-overview.md
   - マルチエージェント設計: multi-agent-design.md
   - Connector層・マルチテナント: connector-design.md

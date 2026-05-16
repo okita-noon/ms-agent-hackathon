@@ -12,6 +12,7 @@
 
 | ドキュメント | 内容 |
 |---|---|
+| [図解フロー](visual-flows.md) | アーキテクチャ・ペルソナ利用シナリオ・ソフトウェア処理フロー |
 | [アーキテクチャ概要](architecture-overview.md) | システム全体の俯瞰・レイヤー構成・Azureサービス一覧 |
 | [マルチエージェント設計](multi-agent-design.md) | Agent一覧・責務・フロー例・ツール定義・Learning Service |
 | [Connector層・マルチテナント](connector-design.md) | Connector層・テナント別差し替え・マルチテナント設計 |
