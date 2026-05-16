@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.models.intelligence import CustomerOrderProfile, OrderPattern, ProductStats, ResolvedItem
+from src.models.intelligence import CustomerOrderProfile, ProductStats
 from src.plugins.intake_plugin import IntakePlugin, _normalize_expression
 from src.plugins.exception_plugin import ExceptionPlugin
 
@@ -167,8 +167,12 @@ class TestExceptionPlugin:
             customer_id="C-001",
             product_stats={
                 "P-001": ProductStats(
-                    avg_qty=10, std_dev=0, min_qty=10, max_qty=10,
-                    typical_unit="kg", total_orders=5,
+                    avg_qty=10,
+                    std_dev=0,
+                    min_qty=10,
+                    max_qty=10,
+                    typical_unit="kg",
+                    total_orders=5,
                 ),
             },
         )

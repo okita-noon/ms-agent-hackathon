@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,9 +31,10 @@ class TestRootRedirect:
 
 class TestLineWebhook:
     def test_returns_200_for_valid_request(self, client):
-        with patch("src.api.main.resolve_tenant_for_line") as mock_resolve, \
-             patch("src.api.main.LineWebhookHandler") as mock_handler_cls:
-            from src.connectors.context import TenantContext
+        with (
+            patch("src.api.main.resolve_tenant_for_line") as mock_resolve,
+            patch("src.api.main.LineWebhookHandler") as mock_handler_cls,
+        ):
             from unittest.mock import MagicMock
 
             mock_ctx = MagicMock()
@@ -52,8 +53,10 @@ class TestLineWebhook:
             assert resp.status_code == 200
 
     def test_rejects_invalid_signature(self, client):
-        with patch("src.api.main.resolve_tenant_for_line") as mock_resolve, \
-             patch("src.api.main.LineWebhookHandler") as mock_handler_cls:
+        with (
+            patch("src.api.main.resolve_tenant_for_line") as mock_resolve,
+            patch("src.api.main.LineWebhookHandler") as mock_handler_cls,
+        ):
             mock_ctx = MagicMock()
             mock_resolve.return_value = mock_ctx
 

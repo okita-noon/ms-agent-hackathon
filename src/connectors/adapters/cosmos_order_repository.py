@@ -37,10 +37,7 @@ class CosmosOrderRepository:
             return None
 
     async def list_by_date(self, tenant_id: str, target_date: date) -> list[Order]:
-        query = (
-            "SELECT * FROM c WHERE c.tenant_id = @tid AND c.delivery_date = @d "
-            "ORDER BY c.customer_name"
-        )
+        query = "SELECT * FROM c WHERE c.tenant_id = @tid AND c.delivery_date = @d ORDER BY c.customer_name"
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},
@@ -49,10 +46,7 @@ class CosmosOrderRepository:
         return [Order.model_validate(doc) async for doc in items]
 
     async def list_by_customer(self, customer_id: str, limit: int = 50) -> list[Order]:
-        query = (
-            "SELECT TOP @limit * FROM c WHERE c.customer_id = @cid "
-            "ORDER BY c.order_date DESC"
-        )
+        query = "SELECT TOP @limit * FROM c WHERE c.customer_id = @cid ORDER BY c.order_date DESC"
         params = [
             {"name": "@cid", "value": customer_id},
             {"name": "@limit", "value": limit},

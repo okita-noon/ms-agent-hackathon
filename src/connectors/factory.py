@@ -25,16 +25,13 @@ class ConnectorFactory:
 
         connector_cfg = self._tenant_config.connectors.get(interface_name)
         if not connector_cfg:
-            raise ValueError(
-                f"No connector config for {interface_name} in tenant {self._tenant_config.tenant_id}"
-            )
+            raise ValueError(f"No connector config for {interface_name} in tenant {self._tenant_config.tenant_id}")
 
         adapters = _ADAPTER_REGISTRY.get(interface_name, {})
         adapter_cls = adapters.get(connector_cfg.type)
         if not adapter_cls:
             raise ValueError(
-                f"No adapter '{connector_cfg.type}' registered for {interface_name}. "
-                f"Available: {list(adapters.keys())}"
+                f"No adapter '{connector_cfg.type}' registered for {interface_name}. Available: {list(adapters.keys())}"
             )
 
         instance = adapter_cls(connector_cfg)

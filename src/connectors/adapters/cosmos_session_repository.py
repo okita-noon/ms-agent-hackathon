@@ -18,9 +18,7 @@ class CosmosSessionRepository:
     def _container(self) -> ContainerProxy:
         return self._db.get_container_client("order-sessions")
 
-    async def find_active_session(
-        self, tenant_id: str, channel: str, channel_user_id: str
-    ) -> OrderSession | None:
+    async def find_active_session(self, tenant_id: str, channel: str, channel_user_id: str) -> OrderSession | None:
         query = (
             "SELECT * FROM c WHERE c.tenant_id = @tid "
             "AND c.channel = @ch AND c.channel_user_id = @uid "

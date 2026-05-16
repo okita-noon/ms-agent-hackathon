@@ -29,20 +29,13 @@ class SearchProductMaster:
     """
 
     def __init__(self, config: ConnectorConfig) -> None:
-        endpoint = (
-            config.endpoint
-            or os.environ.get("AI_SEARCH_ENDPOINT", "")
-        )
-        api_key = (
-            config.extra.get("api_key")
-            or os.environ.get("AI_SEARCH_KEY", "")
-        )
+        endpoint = config.endpoint or os.environ.get("AI_SEARCH_ENDPOINT", "")
+        api_key = config.extra.get("api_key") or os.environ.get("AI_SEARCH_KEY", "")
         index_name = config.index or _INDEX_NAME
 
         if not endpoint or not api_key:
             logger.warning(
-                "SearchProductMaster: AI_SEARCH_ENDPOINT or AI_SEARCH_KEY not set; "
-                "all lookups will return None/empty."
+                "SearchProductMaster: AI_SEARCH_ENDPOINT or AI_SEARCH_KEY not set; all lookups will return None/empty."
             )
             self._client = None
             return
@@ -57,10 +50,7 @@ class SearchProductMaster:
                 credential=AzureKeyCredential(api_key),
             )
         except ImportError:
-            logger.error(
-                "azure-search-documents package is not installed; "
-                "SearchProductMaster will not function."
-            )
+            logger.error("azure-search-documents package is not installed; SearchProductMaster will not function.")
             self._client = None
 
     # ------------------------------------------------------------------
@@ -138,6 +128,7 @@ class SearchProductMaster:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _doc_to_product(doc: dict[str, Any]) -> Product:
     return Product(
         id=doc.get("product_id", ""),
@@ -147,9 +138,7 @@ def _doc_to_product(doc: dict[str, Any]) -> Product:
         category=doc.get("category"),
         default_unit=UnitType(doc["default_unit"]) if doc.get("default_unit") else UnitType.KG,
         temperature_zone=(
-            TemperatureZone(doc["temperature_zone"])
-            if doc.get("temperature_zone")
-            else TemperatureZone.AMBIENT
+            TemperatureZone(doc["temperature_zone"]) if doc.get("temperature_zone") else TemperatureZone.AMBIENT
         ),
         unit_weight_kg=doc.get("unit_weight_kg"),
         is_variable_weight=bool(doc.get("is_variable_weight", False)),

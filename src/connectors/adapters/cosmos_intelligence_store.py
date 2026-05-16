@@ -49,9 +49,7 @@ class CosmosIntelligenceStore:
         if exact:
             return exact
 
-        query = (
-            "SELECT * FROM c WHERE c.tenant_id = @tid AND c.customer_id = @cid"
-        )
+        query = "SELECT * FROM c WHERE c.tenant_id = @tid AND c.customer_id = @cid"
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@cid", "value": customer_id},
@@ -80,9 +78,7 @@ class CosmosIntelligenceStore:
         await self._patterns().upsert_item(doc)
         return pattern
 
-    async def get_customer_profile(
-        self, tenant_id: str, customer_id: str
-    ) -> CustomerOrderProfile | None:
+    async def get_customer_profile(self, tenant_id: str, customer_id: str) -> CustomerOrderProfile | None:
         profile_id = f"prof-{customer_id}"
         try:
             doc = await self._profiles().read_item(profile_id, partition_key=customer_id)

@@ -1,23 +1,20 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 
-import pytest
 
 from src.models.order import (
-    DeliveryCarrier,
-    DeliveryRoute,
     Order,
     OrderItem,
     OrderSource,
     OrderStatus,
     TemperatureZone,
 )
-from src.models.customer import Customer, CustomerDeliveryPreference
-from src.models.product import Product, UnitType
-from src.models.intelligence import CustomerOrderProfile, OrderPattern, ProductStats, ResolvedItem
+from src.models.customer import Customer
+from src.models.product import UnitType
+from src.models.intelligence import ProductStats
 from src.models.session import OrderSession
-from src.models.tenant import ConnectorConfig, TenantConfig
+from src.models.tenant import ConnectorConfig
 
 
 class TestOrderModel:

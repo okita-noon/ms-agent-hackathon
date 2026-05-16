@@ -38,9 +38,7 @@ class IntakePlugin:
         identifier: Annotated[str, "LINE User ID、電話番号、またはメールアドレス"],
     ) -> dict:
         repo = self._ctx.get_connector("ICustomerRepository")
-        customer: Customer | None = await repo.find_by_identifier(
-            self._ctx.tenant_id, identifier
-        )
+        customer: Customer | None = await repo.find_by_identifier(self._ctx.tenant_id, identifier)
         if not customer:
             return {"found": False, "identifier": identifier}
         return {"found": True, **customer.model_dump()}
@@ -54,9 +52,7 @@ class IntakePlugin:
         line_user_id: Annotated[str, "LINE User ID"],
     ) -> dict:
         repo = self._ctx.get_connector("ICustomerRepository")
-        customer: Customer | None = await repo.find_by_line_user_id(
-            self._ctx.tenant_id, line_user_id
-        )
+        customer: Customer | None = await repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
         if not customer:
             return {"found": False, "line_user_id": line_user_id}
         return {"found": True, **customer.model_dump()}
@@ -90,9 +86,7 @@ class IntakePlugin:
         store = self._ctx.get_connector("IOrderIntelligenceStore")
         normalized = _normalize_expression(raw_expression)
 
-        pattern = await store.find_pattern_exact(
-            self._ctx.tenant_id, customer_id, normalized
-        )
+        pattern = await store.find_pattern_exact(self._ctx.tenant_id, customer_id, normalized)
         if not pattern:
             return None
 
