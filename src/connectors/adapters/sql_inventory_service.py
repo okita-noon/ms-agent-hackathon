@@ -45,9 +45,7 @@ class SqlInventoryService:
                     is_sufficient=float(row[0]) >= required_qty,
                 )
 
-    async def find_alternatives(
-        self, tenant_id: str, product_id: str, qty: float
-    ) -> list[Alternative]:
+    async def find_alternatives(self, tenant_id: str, product_id: str, qty: float) -> list[Alternative]:
         query = """
         SELECT p.product_id, p.name, i.quantity - i.reserved_qty AS available_qty, i.unit
         FROM products p
@@ -81,9 +79,7 @@ class SqlInventoryService:
                 await cur.execute(query, (qty, tenant_id, product_id, qty))
                 if cur.rowcount > 0:
                     await conn.commit()
-                    return ReservationResult(
-                        product_id=product_id, reserved_qty=qty, success=True
-                    )
+                    return ReservationResult(product_id=product_id, reserved_qty=qty, success=True)
                 return ReservationResult(
                     product_id=product_id,
                     reserved_qty=0,

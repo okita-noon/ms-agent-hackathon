@@ -1,0 +1,17 @@
+export const STATUS_COLORS: Record<string, { bg: string; text: string; chart: string; border: string }> = {
+  "未処理": { bg: "bg-amber-50", text: "text-amber-700", chart: "#f59e0b", border: "border-amber-200" },
+  "製造": { bg: "bg-blue-50", text: "text-blue-700", chart: "#3b82f6", border: "border-blue-200" },
+  "配送": { bg: "bg-orange-50", text: "text-orange-700", chart: "#f97316", border: "border-orange-200" },
+  "完了": { bg: "bg-emerald-50", text: "text-emerald-700", chart: "#10b981", border: "border-emerald-200" },
+  "キャンセル": { bg: "bg-gray-50", text: "text-gray-500", chart: "#9ca3af", border: "border-gray-200" },
+  "返信待ち": { bg: "bg-rose-50", text: "text-rose-700", chart: "#f43f5e", border: "border-rose-200" },
+};
+
+export const SOURCE_COLORS: Record<string, string> = {
+  LINE: "#06c755",
+  Phone: "#3366ff",
+  Email: "#8b5cf6",
+  FAX: "#78716c",
+  Web: "#f59e42",
+  "手入力": "#64748b",
+};

@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI受発注自動一元管理システム</title>
+  <title>foogent - AI受発注自動一元管理</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
@@ -41,15 +44,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-lg font-bold tracking-tight">AI受発注自動一元管理システム</h1>
-            <p class="text-xs text-blue-300 -mt-0.5">Order Management Dashboard</p>
-          </div>
+          <img src="logo.png" alt="foogent" class="h-10">
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2 text-sm text-blue-200">
@@ -63,6 +58,21 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Tab navigation -->
+    <div class="flex gap-1 mb-6 border-b border-gray-200">
+      <button onclick="switchTab('orders')" id="tab-orders"
+        class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-brand-600 text-brand-700 -mb-px">
+        受注管理
+      </button>
+      <button onclick="switchTab('customers')" id="tab-customers"
+        class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px">
+        顧客管理
+      </button>
+    </div>
+
+    <!-- Orders tab -->
+    <div id="panel-orders">
 
     <!-- Date picker row -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -135,7 +145,101 @@
         <p class="text-sm">この日の受注データはありません</p>
       </div>
     </div>
+
+    </div><!-- /panel-orders -->
+
+    <!-- Customers tab -->
+    <div id="panel-customers" class="hidden">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h2 class="text-xl font-bold text-gray-800">顧客管理</h2>
+        <button onclick="loadCustomers()" id="loadCustomersBtn"
+          class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          更新
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-gray-700">顧客一覧</h3>
+          <span class="text-xs text-gray-400" id="customerCount"></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="px-5 py-3">ID</th>
+                <th class="px-5 py-3">顧客名</th>
+                <th class="px-5 py-3">略称</th>
+                <th class="px-5 py-3">LINE User ID</th>
+                <th class="px-5 py-3">電話</th>
+                <th class="px-5 py-3">メール</th>
+                <th class="px-5 py-3">状態</th>
+                <th class="px-5 py-3">操作</th>
+              </tr>
+            </thead>
+            <tbody id="customerTableBody" class="divide-y divide-gray-100">
+            </tbody>
+          </table>
+        </div>
+        <div id="customerEmptyState" class="hidden py-16 text-center text-gray-400">
+          <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <p class="text-sm">顧客データがありません</p>
+        </div>
+      </div>
+    </div><!-- /panel-customers -->
+
   </main>
+
+  <!-- Customer edit modal -->
+  <div id="customerModal" class="hidden fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden fade-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+        <h3 class="font-bold text-gray-800">顧客編集</h3>
+        <button onclick="closeCustomerModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <form id="customerEditForm" onsubmit="saveCustomer(event)" class="p-6 space-y-4">
+        <input type="hidden" id="editCustomerId">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">顧客名</label>
+            <input type="text" id="editName" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" required>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">略称</label>
+            <input type="text" id="editShortName" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">LINE User ID</label>
+          <input type="text" id="editLineUserId" placeholder="U064d0f5abe71bc0a358c923c3c42599d" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none font-mono">
+          <p class="text-xs text-gray-400 mt-1">「U」で始まる33文字の内部ID（LINE表示名やIDとは異なります。サーバーログで確認できます）</p>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">電話番号</label>
+            <input type="text" id="editPhone" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">メール</label>
+            <input type="email" id="editEmail" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" onclick="closeCustomerModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">キャンセル</button>
+          <button type="submit" id="saveCustomerBtn" class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Order detail modal -->
   <div id="orderModal" class="hidden fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4">
@@ -165,6 +269,6 @@
     </div>
   </div>
 
-  <script src="/dashboard/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

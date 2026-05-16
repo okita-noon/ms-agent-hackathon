@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+import json
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from src.agents.orchestrator import OrderOrchestrator, _build_draft_from_intake, _parse_order_items
+from src.models.order import OrderSource
+
+
+def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
+    return OrderOrchestrator(
+        tenant_ctx=mock_tenant_ctx,
+        azure_openai_endpoint="https://test.openai.azure.com/",
+        azure_openai_key="test-key",
+    )
+
+
+class TestParseOrderItems:
+    def test_single_item(self):
+        items = _parse_order_items("りんご5箱")
+        assert len(items) == 1
+        assert items[0]["raw_name"] == "りんご"
+        assert items[0]["quantity"] == 5.0
+        assert items[0]["unit"] == "箱"
+
+    def test_multiple_items_comma(self):
+        items = _parse_order_items("りんご10箱、バナナ20kg")
+        assert len(items) == 2
+        assert items[0]["raw_name"] == "りんご"
+        assert items[1]["raw_name"] == "バナナ"
+
+    def test_multiple_items_with_to(self):
+        items = _parse_order_items("りんご5箱とバナナ10kg")
+        assert len(items) == 2
+
+    def test_no_unit(self):
+        items = _parse_order_items("りんご5")
+        assert len(items) == 1
+        assert items[0]["unit"] is None
+
+    def test_decimal_quantity(self):
+        items = _parse_order_items("バナナ2.5kg")
+        assert len(items) == 1
+        assert items[0]["quantity"] == 2.5
+
+    def test_empty_message(self):
+        assert _parse_order_items("") == []
+
+    def test_no_quantity(self):
+        assert _parse_order_items("お願いします") == []
+
+
+class TestBuildDraftFromIntake:
+    def test_valid_draft(self):
+        intake = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 5, "unit": "箱"}],
+        }
+        draft = _build_draft_from_intake(intake)
+        assert draft is not None
+        assert draft["customer_id"] == "C-001"
+        assert len(draft["items"]) == 1
+
+    def test_missing_customer_id(self):
+        assert _build_draft_from_intake({"items": [{"product_id": "P-001"}]}) is None
+
+    def test_missing_items(self):
+        assert _build_draft_from_intake({"customer_id": "C-001"}) is None
+
+    def test_empty_items(self):
+        assert _build_draft_from_intake({"customer_id": "C-001", "items": []}) is None
+
+
+class TestExtractJson:
+    def setup_method(self):
+        self._orch = OrderOrchestrator.__new__(OrderOrchestrator)
+
+    def test_json_in_code_block(self):
+        text = '```json\n{"items": [1, 2]}\n```'
+        assert self._orch._extract_json(text) == {"items": [1, 2]}
+
+    def test_raw_json(self):
+        text = 'Here is the result: {"ok": true} end'
+        assert self._orch._extract_json(text) == {"ok": True}
+
+    def test_no_json(self):
+        assert self._orch._extract_json("no json here") is None
+
+    def test_invalid_json(self):
+        assert self._orch._extract_json("{broken: json}") is None
+
+
+class TestProcessOrderMessageSendsOnce:
+    """Verify that process_order_message sends exactly one LINE message — no more, no less."""
+
+    @pytest.mark.asyncio
+    async def test_sends_once_on_intake_fallback(self, mock_tenant_ctx):
+        """When intake returns no parseable draft, orchestrator sends one message."""
+        orch = _make_orchestrator(mock_tenant_ctx)
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            mock_invoke.return_value = "すみません、理解できませんでした。"
+
+            result = await orch.process_order_message(
+                message="キャビアとりんご1個お願い。",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert mock_send.call_count == 1
+            assert result["response"] != ""
+
+    @pytest.mark.asyncio
+    async def test_sends_once_on_successful_order(self, mock_tenant_ctx):
+        """When full chain succeeds, orchestrator sends exactly one message."""
+        orch = _make_orchestrator(mock_tenant_ctx)
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            elif call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            elif call_count == 3:
+                return '```json\n{"all_reserved": true}\n```'
+            else:
+                return "ご注文承りました。りんご1個ですね。"
+
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-001")
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="りんご1個お願い",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert mock_send.call_count == 1
+            assert result.get("order_id") == "ORD-001"
+
+    @pytest.mark.asyncio
+    async def test_sends_once_on_confirmation_needed(self, mock_tenant_ctx):
+        """When confirmation is needed, still sends exactly one message."""
+        orch = _make_orchestrator(mock_tenant_ctx)
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 150, "unit": "kg"}],
+                "needs_confirmation": True,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            elif call_count == 2:
+                return '```json\n{"anomalies": [{"type": "quantity"}], "confirmation_needed": true}\n```'
+            else:
+                return "りんご150kgは通常より多いですが、よろしいですか？"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="りんご150kg",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert mock_send.call_count == 1
+            assert result.get("session_status") == "awaiting_reply"
+            assert "order_id" not in result
+
+
+class TestEndToEndMessageFlow:
+    """Integration-level test: handler + orchestrator together send exactly one message."""
+
+    @pytest.mark.asyncio
+    async def test_handler_plus_orchestrator_sends_once(self, mock_tenant_ctx):
+        """The full LINE webhook flow must result in exactly one LINE API call."""
+        from src.services.line_handler import LineWebhookHandler
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            elif call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            elif call_count == 3:
+                return '```json\n{"all_reserved": true}\n```'
+            else:
+                return "りんご1個、承りました。"
+
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-001")
+
+        # Track all LINE API calls across both handler and orchestrator
+        line_api_calls: list[str] = []
+
+        async def track_push(user_id, message):
+            line_api_calls.append(f"push:{user_id}:{message[:20]}")
+            return True
+
+        orch = handler._orchestrator
+
+        # Mock the agent invocation but let the real orchestrator flow run
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_orch_send,
+            patch.object(handler, "_send_line_push", side_effect=track_push) as mock_handler_push,
+        ):
+            await handler._process_message("U123", "りんご1個", "tok-1")
+
+            # Orchestrator sends once
+            assert mock_orch_send.call_count == 1
+            # Handler does NOT send (no duplicate)
+            assert mock_handler_push.call_count == 0
+            assert len(line_api_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_handler_sends_fallback_on_error(self, mock_tenant_ctx):
+        """On orchestrator exception, handler sends exactly one fallback message."""
+        from src.services.line_handler import LineWebhookHandler
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with (
+            patch.object(
+                handler._orchestrator,
+                "process_order_message",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM down"),
+            ),
+            patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push,
+        ):
+            mock_push.return_value = True
+
+            result = await handler._process_message("U123", "りんご1個", "tok-1")
+
+            assert result["error"] == "agent_processing_failed"
+            assert mock_push.call_count == 1
+            assert "担当者が確認" in mock_push.call_args[0][1]

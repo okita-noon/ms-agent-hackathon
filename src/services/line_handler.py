@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -12,8 +13,10 @@ import httpx
 
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
+from src.models.intelligence import ResolvedItem
 from src.models.order import OrderSource
 from src.models.session import OrderSession
+from src.services.learning_service import LearningService
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +69,7 @@ class LineWebhookHandler:
         if not channel_secret:
             logger.warning("LINE channel secret not configured, skipping verification")
             return True
-        hash_value = hmac.new(
-            channel_secret.encode("utf-8"), body, hashlib.sha256
-        ).digest()
+        hash_value = hmac.new(channel_secret.encode("utf-8"), body, hashlib.sha256).digest()
         expected = base64.b64encode(hash_value).decode("utf-8")
         return hmac.compare_digest(expected, signature)
 
@@ -97,16 +98,12 @@ class LineWebhookHandler:
 
         return results
 
-    async def _process_message(
-        self, user_id: str, text: str, reply_token: str | None
-    ) -> dict:
+    async def _process_message(self, user_id: str, text: str, reply_token: str | None) -> dict:
         logger.info("Processing message from %s: %s", user_id, text[:100])
 
         session_repo = self._ctx.get_connector("ISessionRepository")
 
-        session = await session_repo.find_active_session(
-            self._ctx.tenant_id, "line", user_id
-        )
+        session = await session_repo.find_active_session(self._ctx.tenant_id, "line", user_id)
 
         if session and session.status == "awaiting_reply":
             session.last_message_at = datetime.utcnow()
@@ -131,9 +128,6 @@ class LineWebhookHandler:
                 reply_token=reply_token,
                 source=OrderSource.LINE,
             )
-            response_text = result.get("response", "")
-            if response_text:
-                await self._send_line_push(user_id, response_text)
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
             await self._send_line_push(
@@ -146,11 +140,64 @@ class LineWebhookHandler:
                 "error": "agent_processing_failed",
             }
 
+        order_id = result.get("order_id")
+        if order_id:
+            asyncio.create_task(self._run_learning(order_id=order_id, user_id=user_id, original_message=text))
+
         return {
             "session_id": session.id,
             "user_id": user_id,
             "result": result,
         }
+
+    async def _run_learning(self, order_id: str, user_id: str, original_message: str) -> None:
+        try:
+            order_repo = self._ctx.get_connector("IOrderRepository")
+            customer_repo = self._ctx.get_connector("ICustomerRepository")
+
+            order = await order_repo.find_by_id(order_id)
+            if not order:
+                logger.warning("Learning skipped: order %s not found", order_id)
+                return
+
+            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
+            if not customer:
+                logger.warning("Learning skipped: customer not found for LINE user %s", user_id)
+                return
+
+            learning_service = LearningService(self._ctx)
+
+            resolved_items = [
+                ResolvedItem(
+                    product_id=item.product_id,
+                    product_name=item.product_name,
+                    qty=item.quantity,
+                    unit=item.unit,
+                )
+                for item in order.items
+            ]
+
+            await learning_service.record_pattern(
+                customer_id=customer.id,
+                input_expression=original_message,
+                resolved_items=resolved_items,
+            )
+
+            for item in order.items:
+                await learning_service.update_customer_profile(
+                    customer_id=customer.id,
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                )
+
+            logger.info("Learning completed for order %s, customer %s", order_id, customer.id)
+        except Exception:
+            logger.exception(
+                "Learning failed for order %s (user %s) — order flow unaffected",
+                order_id,
+                user_id,
+            )
 
     async def _send_line_push(self, user_id: str, message: str) -> bool:
         token = self._ctx.config.line_channel_access_token

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 import unicodedata
-from collections import Counter
 from datetime import datetime
-from statistics import mean, stdev
 
 from src.connectors.context import TenantContext
 from src.models.intelligence import (
@@ -31,9 +29,7 @@ class LearningService:
         store = self._ctx.get_connector("IOrderIntelligenceStore")
         normalized = _normalize_expression(input_expression)
 
-        existing = await store.find_pattern_exact(
-            self._ctx.tenant_id, customer_id, normalized
-        )
+        existing = await store.find_pattern_exact(self._ctx.tenant_id, customer_id, normalized)
 
         if existing and _same_resolution(existing.resolved_items, resolved_items):
             existing.confidence = min(1.0, existing.confidence + 0.1)
@@ -63,9 +59,7 @@ class LearningService:
         unit: str,
     ) -> CustomerOrderProfile:
         store = self._ctx.get_connector("IOrderIntelligenceStore")
-        profile = await store.get_customer_profile(
-            self._ctx.tenant_id, customer_id
-        )
+        profile = await store.get_customer_profile(self._ctx.tenant_id, customer_id)
         if not profile:
             profile = CustomerOrderProfile(
                 tenant_id=self._ctx.tenant_id,
@@ -83,10 +77,7 @@ class LearningService:
         else:
             new_avg = (stats.avg_qty * n + quantity) / (n + 1)
             if n >= 1:
-                variance = (
-                    (stats.std_dev ** 2 * n + (quantity - new_avg) * (quantity - stats.avg_qty))
-                    / (n + 1)
-                )
+                variance = (stats.std_dev**2 * n + (quantity - new_avg) * (quantity - stats.avg_qty)) / (n + 1)
                 stats.std_dev = max(variance, 0) ** 0.5
             stats.avg_qty = new_avg
             stats.min_qty = min(stats.min_qty, quantity)
