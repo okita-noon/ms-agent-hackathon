@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">ペルソナ利用シナリオのイラスト</title>
+  <desc id="desc">飲食店店長が朝にLINEで注文し、AIが確認・在庫照合・受注登録を行い、卸の担当者がダッシュボードで確認する流れ。</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .step { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+      .label { font: 650 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .small { font: 500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .bubble { fill: white; stroke: #cbd5e1; stroke-width: 1.5; rx: 18; }
+      .panel { fill: white; stroke: #d1d5db; stroke-width: 1.5; rx: 18; }
+      .green { fill: #dcfce7; stroke: #22c55e; }
+      .blue { fill: #dbeafe; stroke: #3b82f6; }
+      .amber { fill: #fef3c7; stroke: #f59e0b; }
+      .rose { fill: #ffe4e6; stroke: #fb7185; }
+      .line { stroke: #475569; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .muted-line { stroke: #94a3b8; stroke-width: 2; fill: none; stroke-dasharray: 6 6; }
+      .skin { fill: #f7c59f; }
+      .hair { fill: #2f2a28; }
+      .shirt { fill: #2563eb; }
+      .apron { fill: #0f766e; }
+      .screen { fill: #eff6ff; stroke: #93c5fd; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1280" height="760"/>
+  <text class="title" x="56" y="58">ペルソナ利用シナリオ: 朝の注文が自動で受注に変わる</text>
+  <text class="subtitle" x="58" y="90">飲食店店長・卸の受注担当者・AI Agent の関係を、業務目線で見た流れ</text>
+
+  <rect class="panel" x="54" y="132" width="250" height="500"/>
+  <text class="step" x="82" y="170">1. 店長が注文</text>
+  <circle class="skin" cx="178" cy="245" r="45"/>
+  <path class="hair" d="M 135 236 C 138 198 170 182 205 196 C 225 205 230 226 226 247 C 210 232 188 222 160 224 C 150 226 141 230 135 236z"/>
+  <rect class="shirt" x="130" y="296" width="96" height="98" rx="22"/>
+  <rect class="apron" x="148" y="316" width="60" height="84" rx="10"/>
+  <rect class="green" x="92" y="424" width="174" height="104" rx="18"/>
+  <text class="label" x="120" y="456">飲食店A 店長</text>
+  <text class="small" x="114" y="482">朝7:00、仕込み前に</text>
+  <text class="small" x="114" y="502">LINEで発注</text>
+
+  <rect class="panel" x="356" y="132" width="250" height="500"/>
+  <text class="step" x="384" y="170">2. LINEで送信</text>
+  <rect class="blue" x="430" y="214" width="102" height="190" rx="22"/>
+  <rect fill="#ffffff" x="445" y="244" width="72" height="122" rx="10"/>
+  <rect class="green" x="456" y="260" width="48" height="24" rx="12"/>
+  <text class="small" x="466" y="277">LINE</text>
+  <rect fill="#dcfce7" x="455" y="300" width="52" height="34" rx="12"/>
+  <text class="small" x="463" y="322">注文</text>
+  <circle fill="#111827" cx="481" cy="384" r="7"/>
+  <rect class="bubble" x="382" y="432" width="196" height="96"/>
+  <text class="label" x="414" y="462">「鶏もも10kg、</text>
+  <text class="label" x="414" y="486">白菜5ケース」</text>
+  <text class="small" x="414" y="510">いつもの言い方でOK</text>
+
+  <rect class="panel" x="658" y="132" width="250" height="500"/>
+  <text class="step" x="686" y="170">3. AIが処理</text>
+  <circle fill="#1d4ed8" cx="782" cy="245" r="54"/>
+  <circle fill="#bfdbfe" cx="762" cy="236" r="9"/>
+  <circle fill="#bfdbfe" cx="802" cy="236" r="9"/>
+  <path d="M 753 264 Q 782 286 811 264" stroke="#bfdbfe" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <rect class="amber" x="700" y="326" width="168" height="44" rx="12"/>
+  <text class="label" x="728" y="354">商品・数量を解析</text>
+  <rect class="amber" x="700" y="386" width="168" height="44" rx="12"/>
+  <text class="label" x="734" y="414">在庫を照合</text>
+  <rect class="amber" x="700" y="446" width="168" height="44" rx="12"/>
+  <text class="label" x="714" y="474">必要なら確認質問</text>
+  <text class="small" x="706" y="526">専門Agentが協調して</text>
+  <text class="small" x="706" y="546">受注ドラフトを作成</text>
+
+  <rect class="panel" x="960" y="132" width="250" height="500"/>
+  <text class="step" x="988" y="170">4. 担当者が確認</text>
+  <rect class="screen" x="1000" y="228" width="170" height="118" rx="12"/>
+  <rect fill="#bfdbfe" x="1014" y="244" width="142" height="14" rx="4"/>
+  <rect fill="#ffffff" x="1014" y="272" width="142" height="20" rx="6"/>
+  <rect fill="#ffffff" x="1014" y="302" width="142" height="20" rx="6"/>
+  <rect fill="#22c55e" x="1094" y="306" width="44" height="12" rx="6"/>
+  <rect class="rose" x="1002" y="382" width="166" height="60" rx="14"/>
+  <text class="label" x="1036" y="409">確認待ちだけ</text>
+  <text class="label" x="1050" y="431">人が見る</text>
+  <rect class="bubble" x="992" y="480" width="186" height="62"/>
+  <text class="label" x="1018" y="508">受注確定・返信・</text>
+  <text class="label" x="1038" y="530">ピッキングへ</text>
+
+  <path class="line" d="M 304 382 C 328 382 332 382 356 382"/>
+  <path class="line" d="M 606 382 C 630 382 634 382 658 382"/>
+  <path class="line" d="M 908 382 C 932 382 936 382 960 382"/>
+  <path class="muted-line" d="M 1086 542 C 1030 696 252 696 178 530"/>
+  <text class="small" x="524" y="692">自動返信: 「ご注文承りました。本日配送予定です」</text>
+</svg>

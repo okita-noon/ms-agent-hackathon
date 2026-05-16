@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">ソフトウェア処理フロー</title>
+  <desc id="desc">LINEまたは電話注文がWebhookや音声認識を経由し、FastAPI、Tenant Resolver、Session Manager、Orchestrator、各Agent、Connector、データ層、返信とダッシュボード更新へ流れる図。</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .lane-title { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .label { font: 650 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .small { font: 500 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.4; rx: 10; }
+      .input { fill: #dbeafe; stroke: #60a5fa; }
+      .api { fill: #dcfce7; stroke: #4ade80; }
+      .agent { fill: #fef3c7; stroke: #f59e0b; }
+      .connector { fill: #ede9fe; stroke: #a78bfa; }
+      .data { fill: #ffe4e6; stroke: #fb7185; }
+      .output { fill: #cffafe; stroke: #22d3ee; }
+      .arrow { stroke: #475569; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .soft-arrow { stroke: #94a3b8; stroke-width: 2; fill: none; marker-end: url(#arrow-soft); stroke-dasharray: 6 6; }
+      .lane { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1.3; rx: 14; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1280" height="900"/>
+  <text class="title" x="56" y="58">ソフトウェアの大まかな処理フロー</text>
+  <text class="subtitle" x="58" y="90">ペルソナが注文してから、返信・受注登録・ダッシュボード反映まで</text>
+
+  <rect class="lane" x="48" y="128" width="206" height="704"/>
+  <text class="lane-title" x="74" y="164">入力</text>
+  <rect class="card input" x="76" y="202" width="150" height="64"/>
+  <text class="label" x="112" y="230">LINE注文</text>
+  <text class="small" x="96" y="250">POST /api/line-webhook</text>
+  <rect class="card input" x="76" y="316" width="150" height="64"/>
+  <text class="label" x="116" y="344">電話注文</text>
+  <text class="small" x="96" y="364">ACS + AI Speech</text>
+
+  <rect class="lane" x="288" y="128" width="230" height="704"/>
+  <text class="lane-title" x="314" y="164">受信処理</text>
+  <rect class="card api" x="320" y="202" width="166" height="58"/>
+  <text class="label" x="350" y="228">FastAPI入口</text>
+  <text class="small" x="348" y="248">署名検証・正規化</text>
+  <rect class="card api" x="320" y="306" width="166" height="58"/>
+  <text class="label" x="342" y="332">Tenant Resolver</text>
+  <text class="small" x="342" y="352">tenant_id を決定</text>
+  <rect class="card api" x="320" y="410" width="166" height="58"/>
+  <text class="label" x="344" y="436">Session Manager</text>
+  <text class="small" x="342" y="456">新規 / 継続を判定</text>
+  <rect class="card api" x="320" y="514" width="166" height="58"/>
+  <text class="label" x="344" y="540">Agent Thread</text>
+  <text class="small" x="350" y="560">会話文脈を保持</text>
+
+  <rect class="lane" x="552" y="128" width="238" height="704"/>
+  <text class="lane-title" x="578" y="164">Agent処理</text>
+  <rect class="card agent" x="586" y="202" width="170" height="58"/>
+  <text class="label" x="622" y="228">Orchestrator</text>
+  <text class="small" x="620" y="248">次に呼ぶAgentを判断</text>
+  <rect class="card agent" x="586" y="300" width="170" height="58"/>
+  <text class="label" x="650" y="326">Intake</text>
+  <text class="small" x="614" y="346">顧客特定・商品正規化</text>
+  <rect class="card agent" x="586" y="398" width="170" height="58"/>
+  <text class="label" x="638" y="424">Exception</text>
+  <text class="small" x="616" y="444">曖昧さ・異常数量検知</text>
+  <rect class="card agent" x="586" y="496" width="170" height="58"/>
+  <text class="label" x="638" y="522">Inventory</text>
+  <text class="small" x="636" y="542">在庫確認・引当</text>
+  <rect class="card agent" x="586" y="594" width="170" height="58"/>
+  <text class="label" x="622" y="620">Communication</text>
+  <text class="small" x="630" y="640">返信文・通知を生成</text>
+
+  <rect class="lane" x="824" y="128" width="198" height="704"/>
+  <text class="lane-title" x="850" y="164">Connector</text>
+  <rect class="card connector" x="850" y="274" width="146" height="62"/>
+  <text class="label" x="876" y="300">Plugin関数</text>
+  <text class="small" x="872" y="320">SK @kernel_function</text>
+  <rect class="card connector" x="850" y="390" width="146" height="62"/>
+  <text class="label" x="874" y="416">Factory</text>
+  <text class="small" x="866" y="436">テナント別Adapter</text>
+  <rect class="card connector" x="850" y="506" width="146" height="62"/>
+  <text class="label" x="876" y="532">Adapter</text>
+  <text class="small" x="868" y="552">DB/APIを隠蔽</text>
+
+  <rect class="lane" x="1056" y="128" width="176" height="704"/>
+  <text class="lane-title" x="1082" y="164">データ・出力</text>
+  <rect class="card data" x="1080" y="206" width="128" height="54"/>
+  <text class="label" x="1110" y="230">Azure SQL</text>
+  <text class="small" x="1102" y="248">商品・在庫</text>
+  <rect class="card data" x="1080" y="302" width="128" height="54"/>
+  <text class="label" x="1110" y="326">Cosmos DB</text>
+  <text class="small" x="1104" y="344">受注・Session</text>
+  <rect class="card data" x="1080" y="398" width="128" height="54"/>
+  <text class="label" x="1110" y="422">AI Search</text>
+  <text class="small" x="1098" y="440">あいまい検索</text>
+  <rect class="card output" x="1080" y="552" width="128" height="54"/>
+  <text class="label" x="1115" y="576">LINE返信</text>
+  <text class="small" x="1098" y="594">確認 / 確定通知</text>
+  <rect class="card output" x="1080" y="650" width="128" height="54"/>
+  <text class="label" x="1110" y="674">Dashboard</text>
+  <text class="small" x="1100" y="692">一覧・確認待ち</text>
+  <rect class="card output" x="1080" y="748" width="128" height="54"/>
+  <text class="label" x="1096" y="772">Learning Service</text>
+  <text class="small" x="1100" y="790">パターン更新</text>
+
+  <path class="arrow" d="M 226 234 L 320 231"/>
+  <path class="arrow" d="M 226 348 L 320 231"/>
+  <path class="arrow" d="M 403 260 L 403 306"/>
+  <path class="arrow" d="M 403 364 L 403 410"/>
+  <path class="arrow" d="M 403 468 L 403 514"/>
+  <path class="arrow" d="M 486 543 L 586 231"/>
+  <path class="arrow" d="M 671 260 L 671 300"/>
+  <path class="arrow" d="M 671 358 L 671 398"/>
+  <path class="arrow" d="M 671 456 L 671 496"/>
+  <path class="arrow" d="M 671 554 L 671 594"/>
+  <path class="arrow" d="M 756 329 L 850 305"/>
+  <path class="arrow" d="M 756 525 L 850 421"/>
+  <path class="arrow" d="M 996 421 L 1080 233"/>
+  <path class="arrow" d="M 996 537 L 1080 329"/>
+  <path class="arrow" d="M 996 305 L 1080 425"/>
+  <path class="arrow" d="M 756 623 C 932 622 980 577 1080 579"/>
+  <path class="arrow" d="M 756 623 C 954 636 982 674 1080 677"/>
+  <path class="soft-arrow" d="M 1144 356 L 1144 748"/>
+  <path class="soft-arrow" d="M 1080 779 C 918 780 800 730 702 652"/>
+  <text class="small" x="880" y="772">確定注文から次回解釈を改善</text>
+</svg>
