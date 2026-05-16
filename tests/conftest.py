@@ -25,6 +25,8 @@ def tenant_config() -> TenantConfig:
         line_channel_id="test-channel",
         line_channel_secret="test-secret",
         line_channel_access_token="test-token",
+        acs_connection_string="endpoint=https://test.communication.azure.com/;accesskey=dGVzdA==",
+        acs_phone_number="+81501234567",
         auto_confirm_threshold=0.9,
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection="test"),

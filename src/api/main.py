@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.connectors.adapters.registry import register_all_adapters
 from src.services.line_handler import LineWebhookHandler
+from src.services.phone_handler import PhoneCallHandler
 from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +74,48 @@ async def line_webhook(
         raise HTTPException(status_code=403, detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。")
 
     background_tasks.add_task(_process_line_events, handler, body_json)
+
+    return Response(status_code=200)
+
+
+# ── Phone (ACS Call Automation) webhook ───────────────────────────────────────
+
+_phone_handler: PhoneCallHandler | None = None
+
+
+def _get_phone_handler() -> PhoneCallHandler:
+    global _phone_handler  # noqa: PLW0603
+    if _phone_handler is None:
+        _phone_handler = PhoneCallHandler(
+            callback_base_url=os.environ.get("ACS_CALLBACK_BASE_URL", ""),
+            azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
+            azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+            speech_service_key=os.environ.get("SPEECH_SERVICE_KEY", ""),
+            speech_service_endpoint=os.environ.get("SPEECH_SERVICE_ENDPOINT"),
+        )
+    return _phone_handler
+
+
+@app.post("/api/phone-webhook")
+async def phone_webhook(request: Request):
+    events = await request.json()
+    if not isinstance(events, list):
+        events = [events]
+
+    handler = _get_phone_handler()
+    results = []
+    for event in events:
+        event_type = event.get("type", "")
+        if event_type == "Microsoft.EventGrid.SubscriptionValidationEvent":
+            validation_code = event.get("data", {}).get("validationCode")
+            return {"validationResponse": validation_code}
+
+        try:
+            result = await handler.handle_event(event)
+            if result:
+                results.append(result)
+        except Exception:
+            logger.exception("Error handling phone event: %s", event_type)
 
     return Response(status_code=200)
 
