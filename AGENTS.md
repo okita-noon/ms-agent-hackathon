@@ -77,6 +77,7 @@
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |
 | GET | `/api/products?tenant_id=T-001` | 商品マスタ一覧 |
+| GET | `/api/inventory?tenant_id=T-001` | 在庫一覧（全品目） |
 | GET | `/api/inventory/{product_id}?required_qty=0&tenant_id=T-001` | 在庫照会 |
 | GET | `/api/customers?tenant_id=T-001` | 顧客一覧 |
 | PUT | `/api/customers/{customer_id}?tenant_id=T-001` | 顧客更新（LINE User ID紐付け等） |

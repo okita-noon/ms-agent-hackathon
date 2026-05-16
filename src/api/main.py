@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -111,6 +110,30 @@ async def list_products(tenant_id: str = "T-001"):
     master = tenant_ctx.get_connector("IProductMaster")
     products = await master.list_all(tenant_id)
     return {"products": [p.model_dump() for p in products]}
+
+
+@app.get("/api/inventory")
+async def list_inventory(tenant_id: str = "T-001"):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    master = tenant_ctx.get_connector("IProductMaster")
+    svc = tenant_ctx.get_connector("IInventoryService")
+    products = await master.list_all(tenant_id)
+    items = []
+    for p in products:
+        status = await svc.check(tenant_id, p.id, 0)
+        items.append(
+            {
+                "product_id": p.id,
+                "product_name": p.name,
+                "category": p.category,
+                "temperature_zone": p.temperature_zone.value if p.temperature_zone else "常温",
+                "quantity": status.available_qty,
+                "unit": status.unit,
+                "is_variable_weight": p.is_variable_weight,
+                "price_per_unit": p.price_per_unit,
+            }
+        )
+    return {"inventory": items}
 
 
 @app.get("/api/inventory/{product_id}")
