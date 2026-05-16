@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.models.session import OrderSession
 from src.services.line_handler import LineWebhookHandler, _EventDedup
 
 
@@ -39,9 +38,7 @@ class TestVerifySignature:
 
         secret = "test-secret"
         body = b'{"events":[]}'
-        expected = base64.b64encode(
-            hmac.new(secret.encode(), body, hashlib.sha256).digest()
-        ).decode()
+        expected = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
 
         handler = LineWebhookHandler(
             tenant_ctx=mock_tenant_ctx,
@@ -165,15 +162,55 @@ class TestProcessMessage:
         )
 
         with patch.object(handler, "_orchestrator") as mock_orch:
-            mock_orch.process_order_message = AsyncMock(
-                return_value={"response": "ご注文承りました"}
-            )
+            mock_orch.process_order_message = AsyncMock(return_value={"response": "ご注文承りました"})
             with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
-                mock_push.return_value = True
-                result = await handler._process_message("U123", "テスト", None)
+                await handler._process_message("U123", "テスト", None)
 
                 session_repo.create_session.assert_called_once()
-                mock_push.assert_called_once_with("U123", "ご注文承りました")
+                # Handler must NOT send — orchestrator already sent the message
+                mock_push.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_duplicate_send_on_success(self, mock_tenant_ctx):
+        """Regression: handler must not re-send the message that orchestrator already sent."""
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(
+                return_value={"response": "確認しました", "order_id": "ORD-001"}
+            )
+            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+                result = await handler._process_message("U123", "りんご5箱", "token-1")
+
+                mock_push.assert_not_called()
+                assert result["result"]["response"] == "確認しました"
+
+    @pytest.mark.asyncio
+    async def test_no_duplicate_send_empty_response(self, mock_tenant_ctx):
+        """Even when response is empty, handler should not attempt to send."""
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(return_value={"response": ""})
+            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+                await handler._process_message("U123", "テスト", None)
+                mock_push.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_fallback_on_orchestrator_error(self, mock_tenant_ctx):
@@ -194,6 +231,24 @@ class TestProcessMessage:
                 result = await handler._process_message("U123", "テスト", None)
 
                 assert result["error"] == "agent_processing_failed"
-                mock_push.assert_called_once_with(
-                    "U123", "ご注文を受け付けました。担当者が確認いたします。"
-                )
+                mock_push.assert_called_once_with("U123", "ご注文を受け付けました。担当者が確認いたします。")
+
+    @pytest.mark.asyncio
+    async def test_fallback_sends_exactly_once(self, mock_tenant_ctx):
+        """Error fallback must send exactly one message, not zero or two."""
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(side_effect=Exception("boom"))
+            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+                mock_push.return_value = True
+                await handler._process_message("U123", "りんご", None)
+                assert mock_push.call_count == 1
