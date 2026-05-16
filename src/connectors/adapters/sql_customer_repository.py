@@ -26,9 +26,7 @@ class SqlCustomerRepository:
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    query, (tenant_id, identifier, identifier, identifier, f"%{identifier}%")
-                )
+                await cur.execute(query, (tenant_id, identifier, identifier, identifier, f"%{identifier}%"))
                 row = await cur.fetchone()
                 if not row:
                     return None
@@ -64,7 +62,6 @@ class SqlCustomerRepository:
                 if not row:
                     return None
                 return _row_to_customer(row)
-
 
     async def list_all(self, tenant_id: str) -> list[Customer]:
         query = """

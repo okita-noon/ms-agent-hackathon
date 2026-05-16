@@ -63,6 +63,24 @@ export async function fetchCustomers(): Promise<Customer[]> {
   return data.customers || [];
 }
 
+export interface InventoryItem {
+  product_id: string;
+  product_name: string;
+  category: string | null;
+  temperature_zone: string;
+  quantity: number;
+  unit: string;
+  is_variable_weight: boolean;
+  price_per_unit: number | null;
+}
+
+export async function fetchInventory(): Promise<InventoryItem[]> {
+  const resp = await fetch(`${API_BASE}/api/inventory?tenant_id=${currentTenantId}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  return data.inventory || [];
+}
+
 export async function updateCustomer(
   customerId: string,
   fields: Partial<Customer>

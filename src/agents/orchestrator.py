@@ -199,7 +199,6 @@ class OrderOrchestrator:
 
         # ── Step 3: Inventory Agent ────────────────────────────────────────────
         inventory_text: str | None = None
-        inventory_result: dict | None = None
         if not anomaly_confirmation_needed and items:
             inventory_agent = self._make_inventory_agent()
             items_summary = json.dumps(items, ensure_ascii=False)
@@ -213,7 +212,7 @@ class OrderOrchestrator:
             )
             inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
             logger.info("Inventory result: %s", inventory_text[:500])
-            inventory_result = self._extract_json(inventory_text)
+            self._extract_json(inventory_text)
 
         # ── Step 4: Save order if no confirmation needed ───────────────────────
         saved_order: Order | None = None
@@ -267,8 +266,7 @@ class OrderOrchestrator:
 
         final_prompt = (
             "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
-            "返信メッセージのみを出力してください（JSON不要）。\n\n"
-            + "\n\n".join(context_parts)
+            "返信メッセージのみを出力してください（JSON不要）。\n\n" + "\n\n".join(context_parts)
         )
         response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
         return response_text
@@ -301,9 +299,7 @@ class OrderOrchestrator:
                     product_name=item_data["product_name"],
                     quantity=item_data.get("quantity"),
                     unit=item_data.get("unit", "kg"),
-                    temperature_zone=TemperatureZone(
-                        item_data.get("temperature_zone", "常温")
-                    ),
+                    temperature_zone=TemperatureZone(item_data.get("temperature_zone", "常温")),
                 )
             )
 
@@ -346,22 +342,16 @@ class OrderOrchestrator:
 
     async def _build_order_draft(self, message: str, line_user_id: str) -> dict | None:
         customer_repo = self._ctx.get_connector("ICustomerRepository")
-        customer = await customer_repo.find_by_line_user_id(
-            self._ctx.tenant_id, line_user_id
-        )
+        customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
         if not customer:
             return None
 
         product_master = self._ctx.get_connector("IProductMaster")
         items = []
         for parsed in _parse_order_items(message):
-            product = await product_master.fuzzy_match(
-                self._ctx.tenant_id, parsed["raw_name"]
-            )
+            product = await product_master.fuzzy_match(self._ctx.tenant_id, parsed["raw_name"])
             if not product:
-                logger.warning(
-                    "Product not found while saving order: %s", parsed["raw_name"]
-                )
+                logger.warning("Product not found while saving order: %s", parsed["raw_name"])
                 continue
             items.append(
                 {

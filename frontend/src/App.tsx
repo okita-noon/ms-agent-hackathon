@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import Header from "./components/Header";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
+import Inventory from "./pages/Inventory";
 import { getTenantId, setTenantId } from "./lib/api";
 
-type Tab = "orders" | "customers";
+type Tab = "orders" | "customers" | "inventory";
 
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   {
@@ -13,6 +14,15 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: "inventory",
+    label: "在庫管理",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
       </svg>
     ),
   },
@@ -102,6 +112,8 @@ export default function App() {
         </nav>
         {tab === "orders" ? (
           <Orders key={tenantId} />
+        ) : tab === "inventory" ? (
+          <Inventory key={tenantId} />
         ) : (
           <Customers key={tenantId} />
         )}

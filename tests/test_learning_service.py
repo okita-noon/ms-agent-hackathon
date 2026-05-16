@@ -3,9 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.models.intelligence import (
-    CustomerOrderProfile,
     OrderPattern,
-    ProductStats,
     ResolvedItem,
 )
 from src.services.learning_service import LearningService, _normalize_expression, _same_resolution
@@ -62,7 +60,7 @@ class TestLearningServiceRecordPattern:
         store.create_pattern.return_value = created
 
         svc = LearningService(mock_tenant_ctx)
-        result = await svc.record_pattern(
+        await svc.record_pattern(
             customer_id="C-001",
             input_expression="りんご5箱",
             resolved_items=[
@@ -71,7 +69,8 @@ class TestLearningServiceRecordPattern:
         )
 
         store.create_pattern.assert_called_once()
-        assert result.confidence == 0.7
+        created_pattern = store.create_pattern.call_args[0][0]
+        assert created_pattern.confidence == 0.7
 
     @pytest.mark.asyncio
     async def test_updates_existing_pattern(self, mock_tenant_ctx, sample_pattern):
@@ -80,7 +79,7 @@ class TestLearningServiceRecordPattern:
         store.update_pattern.return_value = sample_pattern
 
         svc = LearningService(mock_tenant_ctx)
-        result = await svc.record_pattern(
+        await svc.record_pattern(
             customer_id="C-001",
             input_expression="ツナ缶100g",
             resolved_items=[
@@ -99,7 +98,7 @@ class TestLearningServiceRecordPattern:
         store.create_pattern.side_effect = lambda p: p
 
         svc = LearningService(mock_tenant_ctx)
-        result = await svc.record_pattern(
+        await svc.record_pattern(
             customer_id="C-001",
             input_expression="テスト",
             resolved_items=[
@@ -108,7 +107,8 @@ class TestLearningServiceRecordPattern:
             source="agent_inferred",
         )
 
-        assert result.confidence == 0.5
+        created_pattern = store.create_pattern.call_args[0][0]
+        assert created_pattern.confidence == 0.5
 
     @pytest.mark.asyncio
     async def test_multi_item_creates_template(self, mock_tenant_ctx):
@@ -117,7 +117,7 @@ class TestLearningServiceRecordPattern:
         store.create_pattern.side_effect = lambda p: p
 
         svc = LearningService(mock_tenant_ctx)
-        result = await svc.record_pattern(
+        await svc.record_pattern(
             customer_id="C-001",
             input_expression="いつもの",
             resolved_items=[
@@ -126,7 +126,8 @@ class TestLearningServiceRecordPattern:
             ],
         )
 
-        assert result.type == "template"
+        created_pattern = store.create_pattern.call_args[0][0]
+        assert created_pattern.type == "template"
 
 
 class TestLearningServiceUpdateProfile:
