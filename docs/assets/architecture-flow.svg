@@ -1,15 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="920" viewBox="0 0 1440 920" role="img" aria-labelledby="title desc">
   <title id="title">AI受発注自動一元管理システム アーキテクチャ</title>
   <desc id="desc">受注チャネルから受信処理、マルチエージェント、Connector、データ層、出力UI層までの6層構成を示す図。</desc>
   <defs>
     <style>
       .bg { fill: #f8fafc; }
-      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
-      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
-      .band-title { font: 700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
-      .label { font: 650 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
-      .small { font: 500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
-      .tiny { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .title { font: 700 34px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 17px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .band-title { font: 700 20px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+      .label { font: 650 16px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; text-anchor: middle; }
+      .small { font: 500 13px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; text-anchor: middle; }
+      .tiny { font: 500 12px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; text-anchor: middle; }
+      .note { font: 500 12px "Hiragino Sans", "Noto Sans CJK JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
       .card { fill: white; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; }
       .blue { fill: #dbeafe; stroke: #60a5fa; }
       .green { fill: #dcfce7; stroke: #4ade80; }
@@ -20,7 +21,7 @@
       .arrow { stroke: #475569; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
       .soft-arrow { stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 5 5; fill: none; marker-end: url(#arrow-soft); }
       .lane { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1.5; rx: 16; }
-      .icon { font: 700 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .divider { stroke: #e2e8f0; stroke-width: 1.5; }
     </style>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
@@ -30,92 +31,100 @@
     </marker>
   </defs>
 
-  <rect class="bg" width="1280" height="820"/>
+  <rect class="bg" width="1440" height="920"/>
   <text class="title" x="58" y="58">AI受発注自動一元管理システム: 6層アーキテクチャ</text>
   <text class="subtitle" x="60" y="90">LINE・電話の注文を、複数の専門AI Agentとテナント別Connectorで受注確定まで自動処理する</text>
 
-  <rect class="lane" x="44" y="124" width="1192" height="112"/>
-  <text class="band-title" x="68" y="158">1. 受注チャネル</text>
-  <rect class="card blue" x="246" y="146" width="150" height="64"/>
-  <text class="icon" x="270" y="184">LINE</text>
-  <text class="tiny" x="270" y="202">Webhook</text>
-  <rect class="card blue" x="420" y="146" width="150" height="64"/>
-  <text class="icon" x="452" y="184">電話</text>
-  <text class="tiny" x="444" y="202">ACS + Speech</text>
-  <rect class="card" x="594" y="146" width="150" height="64"/>
-  <text class="label" x="636" y="176">メール</text>
-  <text class="tiny" x="622" y="198">Graph API</text>
-  <rect class="card" x="768" y="146" width="150" height="64"/>
-  <text class="label" x="816" y="176">FAX</text>
-  <text class="tiny" x="804" y="198">OCR</text>
-  <rect class="card" x="942" y="146" width="150" height="64"/>
-  <text class="label" x="992" y="176">EC</text>
-  <text class="tiny" x="978" y="198">API連携</text>
+  <rect class="lane" x="44" y="124" width="1352" height="118"/>
+  <line class="divider" x1="270" y1="124" x2="270" y2="242"/>
+  <text class="band-title" x="74" y="162">1. 受注チャネル</text>
+  <rect class="card blue" x="336" y="150" width="150" height="64"/>
+  <text class="label" x="411" y="179">LINE</text>
+  <text class="tiny" x="411" y="200">Webhook</text>
+  <rect class="card blue" x="520" y="150" width="150" height="64"/>
+  <text class="label" x="595" y="179">電話</text>
+  <text class="tiny" x="595" y="200">ACS + Speech</text>
+  <rect class="card" x="704" y="150" width="150" height="64"/>
+  <text class="label" x="779" y="179">メール</text>
+  <text class="tiny" x="779" y="200">Graph API</text>
+  <rect class="card" x="888" y="150" width="150" height="64"/>
+  <text class="label" x="963" y="179">FAX</text>
+  <text class="tiny" x="963" y="200">OCR</text>
+  <rect class="card" x="1072" y="150" width="150" height="64"/>
+  <text class="label" x="1147" y="179">EC</text>
+  <text class="tiny" x="1147" y="200">API連携</text>
 
-  <rect class="lane" x="44" y="264" width="1192" height="116"/>
-  <text class="band-title" x="68" y="298">2. 受信処理・セッション管理</text>
-  <rect class="card green" x="254" y="288" width="264" height="68"/>
-  <text class="label" x="285" y="316">Azure Container Apps</text>
-  <text class="small" x="286" y="338">FastAPI / Webhook / REST API</text>
-  <rect class="card green" x="556" y="288" width="228" height="68"/>
-  <text class="label" x="590" y="316">Tenant Resolver</text>
-  <text class="small" x="590" y="338">公式アカウント・番号で解決</text>
-  <rect class="card green" x="822" y="288" width="224" height="68"/>
-  <text class="label" x="858" y="316">Session Manager</text>
-  <text class="small" x="860" y="338">会話継続 / TTL管理</text>
+  <rect class="lane" x="44" y="272" width="1352" height="124"/>
+  <line class="divider" x1="270" y1="272" x2="270" y2="396"/>
+  <text class="band-title" x="74" y="310">2. 受信処理</text>
+  <text class="band-title" x="74" y="337">セッション管理</text>
+  <rect class="card green" x="326" y="302" width="260" height="68"/>
+  <text class="label" x="456" y="329">Azure Container Apps</text>
+  <text class="small" x="456" y="351">FastAPI / Webhook / REST API</text>
+  <rect class="card green" x="636" y="302" width="230" height="68"/>
+  <text class="label" x="751" y="329">Tenant Resolver</text>
+  <text class="small" x="751" y="351">公式アカウント・番号で解決</text>
+  <rect class="card green" x="916" y="302" width="230" height="68"/>
+  <text class="label" x="1031" y="329">Session Manager</text>
+  <text class="small" x="1031" y="351">会話継続 / TTL管理</text>
 
-  <rect class="lane" x="44" y="408" width="1192" height="134"/>
-  <text class="band-title" x="68" y="442">3. マルチエージェント処理</text>
-  <rect class="card amber" x="226" y="448" width="160" height="64"/>
-  <text class="label" x="260" y="477">Orchestrator</text>
-  <text class="tiny" x="265" y="497">処理順序を判断</text>
-  <rect class="card amber" x="424" y="448" width="144" height="64"/>
-  <text class="label" x="472" y="477">Intake</text>
-  <text class="tiny" x="448" y="497">顧客・商品・数量</text>
-  <rect class="card amber" x="594" y="448" width="144" height="64"/>
-  <text class="label" x="626" y="477">Exception</text>
-  <text class="tiny" x="618" y="497">確認・異常検知</text>
-  <rect class="card amber" x="764" y="448" width="144" height="64"/>
-  <text class="label" x="794" y="477">Inventory</text>
-  <text class="tiny" x="798" y="497">在庫照合</text>
-  <rect class="card amber" x="934" y="448" width="156" height="64"/>
-  <text class="label" x="958" y="477">Communication</text>
-  <text class="tiny" x="974" y="497">返信生成</text>
+  <rect class="lane" x="44" y="426" width="1352" height="142"/>
+  <line class="divider" x1="270" y1="426" x2="270" y2="568"/>
+  <text class="band-title" x="74" y="464">3. マルチ</text>
+  <text class="band-title" x="74" y="491">エージェント処理</text>
+  <rect class="card amber" x="320" y="464" width="170" height="64"/>
+  <text class="label" x="405" y="493">Orchestrator</text>
+  <text class="tiny" x="405" y="514">処理順序を判断</text>
+  <rect class="card amber" x="532" y="464" width="150" height="64"/>
+  <text class="label" x="607" y="493">Intake</text>
+  <text class="tiny" x="607" y="514">顧客・商品・数量</text>
+  <rect class="card amber" x="724" y="464" width="150" height="64"/>
+  <text class="label" x="799" y="493">Exception</text>
+  <text class="tiny" x="799" y="514">確認・異常検知</text>
+  <rect class="card amber" x="916" y="464" width="150" height="64"/>
+  <text class="label" x="991" y="493">Inventory</text>
+  <text class="tiny" x="991" y="514">在庫照合</text>
+  <rect class="card amber" x="1108" y="464" width="168" height="64"/>
+  <text class="label" x="1192" y="493">Communication</text>
+  <text class="tiny" x="1192" y="514">返信生成</text>
 
-  <rect class="lane" x="44" y="570" width="1192" height="102"/>
-  <text class="band-title" x="68" y="604">4. Connector層</text>
-  <rect class="card violet" x="270" y="592" width="260" height="52"/>
-  <text class="label" x="302" y="622">Protocol Interface</text>
-  <text class="tiny" x="303" y="638">IOrder / IProduct / IInventory ...</text>
-  <rect class="card violet" x="580" y="592" width="260" height="52"/>
-  <text class="label" x="612" y="622">Connector Factory</text>
-  <text class="tiny" x="614" y="638">tenant_id で Adapter 解決</text>
-  <rect class="card violet" x="890" y="592" width="220" height="52"/>
-  <text class="label" x="938" y="622">Adapter</text>
-  <text class="tiny" x="920" y="638">Azure / 既存ERP / API</text>
+  <rect class="lane" x="44" y="598" width="1352" height="112"/>
+  <line class="divider" x1="270" y1="598" x2="270" y2="710"/>
+  <text class="band-title" x="74" y="638">4. Connector層</text>
+  <rect class="card violet" x="340" y="626" width="270" height="54"/>
+  <text class="label" x="475" y="653">Protocol Interface</text>
+  <text class="tiny" x="475" y="671">IOrder / IProduct / IInventory</text>
+  <rect class="card violet" x="670" y="626" width="270" height="54"/>
+  <text class="label" x="805" y="653">Connector Factory</text>
+  <text class="tiny" x="805" y="671">tenant_id で Adapter 解決</text>
+  <rect class="card violet" x="1000" y="626" width="240" height="54"/>
+  <text class="label" x="1120" y="653">Adapter</text>
+  <text class="tiny" x="1120" y="671">Azure / 既存ERP / API</text>
 
-  <rect class="lane" x="44" y="700" width="1192" height="84"/>
-  <text class="band-title" x="68" y="734">5. データ層 / 6. 出力・UI層</text>
-  <rect class="card rose" x="284" y="718" width="150" height="46"/>
-  <text class="label" x="320" y="746">Cosmos DB</text>
-  <rect class="card rose" x="460" y="718" width="150" height="46"/>
-  <text class="label" x="492" y="746">Azure SQL</text>
-  <rect class="card rose" x="636" y="718" width="150" height="46"/>
-  <text class="label" x="668" y="746">AI Search</text>
-  <rect class="card cyan" x="838" y="718" width="150" height="46"/>
-  <text class="label" x="874" y="746">Dashboard</text>
-  <rect class="card cyan" x="1014" y="718" width="150" height="46"/>
-  <text class="label" x="1052" y="746">LINE返信</text>
+  <rect class="lane" x="44" y="740" width="1352" height="106"/>
+  <line class="divider" x1="270" y1="740" x2="270" y2="846"/>
+  <text class="band-title" x="74" y="778">5. データ層</text>
+  <text class="band-title" x="74" y="805">6. 出力・UI層</text>
+  <rect class="card rose" x="340" y="770" width="150" height="48"/>
+  <text class="label" x="415" y="800">Cosmos DB</text>
+  <rect class="card rose" x="540" y="770" width="150" height="48"/>
+  <text class="label" x="615" y="800">Azure SQL</text>
+  <rect class="card rose" x="740" y="770" width="150" height="48"/>
+  <text class="label" x="815" y="800">AI Search</text>
+  <rect class="card cyan" x="970" y="770" width="150" height="48"/>
+  <text class="label" x="1045" y="800">Dashboard</text>
+  <rect class="card cyan" x="1170" y="770" width="150" height="48"/>
+  <text class="label" x="1245" y="800">LINE返信</text>
 
-  <path class="arrow" d="M 670 210 L 670 286"/>
-  <path class="arrow" d="M 1046 322 L 1046 448"/>
-  <path class="arrow" d="M 386 322 L 386 448"/>
-  <path class="arrow" d="M 386 512 L 386 592"/>
-  <path class="arrow" d="M 1000 644 L 1000 718"/>
-  <path class="arrow" d="M 682 644 L 682 718"/>
-  <path class="arrow" d="M 360 644 L 360 718"/>
-  <path class="soft-arrow" d="M 1012 512 C 1148 548 1160 674 1088 718"/>
-  <path class="soft-arrow" d="M 506 512 C 516 560 424 678 360 718"/>
-  <text class="tiny" x="1010" y="684">確定通知</text>
-  <text class="tiny" x="430" y="684">注文・学習データ</text>
+  <path class="arrow" d="M 779 214 L 779 300"/>
+  <path class="arrow" d="M 1031 370 L 1031 462"/>
+  <path class="arrow" d="M 456 370 L 456 462"/>
+  <path class="arrow" d="M 405 528 L 405 624"/>
+  <path class="arrow" d="M 475 680 L 475 768"/>
+  <path class="arrow" d="M 805 680 L 805 768"/>
+  <path class="arrow" d="M 1120 680 L 1120 768"/>
+  <path class="soft-arrow" d="M 1192 528 C 1324 586 1340 724 1245 768"/>
+  <path class="soft-arrow" d="M 607 528 C 590 596 506 704 415 768"/>
+  <text class="note" x="1210" y="724">確定通知</text>
+  <text class="note" x="514" y="724">注文・学習データ</text>
 </svg>
