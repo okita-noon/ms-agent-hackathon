@@ -1,5 +1,15 @@
 const API_BASE = "";
 
+let currentTenantId = "T-001";
+
+export function setTenantId(id: string): void {
+  currentTenantId = id;
+}
+
+export function getTenantId(): string {
+  return currentTenantId;
+}
+
 export interface OrderItem {
   product_name: string;
   quantity: number;
@@ -38,14 +48,16 @@ export interface Customer {
 }
 
 export async function fetchOrders(date: string): Promise<Order[]> {
-  const resp = await fetch(`${API_BASE}/api/orders?delivery_date=${date}`);
+  const resp = await fetch(
+    `${API_BASE}/api/orders?delivery_date=${date}&tenant_id=${currentTenantId}`
+  );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   return data.orders || [];
 }
 
 export async function fetchCustomers(): Promise<Customer[]> {
-  const resp = await fetch(`${API_BASE}/api/customers`);
+  const resp = await fetch(`${API_BASE}/api/customers?tenant_id=${currentTenantId}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   return data.customers || [];
@@ -55,11 +67,14 @@ export async function updateCustomer(
   customerId: string,
   fields: Partial<Customer>
 ): Promise<Customer> {
-  const resp = await fetch(`${API_BASE}/api/customers/${customerId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(fields),
-  });
+  const resp = await fetch(
+    `${API_BASE}/api/customers/${customerId}?tenant_id=${currentTenantId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    }
+  );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }

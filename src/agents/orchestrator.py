@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import date
@@ -17,6 +18,7 @@ from src.agents.definitions import (
 )
 from src.connectors.context import TenantContext
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
 from src.plugins.inventory_plugin import InventoryPlugin
@@ -37,7 +39,7 @@ class OrderOrchestrator:
         self._key = azure_openai_key
         self._deployment = deployment_name
 
-    def _build_kernel(self) -> Kernel:
+    def _build_kernel(self, *plugins: tuple[object, str]) -> Kernel:
         kernel = Kernel()
         kernel.add_service(
             AzureChatCompletion(
@@ -46,10 +48,86 @@ class OrderOrchestrator:
                 api_key=self._key,
             )
         )
-        kernel.add_plugin(IntakePlugin(self._ctx), plugin_name="intake")
-        kernel.add_plugin(InventoryPlugin(self._ctx), plugin_name="inventory")
-        kernel.add_plugin(ExceptionPlugin(self._ctx), plugin_name="exception")
+        for plugin_instance, plugin_name in plugins:
+            kernel.add_plugin(plugin_instance, plugin_name=plugin_name)
         return kernel
+
+    def _make_intake_agent(self) -> ChatCompletionAgent:
+        kernel = self._build_kernel(
+            (IntakePlugin(self._ctx), "intake"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="IntakeAgent",
+            instructions=INTAKE_AGENT_INSTRUCTIONS,
+        )
+
+    def _make_exception_agent(self) -> ChatCompletionAgent:
+        kernel = self._build_kernel(
+            (ExceptionPlugin(self._ctx), "exception"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="ExceptionAgent",
+            instructions=EXCEPTION_AGENT_INSTRUCTIONS,
+        )
+
+    def _make_inventory_agent(self) -> ChatCompletionAgent:
+        kernel = self._build_kernel(
+            (InventoryPlugin(self._ctx), "inventory"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="InventoryAgent",
+            instructions=INVENTORY_AGENT_INSTRUCTIONS,
+        )
+
+    def _make_communication_agent(self) -> ChatCompletionAgent:
+        kernel = self._build_kernel(
+            (CommunicationPlugin(self._ctx), "communication"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="CommunicationAgent",
+            instructions=COMMUNICATION_AGENT_INSTRUCTIONS,
+        )
+
+    def _make_orchestrator_agent(self) -> ChatCompletionAgent:
+        # Shared kernel with all plugins for final response generation
+        kernel = self._build_kernel(
+            (IntakePlugin(self._ctx), "intake"),
+            (InventoryPlugin(self._ctx), "inventory"),
+            (ExceptionPlugin(self._ctx), "exception"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="Orchestrator",
+            instructions=ORCHESTRATOR_INSTRUCTIONS,
+        )
+
+    def _extract_json(self, text: str) -> dict | None:
+        # Try to extract JSON block from agent output
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if match:
+            raw = match.group(1)
+        else:
+            match = re.search(r"(\{.*\})", text, re.DOTALL)
+            raw = match.group(1) if match else None
+
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    async def _invoke_agent(self, agent: ChatCompletionAgent, message: str) -> str:
+        result_text = ""
+        thread = None
+        async for response in agent.invoke(messages=message, thread=thread):
+            result_text = str(response.content)
+            thread = response.thread
+        return result_text
 
     async def process_order_message(
         self,
@@ -58,41 +136,157 @@ class OrderOrchestrator:
         reply_token: str | None = None,
         source: OrderSource = OrderSource.LINE,
     ) -> dict:
-        kernel = self._build_kernel()
+        result: dict = {
+            "response": "",
+            "line_user_id": line_user_id,
+            "reply_token": reply_token,
+        }
 
-        agent = ChatCompletionAgent(
-            kernel=kernel,
-            name="Orchestrator",
-            instructions=ORCHESTRATOR_INSTRUCTIONS,
-        )
-
-        user_message = (
+        # ── Step 1: Intake Agent ───────────────────────────────────────────────
+        intake_agent = self._make_intake_agent()
+        intake_prompt = (
             f"以下の注文メッセージを処理してください。\n"
             f"チャネル: {source.value}\n"
             f"LINE User ID: {line_user_id}\n"
             f"メッセージ: {message}\n\n"
             f"まず lookup_customer_by_line_id でこの顧客を特定し、"
-            f"次に注文内容を解析してください。"
+            f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
         )
+        intake_text = await self._invoke_agent(intake_agent, intake_prompt)
+        logger.info("Intake result: %s", intake_text[:500])
 
-        result_text = ""
-        thread = None
-        async for response in agent.invoke(messages=user_message, thread=thread):
-            result_text = str(response.content)
-            thread = response.thread
+        intake_draft = self._extract_json(intake_text)
+        if not intake_draft or not intake_draft.get("items"):
+            # Could not parse order → fall back to orchestrator for natural reply
+            logger.warning("Intake agent returned no parseable draft; falling back to orchestrator")
+            response_text = await self._generate_final_response(
+                message=message,
+                line_user_id=line_user_id,
+                intake_text=intake_text,
+                exception_text=None,
+                inventory_text=None,
+            )
+            result["response"] = response_text
+            await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
 
-        logger.info("Orchestrator result: %s", result_text[:500])
+        items = intake_draft.get("items", [])
+        customer_id = intake_draft.get("customer_id", "")
+        needs_confirmation = intake_draft.get("needs_confirmation", False)
 
-        saved_order = await self._try_create_order_from_message(message, line_user_id, source)
+        # ── Step 2: Exception Agent ────────────────────────────────────────────
+        exception_text: str | None = None
+        exception_result: dict | None = None
+        if items and customer_id:
+            exception_agent = self._make_exception_agent()
+            items_summary = json.dumps(items, ensure_ascii=False)
+            exception_prompt = (
+                f"以下の注文ドラフトの異常検知を行ってください。\n"
+                f"顧客ID: {customer_id}\n"
+                f"注文アイテム: {items_summary}\n"
+                f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
+                f"結果をJSON形式で返してください。"
+            )
+            exception_text = await self._invoke_agent(exception_agent, exception_prompt)
+            logger.info("Exception result: %s", exception_text[:500])
+            exception_result = self._extract_json(exception_text)
 
-        result = {
-            "response": result_text,
-            "line_user_id": line_user_id,
-            "reply_token": reply_token,
-        }
-        if saved_order:
-            result["order_id"] = saved_order.id
+        # Check if critical anomaly requires user confirmation
+        anomaly_confirmation_needed = False
+        if exception_result and exception_result.get("confirmation_needed"):
+            anomaly_confirmation_needed = True
+            needs_confirmation = True
+
+        # ── Step 3: Inventory Agent ────────────────────────────────────────────
+        inventory_text: str | None = None
+        inventory_result: dict | None = None
+        if not anomaly_confirmation_needed and items:
+            inventory_agent = self._make_inventory_agent()
+            items_summary = json.dumps(items, ensure_ascii=False)
+            inventory_prompt = (
+                f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
+                f"注文アイテム: {items_summary}\n"
+                f"各アイテムに対して check_inventory を実行し、"
+                f"在庫が足りない場合は find_alternatives を検索し、"
+                f"在庫が確保できたアイテムは reserve_inventory で引当を行ってください。"
+                f"結果をJSON形式で返してください。"
+            )
+            inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
+            logger.info("Inventory result: %s", inventory_text[:500])
+            inventory_result = self._extract_json(inventory_text)
+
+        # ── Step 4: Save order if no confirmation needed ───────────────────────
+        saved_order: Order | None = None
+        if not needs_confirmation:
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    saved_order = await self.create_order_from_draft(draft, source=source)
+                    logger.info("Created order %s from multi-agent chain", saved_order.id)
+                    result["order_id"] = saved_order.id
+            except Exception:
+                logger.exception("Failed to save order from multi-agent chain")
+
+        # ── Step 5: Generate final response via orchestrator ───────────────────
+        response_text = await self._generate_final_response(
+            message=message,
+            line_user_id=line_user_id,
+            intake_text=intake_text,
+            exception_text=exception_text,
+            inventory_text=inventory_text,
+        )
+        result["response"] = response_text
+
+        # ── Step 6: Send LINE message ──────────────────────────────────────────
+        await self._send_line_message(response_text, reply_token, line_user_id)
+
+        if needs_confirmation:
+            result["session_status"] = "awaiting_reply"
+
         return result
+
+    async def _generate_final_response(
+        self,
+        message: str,
+        line_user_id: str,
+        intake_text: str | None,
+        exception_text: str | None,
+        inventory_text: str | None,
+    ) -> str:
+        orchestrator_agent = self._make_orchestrator_agent()
+        context_parts = [
+            f"元のメッセージ: {message}",
+            f"LINE User ID: {line_user_id}",
+        ]
+        if intake_text:
+            context_parts.append(f"[Intake Agent結果]\n{intake_text}")
+        if exception_text:
+            context_parts.append(f"[Exception Agent結果]\n{exception_text}")
+        if inventory_text:
+            context_parts.append(f"[Inventory Agent結果]\n{inventory_text}")
+
+        final_prompt = (
+            "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
+            "返信メッセージのみを出力してください（JSON不要）。\n\n"
+            + "\n\n".join(context_parts)
+        )
+        response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
+        return response_text
+
+    async def _send_line_message(
+        self,
+        message: str,
+        reply_token: str | None,
+        line_user_id: str,
+    ) -> None:
+        comm_plugin = CommunicationPlugin(self._ctx)
+        try:
+            if reply_token:
+                await comm_plugin.send_line_reply(reply_token=reply_token, message=message)
+            else:
+                await comm_plugin.send_line_push(user_id=line_user_id, message=message)
+        except Exception:
+            logger.exception("Failed to send LINE message")
 
     async def create_order_from_draft(
         self,
@@ -192,6 +386,20 @@ class OrderOrchestrator:
             "delivery_carrier": preference.default_carrier,
             "delivery_time_slot": preference.default_time_slot,
         }
+
+
+def _build_draft_from_intake(intake_draft: dict) -> dict | None:
+    if not intake_draft.get("customer_id") or not intake_draft.get("items"):
+        return None
+    return {
+        "customer_id": intake_draft["customer_id"],
+        "customer_name": intake_draft.get("customer_name", ""),
+        "items": intake_draft["items"],
+        "delivery_date": intake_draft.get("delivery_date") or date.today(),
+        "delivery_route": intake_draft.get("delivery_route"),
+        "delivery_carrier": intake_draft.get("delivery_carrier"),
+        "delivery_time_slot": intake_draft.get("delivery_time_slot"),
+    }
 
 
 def _parse_order_items(message: str) -> list[dict]:
