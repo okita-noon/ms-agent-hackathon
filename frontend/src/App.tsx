@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import Header from "./components/Header";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
+import { getTenantId, setTenantId } from "./lib/api";
 
 type Tab = "orders" | "customers";
 
@@ -26,10 +27,16 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   },
 ];
 
+const TENANTS = [
+  { id: "T-001", label: "T-001 丸山食品" },
+  { id: "T-002", label: "T-002 鈴木青果" },
+];
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("orders");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  const [tenantId, setTenantIdState] = useState<string>(getTenantId());
 
   useEffect(() => {
     const el = tabRefs.current[tab];
@@ -42,12 +49,17 @@ export default function App() {
     }
   }, [tab]);
 
+  function handleTenantChange(id: string) {
+    setTenantId(id);
+    setTenantIdState(id);
+  }
+
   return (
     <div className="min-h-screen bg-surface">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <nav className="relative mb-8">
-          <div className="flex gap-1 border-b border-gray-200 relative">
+          <div className="flex items-end gap-1 border-b border-gray-200 relative">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -67,9 +79,32 @@ export default function App() {
               className="tab-indicator absolute bottom-0 h-0.5 bg-brand-600 rounded-full"
               style={{ left: indicator.left, width: indicator.width }}
             />
+            {/* Tenant selector — pushed to the right of the tab bar */}
+            <div className="ml-auto mb-1 flex items-center gap-2">
+              <span className="text-[11px] text-gray-400 font-medium tracking-wide">テナント</span>
+              <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs font-medium">
+                {TENANTS.map((t, i) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleTenantChange(t.id)}
+                    className={`px-3 py-1.5 transition-colors duration-150 ${
+                      tenantId === t.id
+                        ? "bg-brand-600 text-white"
+                        : "bg-white text-gray-500 hover:bg-gray-50"
+                    } ${i > 0 ? "border-l border-gray-200" : ""}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </nav>
-        {tab === "orders" ? <Orders /> : <Customers />}
+        {tab === "orders" ? (
+          <Orders key={tenantId} />
+        ) : (
+          <Customers key={tenantId} />
+        )}
       </main>
     </div>
   );

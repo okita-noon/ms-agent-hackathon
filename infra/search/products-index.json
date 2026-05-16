@@ -1,0 +1,151 @@
+{
+  "name": "products",
+  "fields": [
+    {
+      "name": "product_id",
+      "type": "Edm.String",
+      "key": true,
+      "searchable": false,
+      "filterable": true,
+      "sortable": true,
+      "facetable": false,
+      "retrievable": true
+    },
+    {
+      "name": "tenant_id",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": true,
+      "facetable": false,
+      "retrievable": true
+    },
+    {
+      "name": "name",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": true,
+      "filterable": false,
+      "sortable": false,
+      "facetable": false,
+      "retrievable": true,
+      "analyzer": "ja.microsoft"
+    },
+    {
+      "name": "display_name",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": true,
+      "filterable": false,
+      "sortable": false,
+      "facetable": false,
+      "retrievable": true,
+      "analyzer": "ja.microsoft"
+    },
+    {
+      "name": "search_text",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": true,
+      "filterable": false,
+      "sortable": false,
+      "facetable": false,
+      "retrievable": false,
+      "analyzer": "ja.microsoft"
+    },
+    {
+      "name": "category",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": true,
+      "filterable": true,
+      "sortable": true,
+      "facetable": true,
+      "retrievable": true,
+      "analyzer": "ja.microsoft"
+    },
+    {
+      "name": "default_unit",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": true,
+      "retrievable": true
+    },
+    {
+      "name": "temperature_zone",
+      "type": "Edm.String",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": true,
+      "retrievable": true
+    },
+    {
+      "name": "unit_weight_kg",
+      "type": "Edm.Double",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": true,
+      "facetable": false,
+      "retrievable": true
+    },
+    {
+      "name": "is_variable_weight",
+      "type": "Edm.Boolean",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": false,
+      "retrievable": true
+    },
+    {
+      "name": "price_per_unit",
+      "type": "Edm.Double",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": true,
+      "facetable": false,
+      "retrievable": true
+    },
+    {
+      "name": "active",
+      "type": "Edm.Boolean",
+      "key": false,
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": false,
+      "retrievable": true
+    }
+  ],
+  "scoringProfiles": [
+    {
+      "name": "nameBoost",
+      "text": {
+        "weights": {
+          "name": 5,
+          "display_name": 3,
+          "search_text": 2,
+          "category": 1
+        }
+      }
+    }
+  ],
+  "defaultScoringProfile": "nameBoost",
+  "corsOptions": null,
+  "suggesters": [
+    {
+      "name": "product-suggester",
+      "searchMode": "analyzingInfixMatching",
+      "sourceFields": ["name", "display_name"]
+    }
+  ]
+}
