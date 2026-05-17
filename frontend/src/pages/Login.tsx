@@ -55,7 +55,7 @@ export default function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">OrderAI</h1>
+          <h1 className="text-xl font-bold text-gray-900">foogent</h1>
           <p className="text-sm text-gray-500 mt-1">
             AI受発注自動一元管理システム
           </p>
@@ -136,7 +136,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="text-center text-[11px] text-gray-400 mt-4">
-          OrderAI v1.0
+          foogent v1.0
         </p>
       </div>
     </div>

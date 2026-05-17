@@ -2,7 +2,7 @@
 
 ## 概要
 
-OrderAI はID/パスワード認証と Microsoft SSO (Entra ID) に対応。
+foogent はID/パスワード認証と Microsoft SSO (Entra ID) に対応。
 ユーザーはテナントに紐付いており、ログイン後は自動的に所属テナントのデータのみ表示される。
 
 ---
@@ -75,7 +75,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 1. Azure Portal → **Microsoft Entra ID** → **アプリの登録** → **新規登録**
 2. 以下を入力:
-   - 名前: `OrderAI Dashboard`
+   - 名前: `foogent Dashboard`
    - サポートされるアカウントの種類: **この組織ディレクトリのみ**（シングルテナント）
      - 外部ユーザーも許可する場合は「任意の組織ディレクトリ」を選択
    - リダイレクト URI:

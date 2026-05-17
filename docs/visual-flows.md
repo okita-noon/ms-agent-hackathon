@@ -4,7 +4,7 @@
 
 ## アーキテクチャ
 
-![AI受発注自動一元管理システムの6層アーキテクチャ](assets/architecture-flow.svg)
+![foogent の6層アーキテクチャ](assets/architecture-flow.svg)
 
 LINE・電話などの入力チャネルを Azure Container Apps が受け、テナント解決とセッション管理を行う。
 その後、Orchestrator が各専門 Agent を呼び分け、Connector 層を通じてテナント別のデータソースにアクセスする。
