@@ -42,6 +42,16 @@ if frontend_origins:
         allow_headers=["*"],
     )
 
+frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+if frontend_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=frontend_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 # ── Auth routes (public) ──────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/auth")
 
