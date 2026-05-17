@@ -59,10 +59,15 @@ def main() -> None:
 
     hashed = pwd_context.hash(demo_password)
 
+    # Convert ADO.NET connection string to ODBC DSN format if needed
+    from src.connectors.adapters._sql_util import to_odbc_dsn
+
+    odbc_dsn = to_odbc_dsn(conn_str)
+
     try:
         import pyodbc
 
-        conn = pyodbc.connect(conn_str)
+        conn = pyodbc.connect(odbc_dsn)
     except ImportError:
         print("ERROR: pyodbc not installed. Run: pip install pyodbc")
         sys.exit(1)
