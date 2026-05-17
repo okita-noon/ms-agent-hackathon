@@ -20,6 +20,8 @@ from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_fo
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+DEFAULT_FRONTEND_URL = "https://storderaidev.z11.web.core.windows.net/dashboard/"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,7 +48,14 @@ app.include_router(auth_router, prefix="/api/auth")
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url=os.environ.get("FRONTEND_URL", "/dashboard"))
+    return RedirectResponse(url=os.environ.get("FRONTEND_URL", DEFAULT_FRONTEND_URL))
+
+
+@app.get("/dashboard")
+@app.get("/dashboard/")
+@app.get("/dashboard/{path:path}")
+async def dashboard_redirect(path: str = ""):
+    return RedirectResponse(url=os.environ.get("FRONTEND_URL", DEFAULT_FRONTEND_URL))
 
 
 @app.get("/api/health")

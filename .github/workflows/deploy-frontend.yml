@@ -79,8 +79,8 @@ jobs:
             --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
             --account-key "$ACCOUNT_KEY" \
             --static-website \
-            --index-document "${{ env.FRONTEND_PATH }}/index.html" \
-            --404-document "${{ env.FRONTEND_PATH }}/index.html"
+            --index-document "index.html" \
+            --404-document "index.html"
 
       - name: Upload frontend
         run: |

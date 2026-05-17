@@ -28,6 +28,11 @@ class TestRootRedirect:
         assert resp.status_code == 307
         assert "/dashboard" in resp.headers["location"]
 
+    def test_legacy_dashboard_path_redirects_to_dashboard(self, client):
+        resp = client.get("/dashboard/", follow_redirects=False)
+        assert resp.status_code == 307
+        assert "/dashboard" in resp.headers["location"]
+
 
 class TestLineWebhook:
     def test_returns_200_for_valid_request(self, client):
