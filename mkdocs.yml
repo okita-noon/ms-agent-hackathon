@@ -6,16 +6,18 @@ repo_name: okita-noon/ms-agent-hackathon
 theme:
   name: material
   language: ja
+  logo: assets/logo.png
+  favicon: assets/favicon.png
   palette:
     - scheme: default
-      primary: indigo
-      accent: indigo
+      primary: deep orange
+      accent: orange
       toggle:
         icon: material/brightness-7
         name: ダークモードに切り替え
     - scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: deep orange
+      accent: orange
       toggle:
         icon: material/brightness-4
         name: ライトモードに切り替え
