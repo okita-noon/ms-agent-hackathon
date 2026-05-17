@@ -31,6 +31,7 @@ def tenant_config() -> TenantConfig:
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection="test"),
             "ISessionRepository": ConnectorConfig(type="cosmosdb", connection="test"),
+            "IMessageHistoryRepository": ConnectorConfig(type="cosmosdb", connection="test"),
             "IOrderIntelligenceStore": ConnectorConfig(type="cosmosdb", connection="test"),
             "IProductMaster": ConnectorConfig(type="azure_sql", connection="test"),
             "ICustomerRepository": ConnectorConfig(type="azure_sql", connection="test"),
@@ -49,6 +50,9 @@ def mock_tenant_ctx(tenant_config) -> TenantContext:
     def _get_connector(name):
         if name not in ctx._connectors:
             ctx._connectors[name] = AsyncMock()
+            if name == "IMessageHistoryRepository":
+                ctx._connectors[name].list_recent_messages.return_value = []
+                ctx._connectors[name].create_message.side_effect = lambda message: message
         return ctx._connectors[name]
 
     ctx.get_connector = _get_connector

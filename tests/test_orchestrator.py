@@ -5,7 +5,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.agents.orchestrator import OrderOrchestrator, _build_draft_from_intake, _parse_order_items
+from src.agents.orchestrator import (
+    OrderOrchestrator,
+    _build_draft_from_intake,
+    _format_memory_context,
+    _is_affirmative_reply,
+    _parse_order_items,
+)
+from src.models.message_history import MessageHistory
 from src.models.order import OrderSource
 
 
@@ -91,6 +98,41 @@ class TestExtractJson:
 
     def test_invalid_json(self):
         assert self._orch._extract_json("{broken: json}") is None
+
+
+class TestMemoryContext:
+    def test_format_memory_context(self):
+        history = [
+            MessageHistory(
+                id="msg-1",
+                tenant_id="T-TEST",
+                session_id="sess-1",
+                channel="line",
+                channel_user_id="U123",
+                role="user",
+                text="りんご150kg",
+            ),
+            MessageHistory(
+                id="msg-2",
+                tenant_id="T-TEST",
+                session_id="sess-1",
+                channel="line",
+                channel_user_id="U123",
+                role="assistant",
+                text="通常より多いですが、よろしいですか？",
+            ),
+        ]
+
+        context = _format_memory_context(history, {"customer_id": "C-001", "items": []})
+
+        assert "会話履歴" in context
+        assert "顧客: りんご150kg" in context
+        assert "確認待ち注文ドラフト" in context
+
+    def test_affirmative_reply(self):
+        assert _is_affirmative_reply("OK") is True
+        assert _is_affirmative_reply("それでお願いします") is True
+        assert _is_affirmative_reply("りんごを15kgに変更") is False
 
 
 class TestProcessOrderMessageSendsOnce:
@@ -201,7 +243,37 @@ class TestProcessOrderMessageSendsOnce:
 
             assert mock_send.call_count == 1
             assert result.get("session_status") == "awaiting_reply"
+            assert result.get("pending_order_draft")
             assert "order_id" not in result
+
+    @pytest.mark.asyncio
+    async def test_affirmative_reply_creates_order_from_pending_draft(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-OK")
+
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+        }
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            mock_invoke.return_value = "ご注文を確定しました。"
+
+            result = await orch.process_order_message(
+                message="OK",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                pending_order_draft=pending_draft,
+            )
+
+            assert result["order_id"] == "ORD-OK"
+            assert mock_send.call_count == 1
 
 
 class TestEndToEndMessageFlow:
