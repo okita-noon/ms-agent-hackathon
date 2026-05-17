@@ -4,11 +4,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
-from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from fastapi.staticfiles import StaticFiles
 
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT
 from src.auth.dependencies import get_tenant_id
@@ -31,19 +30,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OrderAI API", lifespan=lifespan)
 
+frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+if frontend_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=frontend_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 # ── Auth routes (public) ──────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/auth")
-
-frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-legacy_dashboard = Path(__file__).resolve().parent.parent / "dashboard"
-dashboard_dir = frontend_dist if frontend_dist.exists() else legacy_dashboard
-if dashboard_dir.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
 
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/dashboard")
+    return RedirectResponse(url=os.environ.get("FRONTEND_URL", "/dashboard"))
 
 
 @app.get("/api/health")
@@ -97,7 +100,9 @@ def _get_phone_handler() -> PhoneCallHandler:
             callback_base_url=os.environ.get("ACS_CALLBACK_BASE_URL", ""),
             azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
             azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
-            azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
+            azure_openai_deployment_name=os.environ.get(
+                "AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT
+            ),
             speech_service_key=os.environ.get("SPEECH_SERVICE_KEY", ""),
             speech_service_endpoint=os.environ.get("SPEECH_SERVICE_ENDPOINT"),
         )

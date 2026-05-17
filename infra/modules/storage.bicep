@@ -39,3 +39,4 @@ resource emailContainer 'Microsoft.Storage/storageAccounts/blobServices/containe
 
 output name string = storageAccount.name
 output id string = storageAccount.id
+output webEndpoint string = storageAccount.properties.primaryEndpoints.web

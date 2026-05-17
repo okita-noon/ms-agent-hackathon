@@ -46,6 +46,7 @@ nav:
   - データフロー: data-flow.md
   - LINE会話履歴参照設計: line-conversation-memory.md
   - メールチャネル設計: email-channel-design.md
+  - デプロイ分割設計: deployment-split.md
   - MVPスコープ: mvp-scope.md
   - 認証セットアップ: auth-setup.md
   - 電話チャネル テスト: phone-testing.md

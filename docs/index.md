@@ -19,6 +19,7 @@
 | [データフロー](data-flow.md) | チャネル別データフロー・セッション管理・スケール戦略 |
 | [LINE会話履歴参照設計](line-conversation-memory.md) | LINEの直近会話履歴・確認待ちドラフトをAgentに渡す設計 |
 | [メールチャネル設計](email-channel-design.md) | Microsoft Graph によるメール受信・返信・セッション管理・実装タスク |
+| [デプロイ分割設計](deployment-split.md) | API・Frontend・Docsを分けたチーム開発向けCI/CD構成 |
 | [MVPスコープ](mvp-scope.md) | MVPスコープ・ユーザー体験シナリオ・非機能要件 |
 | [セキュリティ](security.md) | セキュリティガイド |
 
@@ -33,6 +34,7 @@
 | リレーショナルDB | Azure SQL Database |
 | 検索 | Azure AI Search |
 | サーバーレス | Azure Functions |
-| アプリ実行 | Azure Container Apps |
+| API実行 | Azure Container Apps |
+| Frontend配信 | Azure Storage Static Website |
 | 認証 | Microsoft Entra ID |
 | 秘密管理 | Azure Key Vault |
