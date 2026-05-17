@@ -58,7 +58,9 @@ class UserStore:
     """User CRUD backed by Azure SQL via aioodbc."""
 
     def __init__(self, sql_connection_string: str):
-        self._conn_str = sql_connection_string
+        from src.connectors.adapters._sql_util import to_odbc_dsn
+
+        self._conn_str = to_odbc_dsn(sql_connection_string)
 
     async def _get_connection(self):
         import aioodbc
