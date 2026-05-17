@@ -10,7 +10,7 @@ from azure.communication.callautomation import (
     PhoneNumberIdentifier,
     TextSource,
 )
-from src.agents.orchestrator import OrderOrchestrator
+from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.order import OrderSource
 from src.models.session import OrderSession
@@ -49,10 +49,12 @@ class PhoneCallHandler:
         azure_openai_key: str,
         speech_service_key: str,
         speech_service_endpoint: str | None = None,
+        azure_openai_deployment_name: str = DEFAULT_AZURE_OPENAI_DEPLOYMENT,
     ):
         self._callback_base_url = callback_base_url.rstrip("/")
         self._openai_endpoint = azure_openai_endpoint
         self._openai_key = azure_openai_key
+        self._openai_deployment_name = azure_openai_deployment_name
         self._speech_key = speech_service_key
         self._speech_endpoint = speech_service_endpoint
         self._calls: dict[str, CallState] = {}
@@ -173,6 +175,7 @@ class PhoneCallHandler:
             tenant_ctx=state.tenant_ctx,
             azure_openai_endpoint=self._openai_endpoint,
             azure_openai_key=self._openai_key,
+            deployment_name=self._openai_deployment_name,
         )
 
         response_text_holder: list[str] = []

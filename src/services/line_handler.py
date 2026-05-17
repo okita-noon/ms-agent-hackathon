@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from src.agents.orchestrator import OrderOrchestrator
+from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.intelligence import ResolvedItem
 from src.models.message_history import MessageHistory
@@ -58,12 +58,14 @@ class LineWebhookHandler:
         tenant_ctx: TenantContext,
         azure_openai_endpoint: str,
         azure_openai_key: str,
+        azure_openai_deployment_name: str = DEFAULT_AZURE_OPENAI_DEPLOYMENT,
     ):
         self._ctx = tenant_ctx
         self._orchestrator = OrderOrchestrator(
             tenant_ctx=tenant_ctx,
             azure_openai_endpoint=azure_openai_endpoint,
             azure_openai_key=azure_openai_key,
+            deployment_name=azure_openai_deployment_name,
         )
 
     def verify_signature(self, body: bytes, signature: str) -> bool:

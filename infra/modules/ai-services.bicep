@@ -2,6 +2,8 @@ param name string
 param location string
 param tags object
 param openAiModelDeploymentName string
+param openAiModelName string
+param openAiModelVersion string
 param embeddingModelDeploymentName string
 param keyVaultName string
 
@@ -19,7 +21,7 @@ resource aiServices 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = 
   }
 }
 
-resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
+resource openAiModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
   parent: aiServices
   name: openAiModelDeploymentName
   sku: {
@@ -29,8 +31,8 @@ resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-4o'
-      version: '2024-11-20'
+      name: openAiModelName
+      version: openAiModelVersion
     }
   }
 }
@@ -49,7 +51,7 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
       version: '1'
     }
   }
-  dependsOn: [gpt4oDeployment]
+  dependsOn: [openAiModelDeployment]
 }
 
 resource speechService 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = {

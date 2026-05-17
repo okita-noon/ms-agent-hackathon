@@ -27,7 +27,7 @@
 | カテゴリ | 技術 |
 |---|---|
 | Agent基盤 | Azure AI Agent Service |
-| LLM/Embedding | Azure AI Foundry（GPT-4o, text-embedding-3-small） |
+| LLM/Embedding | Azure AI Foundry（gpt-5.4-mini, text-embedding-3-small） |
 | オーケストレーション | Semantic Kernel（Python SDK） |
 | ドキュメントDB | Azure Cosmos DB |
 | リレーショナルDB | Azure SQL Database |
