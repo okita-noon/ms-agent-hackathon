@@ -19,7 +19,7 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert data["service"] == "orderai-api"
+        assert data["service"] == "foogent-api"
 
 
 class TestRootRedirect:

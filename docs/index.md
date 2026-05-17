@@ -1,4 +1,4 @@
-# AI受発注自動一元管理システム
+# foogent — AI受発注自動一元管理システム
 
 > ASKNOI_AI木曜会 / Microsoft Agent Hackathon 2026
 

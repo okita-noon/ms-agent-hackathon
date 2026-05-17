@@ -1,5 +1,5 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const TOKEN_KEY = "orderai_token";
+const TOKEN_KEY = "foogent_token";
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
