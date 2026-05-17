@@ -40,7 +40,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="foogent" className="h-12 mx-auto mb-4" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="foogent" className="h-12 mx-auto mb-4" />
           <p className="text-sm text-gray-500 mt-1">
             AI受発注自動一元管理システム
           </p>

@@ -42,7 +42,6 @@ function Dashboard() {
   const [tab, setTab] = useState<Tab>("orders");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
-  const { user, logout } = useAuth();
 
   useEffect(() => {
     const el = tabRefs.current[tab];
@@ -80,22 +79,6 @@ function Dashboard() {
               className="tab-indicator absolute bottom-0 h-0.5 bg-brand-600 rounded-full"
               style={{ left: indicator.left, width: indicator.width }}
             />
-            {/* User info & logout */}
-            <div className="ml-auto mb-1 flex items-center gap-3">
-              {user && (
-                <span className="text-xs text-gray-500">
-                  {user.display_name}
-                  <span className="text-gray-300 mx-1">|</span>
-                  <span className="text-gray-400">{user.tenant_id}</span>
-                </span>
-              )}
-              <button
-                onClick={logout}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                ログアウト
-              </button>
-            </div>
           </div>
         </nav>
         {tab === "orders" ? (
