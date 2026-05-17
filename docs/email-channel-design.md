@@ -17,6 +17,116 @@
 - 返信は初期実装では Graph `sendMail` を優先し、必要に応じて Azure Communication Services Email に差し替える。
 - メール原文、HTML本文、添付ファイルは Blob Storage に保存し、監査・再処理に使えるようにする。
 
+## ハッカソン用の推奨構成
+
+独自ドメインは取得しない。
+ハッカソンでは、Microsoft 365 / Entra テナントにあるデモ用メールボックスを使い、
+Microsoft Graph で受信・返信する構成を採用する。
+
+### 採用する方式
+
+| 項目 | ハッカソン方針 |
+|---|---|
+| 送受信方式 | Microsoft Graph |
+| 送信元 | デモ用 Microsoft 365 メールボックス |
+| 送信元ドメイン | `*.onmicrosoft.com` など既存テナントのドメイン |
+| 独自ドメイン | 使わない |
+| ACS Email | 使わない |
+| 受信検知 | 最初は polling、時間があれば Change Notifications |
+| 返信 | Graph `reply` または `sendMail` |
+| デモの見せ場 | メール注文 → Agent処理 → Dashboard反映 → 自動返信 |
+
+独自ドメインを使わないため、送信元は例として以下のような既存テナントのメールアドレスになる。
+
+```text
+orderai@<tenant>.onmicrosoft.com
+orders@<tenant>.onmicrosoft.com
+```
+
+実際のアドレスは、Microsoft 365 側で作成したメールボックスに合わせて決める。
+このリポジトリにはまだ送信元メールアドレスは固定されていない。
+
+### なぜ Graph を使うか
+
+- LINE の受信・返信に近い体験をメールでも作りやすい。
+- Microsoft 365 のメールボックスを使うため、受信・返信・スレッド継続をまとめて扱える。
+- ACS Email よりも、顧客メールへの「返信」として見せやすい。
+- 独自ドメインや DNS 検証が不要で、ハッカソン期間に間に合わせやすい。
+
+### 開発者に必要な権限
+
+開発担当者には、Entra ID で以下のどちらかを付与する。
+
+| 権限 | 用途 |
+|---|---|
+| `Cloud Application Administrator` | アプリ登録・Enterprise App・資格情報・API permission 設定 |
+| 対象アプリの owner | 既に作成済みのアプリ登録だけを編集する場合 |
+
+Graph の application permission に tenant-wide admin consent を付与する作業は、
+`Cloud Application Administrator` だけでは不足する場合がある。
+その場合は、管理者が最後に admin consent を実行する。
+
+### Graph API 権限
+
+デモではまず application permission で対象メールボックスを読む構成を目指す。
+権限は最小から始める。
+
+| 権限 | 種別 | 用途 |
+|---|---|---|
+| `Mail.Read` | Application | デモ用メールボックスの受信メール取得 |
+| `Mail.Send` | Application | デモ用メールボックスから返信・送信 |
+| `User.Read.All` | Application | メールボックスID解決が必要な場合のみ |
+
+可能であれば、Application Access Policy などで Graph アクセス対象をデモ用メールボックスに限定する。
+ハッカソン中に制限設定まで間に合わない場合でも、少なくともアプリ登録名・client secret・対象メールボックスを
+デモ用途に限定して運用する。
+
+### Azure / Container Apps に追加する設定
+
+Key Vault secret と Container Apps 環境変数に、以下を追加する。
+値はこのドキュメントに書かない。
+
+| 環境変数 | 用途 |
+|---|---|
+| `GRAPH_TENANT_ID` | Entra テナントID |
+| `GRAPH_CLIENT_ID` | メール連携用アプリ登録の client ID |
+| `GRAPH_CLIENT_SECRET` | client secret |
+| `GRAPH_MAILBOX_USER_ID` | 受信・返信に使うメールボックスの user id または UPN |
+| `EMAIL_POLL_INTERVAL_SECONDS` | polling 間隔。デモでは 30-60 秒程度 |
+| `EMAIL_REPLY_FROM_ADDRESS` | 表示・ルーティング用の送信元メールアドレス |
+
+`GRAPH_CLIENT_SECRET` は Key Vault で管理する。
+Container Apps には Key Vault から注入するか、既存運用に合わせて環境変数へ設定する。
+
+### 最短実装手順
+
+1. Microsoft 365 / Entra 側にデモ用メールボックスを用意する。
+2. Entra ID でメール連携用のアプリ登録を作成する。
+3. Graph API permission に `Mail.Read` と `Mail.Send` の application permission を追加する。
+4. 管理者が admin consent を付与する。
+5. client secret を作成し、Key Vault / Container Apps に設定する。
+6. まず polling で `GRAPH_MAILBOX_USER_ID` の Inbox を読む。
+7. 未処理メールを `InboundMessage(channel="email")` に変換する。
+8. 既存の `OrderOrchestrator` に渡す。
+9. 受注結果または確認質問を Graph `reply` / `sendMail` で返す。
+10. Dashboard では `source=email` として表示する。
+
+### デモ時の割り切り
+
+- 独自ドメイン、ACS Email、DNS 設定は扱わない。
+- Change Notifications は余力対応にする。最初は polling で十分。
+- 添付ファイル、HTML整形、署名除去は最小実装でよい。
+- 返信メールは、受信メールの `from` または `replyTo` に返す。
+- 同じメールを二重処理しないように、Graph message id を Cosmos DB などに保存する。
+- メール本文全文はログに出さない。
+
+### ハッカソンの完了条件
+
+- デモ用メールボックスへ注文メールを送る。
+- アプリがメールを取得し、本文を注文テキストとして解析する。
+- Dashboard に `source=email` の受注が表示される。
+- 在庫確認後、確認質問または受注確定メールが自動返信される。
+
 ## 全体フロー
 
 ```text
