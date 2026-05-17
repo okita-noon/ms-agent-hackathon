@@ -1,6 +1,6 @@
 # Microsoft Agent Hackathon 2026
 
-**チーム: ASKNOI_AI木曜会**
+**チーム: AINOK_AI木曜会**
 
 ## セットアップ
 
