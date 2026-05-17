@@ -44,5 +44,6 @@ nav:
   - マルチエージェント設計: multi-agent-design.md
   - Connector層・マルチテナント: connector-design.md
   - データフロー: data-flow.md
+  - メールチャネル設計: email-channel-design.md
   - MVPスコープ: mvp-scope.md
   - セキュリティ: security.md

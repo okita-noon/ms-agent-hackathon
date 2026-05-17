@@ -85,8 +85,8 @@
 | **Must** | 電話音声→テキスト変換→注文抽出 | ACS Call Automation + Azure AI Speech + Container Apps |
 | **Should** | AI Search商品あいまい検索 | Azure AI Search |
 | **Should** | ピッキングリストPDF生成 | Container Apps (バックグラウンドタスク) |
-| **Could** | メール受信→注文抽出 | Microsoft Graph API (Office 365) |
-| **Could** | メール自動返信 | Azure Communication Services |
+| **Could** | メール受信→注文抽出 | Microsoft Graph API (Office 365)。詳細: [メールチャネル設計](email-channel-design.md) |
+| **Could** | メール自動返信 | 初期実装は Graph `sendMail`、運用分離が必要なら Azure Communication Services Email |
 
 ## 非機能要件
 

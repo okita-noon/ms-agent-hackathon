@@ -17,6 +17,7 @@
 | [マルチエージェント設計](multi-agent-design.md) | Agent一覧・責務・フロー例・ツール定義・Learning Service |
 | [Connector層・マルチテナント](connector-design.md) | Connector層・テナント別差し替え・マルチテナント設計 |
 | [データフロー](data-flow.md) | チャネル別データフロー・セッション管理・スケール戦略 |
+| [メールチャネル設計](email-channel-design.md) | Microsoft Graph によるメール受信・返信・セッション管理・実装タスク |
 | [MVPスコープ](mvp-scope.md) | MVPスコープ・ユーザー体験シナリオ・非機能要件 |
 | [セキュリティ](security.md) | セキュリティガイド |
 
