@@ -100,6 +100,31 @@ resource sessionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
   }
 }
 
+resource messageHistoryContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-02-15-preview' = {
+  parent: ordersDb
+  name: 'message-history'
+  properties: {
+    resource: {
+      id: 'message-history'
+      partitionKey: {
+        paths: ['/tenant_id']
+        kind: 'Hash'
+      }
+      defaultTtl: 2592000
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [{ path: '/*' }]
+        compositeIndexes: [
+          [
+            { path: '/channel_user_id', order: 'ascending' }
+            { path: '/created_at', order: 'descending' }
+          ]
+        ]
+      }
+    }
+  }
+}
+
 resource intelligenceDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-02-15-preview' = {
   parent: cosmosAccount
   name: 'intelligence'

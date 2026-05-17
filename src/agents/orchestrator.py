@@ -18,6 +18,7 @@ from src.agents.definitions import (
     ORCHESTRATOR_INSTRUCTIONS,
 )
 from src.connectors.context import TenantContext
+from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
@@ -137,12 +138,34 @@ class OrderOrchestrator:
         reply_token: str | None = None,
         source: OrderSource = OrderSource.LINE,
         response_callback: Callable[[str], Awaitable[None]] | None = None,
+        conversation_history: list[MessageHistory] | None = None,
+        pending_order_draft: dict | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
             "line_user_id": line_user_id,
             "reply_token": reply_token,
         }
+
+        if pending_order_draft and _is_affirmative_reply(message):
+            saved_order = await self.create_order_from_draft(pending_order_draft, source=source)
+            response_text = await self._generate_final_response(
+                message=message,
+                line_user_id=line_user_id,
+                intake_text="顧客が確認待ち注文に同意しました。保存済みドラフトを受注確定しました。",
+                exception_text=None,
+                inventory_text=None,
+                source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+            )
+            result["response"] = response_text
+            result["order_id"] = saved_order.id
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent()
@@ -157,9 +180,11 @@ class OrderOrchestrator:
             f"以下の注文メッセージを処理してください。\n"
             f"チャネル: {source.value}\n"
             f"{user_label}\n"
+            f"{_format_memory_context(conversation_history, pending_order_draft)}"
             f"メッセージ: {message}\n\n"
             f"まず {lookup_instruction}"
             f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
+            f"現在のメッセージが省略表現の場合は、会話履歴と確認待ち注文ドラフトを参照してください。"
         )
         intake_text = await self._invoke_agent(intake_agent, intake_prompt)
         logger.info("Intake result: %s", intake_text[:500])
@@ -175,6 +200,8 @@ class OrderOrchestrator:
                 exception_text=None,
                 inventory_text=None,
                 source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
             )
             result["response"] = response_text
             if response_callback:
@@ -247,6 +274,8 @@ class OrderOrchestrator:
             exception_text=exception_text,
             inventory_text=inventory_text,
             source=source,
+            conversation_history=conversation_history,
+            pending_order_draft=pending_order_draft,
         )
         result["response"] = response_text
 
@@ -258,6 +287,7 @@ class OrderOrchestrator:
 
         if needs_confirmation:
             result["session_status"] = "awaiting_reply"
+            result["pending_order_draft"] = _build_draft_from_intake(intake_draft)
 
         return result
 
@@ -269,12 +299,17 @@ class OrderOrchestrator:
         exception_text: str | None,
         inventory_text: str | None,
         source: OrderSource = OrderSource.LINE,
+        conversation_history: list[MessageHistory] | None = None,
+        pending_order_draft: dict | None = None,
     ) -> str:
         orchestrator_agent = self._make_orchestrator_agent()
         context_parts = [
             f"元のメッセージ: {message}",
             f"LINE User ID: {line_user_id}",
         ]
+        memory_context = _format_memory_context(conversation_history, pending_order_draft).strip()
+        if memory_context:
+            context_parts.append(memory_context)
         if intake_text:
             context_parts.append(f"[Intake Agent結果]\n{intake_text}")
         if exception_text:
@@ -445,3 +480,44 @@ def _parse_order_items(message: str) -> list[dict]:
             }
         )
     return items
+
+
+def _format_memory_context(
+    conversation_history: list[MessageHistory] | None,
+    pending_order_draft: dict | None,
+) -> str:
+    parts: list[str] = []
+    if conversation_history:
+        lines = []
+        for history in conversation_history[-20:]:
+            role = "顧客" if history.role == "user" else "AI" if history.role == "assistant" else "システム"
+            text = history.text.replace("\n", " ").strip()
+            if len(text) > 240:
+                text = text[:237] + "..."
+            lines.append(f"- {role}: {text}")
+        parts.append("会話履歴:\n" + "\n".join(lines))
+    if pending_order_draft:
+        parts.append("確認待ち注文ドラフト:\n" + json.dumps(pending_order_draft, ensure_ascii=False, default=str))
+    if not parts:
+        return ""
+    return "\n\n".join(parts) + "\n\n"
+
+
+def _is_affirmative_reply(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message).lower()
+    affirmative_words = {
+        "ok",
+        "ｏｋ",
+        "はい",
+        "それで",
+        "それでok",
+        "それでお願いします",
+        "お願いします",
+        "それでお願い",
+        "大丈夫",
+        "よい",
+        "良い",
+        "承認",
+        "確定",
+    }
+    return normalized in affirmative_words or normalized.endswith("でお願いします")

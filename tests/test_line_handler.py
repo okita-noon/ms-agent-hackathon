@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
@@ -109,7 +109,14 @@ class TestHandleWebhook:
             mock_proc.return_value = {"status": "ok"}
             results = await handler.handle_webhook(body)
             assert len(results) == 1
-            mock_proc.assert_called_once_with("U123", "りんご5箱", "token-1")
+            mock_proc.assert_called_once_with(
+                "U123",
+                "りんご5箱",
+                "token-1",
+                message_id=None,
+                webhook_event_id="evt-unique-1",
+                received_at=ANY,
+            )
 
     @pytest.mark.asyncio
     async def test_sorts_by_timestamp(self, mock_tenant_ctx):
@@ -139,7 +146,7 @@ class TestHandleWebhook:
 
         call_order = []
 
-        async def track_calls(user_id, text, reply_token):
+        async def track_calls(user_id, text, reply_token, **kwargs):
             call_order.append(text)
             return {"status": "ok"}
 
@@ -167,6 +174,9 @@ class TestProcessMessage:
                 await handler._process_message("U123", "テスト", None)
 
                 session_repo.create_session.assert_called_once()
+                history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+                history_repo.list_recent_messages.assert_called_once_with("T-TEST", "line", "U123", 20)
+                assert history_repo.create_message.call_count == 2
                 # Handler must NOT send — orchestrator already sent the message
                 mock_push.assert_not_called()
 
@@ -192,6 +202,40 @@ class TestProcessMessage:
 
                 mock_push.assert_not_called()
                 assert result["result"]["response"] == "確認しました"
+
+    @pytest.mark.asyncio
+    async def test_passes_conversation_history_and_pending_draft(self, mock_tenant_ctx):
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+        history_repo.list_recent_messages.return_value = []
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(
+                return_value={
+                    "response": "数量をご確認ください",
+                    "session_status": "awaiting_reply",
+                    "pending_order_draft": {"customer_id": "C-001", "items": []},
+                }
+            )
+
+            await handler._process_message("U123", "りんご150kg", "token-1", webhook_event_id="evt-history-1")
+
+            mock_orch.process_order_message.assert_called_once()
+            _, kwargs = mock_orch.process_order_message.call_args
+            assert kwargs["conversation_history"] == []
+            assert kwargs["pending_order_draft"] is None
+            assert session_repo.update_session.call_count == 1
+            updated_session = session_repo.update_session.call_args.args[0]
+            assert updated_session.status == "awaiting_reply"
+            assert updated_session.pending_order_draft == {"customer_id": "C-001", "items": []}
 
     @pytest.mark.asyncio
     async def test_no_duplicate_send_empty_response(self, mock_tenant_ctx):

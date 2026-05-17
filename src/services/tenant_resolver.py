@@ -59,6 +59,7 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
             "ISessionRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
+            "IMessageHistoryRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
             "IOrderIntelligenceStore": ConnectorConfig(
                 type="cosmosdb", connection=cosmos_conn, database="intelligence"
             ),

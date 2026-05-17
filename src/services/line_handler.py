@@ -7,13 +7,14 @@ import hmac
 import logging
 import time
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.intelligence import ResolvedItem
+from src.models.message_history import MessageHistory
 from src.models.order import OrderSource
 from src.models.session import OrderSession
 from src.services.learning_service import LearningService
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 SESSION_TIMEOUT_HOURS = 2
 DEDUP_TTL_SECONDS = 600
+HISTORY_CONTEXT_LIMIT = 20
 
 
 class _EventDedup:
@@ -91,17 +93,35 @@ class LineWebhookHandler:
 
             user_id = event["source"]["userId"]
             text = event["message"]["text"]
+            message_id = event["message"].get("id")
             reply_token = event.get("replyToken")
+            timestamp = _line_timestamp_to_datetime(event.get("timestamp"))
 
-            result = await self._process_message(user_id, text, reply_token)
+            result = await self._process_message(
+                user_id,
+                text,
+                reply_token,
+                message_id=message_id,
+                webhook_event_id=webhook_event_id or None,
+                received_at=timestamp,
+            )
             results.append(result)
 
         return results
 
-    async def _process_message(self, user_id: str, text: str, reply_token: str | None) -> dict:
+    async def _process_message(
+        self,
+        user_id: str,
+        text: str,
+        reply_token: str | None,
+        message_id: str | None = None,
+        webhook_event_id: str | None = None,
+        received_at: datetime | None = None,
+    ) -> dict:
         logger.info("Processing message from %s: %s", user_id, text[:100])
 
         session_repo = self._ctx.get_connector("ISessionRepository")
+        history_repo = self._ctx.get_connector("IMessageHistoryRepository")
 
         session = await session_repo.find_active_session(self._ctx.tenant_id, "line", user_id)
 
@@ -121,24 +141,83 @@ class LineWebhookHandler:
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
 
+        conversation_history = await history_repo.list_recent_messages(
+            self._ctx.tenant_id,
+            "line",
+            user_id,
+            HISTORY_CONTEXT_LIMIT,
+        )
+        await history_repo.create_message(
+            MessageHistory(
+                id=_build_message_history_id("user", session.id, webhook_event_id, message_id),
+                tenant_id=self._ctx.tenant_id,
+                session_id=session.id,
+                channel="line",
+                channel_user_id=user_id,
+                role="user",
+                text=text,
+                message_id=message_id,
+                webhook_event_id=webhook_event_id,
+                created_at=received_at or datetime.utcnow(),
+            )
+        )
+
         try:
             result = await self._orchestrator.process_order_message(
                 message=text,
                 line_user_id=user_id,
                 reply_token=reply_token,
                 source=OrderSource.LINE,
+                conversation_history=conversation_history,
+                pending_order_draft=session.pending_order_draft,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
-            await self._send_line_push(
-                user_id,
-                "ご注文を受け付けました。担当者が確認いたします。",
+            fallback_message = "ご注文を受け付けました。担当者が確認いたします。"
+            await self._send_line_push(user_id, fallback_message)
+            await history_repo.create_message(
+                MessageHistory(
+                    id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
+                    tenant_id=self._ctx.tenant_id,
+                    session_id=session.id,
+                    channel="line",
+                    channel_user_id=user_id,
+                    role="assistant",
+                    text=fallback_message,
+                    webhook_event_id=webhook_event_id,
+                )
             )
             return {
                 "session_id": session.id,
                 "user_id": user_id,
                 "error": "agent_processing_failed",
             }
+
+        response_text = result.get("response")
+        if response_text:
+            await history_repo.create_message(
+                MessageHistory(
+                    id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
+                    tenant_id=self._ctx.tenant_id,
+                    session_id=session.id,
+                    channel="line",
+                    channel_user_id=user_id,
+                    role="assistant",
+                    text=response_text,
+                    webhook_event_id=webhook_event_id,
+                    metadata={"order_id": result.get("order_id")},
+                )
+            )
+
+        if result.get("session_status") == "awaiting_reply":
+            session.status = "awaiting_reply"
+            session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
+            session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS)
+            await session_repo.update_session(session)
+        elif result.get("order_id"):
+            session.status = "completed"
+            session.pending_order_draft = None
+            await session_repo.update_session(session)
 
         order_id = result.get("order_id")
         if order_id:
@@ -222,3 +301,19 @@ class LineWebhookHandler:
                 return True
             logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
             return False
+
+
+def _line_timestamp_to_datetime(timestamp: int | None) -> datetime | None:
+    if timestamp is None:
+        return None
+    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
+
+
+def _build_message_history_id(
+    role: str,
+    session_id: str,
+    webhook_event_id: str | None,
+    message_id: str | None,
+) -> str:
+    source_id = webhook_event_id or message_id or datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    return f"hist-{session_id}-{role}-{source_id}"
