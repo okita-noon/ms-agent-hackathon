@@ -19,7 +19,7 @@
 - [x] Cosmos DB アダプタ（受注・セッション・パターン学習）
 - [x] Azure SQL アダプタ（商品・顧客・在庫）
 - [x] Semantic Kernel Plugin（Intake・Inventory・Exception・Communication）
-- [x] Agent 定義 + Orchestrator（GPT-4o 連携）
+- [x] Agent 定義 + Orchestrator（gpt-5.4-mini 連携）
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理）
 - [x] Learning Service（パターン記録・プロファイル更新）
 - [x] テナント解決サービス（デモ環境用）

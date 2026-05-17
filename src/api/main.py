@@ -10,6 +10,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Re
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
@@ -73,6 +74,7 @@ async def line_webhook(
         tenant_ctx=tenant_ctx,
         azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
         azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+        azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
     )
 
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
@@ -95,6 +97,7 @@ def _get_phone_handler() -> PhoneCallHandler:
             callback_base_url=os.environ.get("ACS_CALLBACK_BASE_URL", ""),
             azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
             azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+            azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
             speech_service_key=os.environ.get("SPEECH_SERVICE_KEY", ""),
             speech_service_endpoint=os.environ.get("SPEECH_SERVICE_ENDPOINT"),
         )

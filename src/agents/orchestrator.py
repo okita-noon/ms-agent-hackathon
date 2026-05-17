@@ -27,6 +27,8 @@ from src.plugins.inventory_plugin import InventoryPlugin
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+
 
 class OrderOrchestrator:
     def __init__(
@@ -34,7 +36,7 @@ class OrderOrchestrator:
         tenant_ctx: TenantContext,
         azure_openai_endpoint: str,
         azure_openai_key: str,
-        deployment_name: str = "gpt-4o",
+        deployment_name: str = DEFAULT_AZURE_OPENAI_DEPLOYMENT,
     ):
         self._ctx = tenant_ctx
         self._endpoint = azure_openai_endpoint

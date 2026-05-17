@@ -18,7 +18,13 @@ param sqlAdminLogin string
 param sqlAdminPassword string
 
 @description('Azure AI Foundry で使用する OpenAI モデルデプロイ名')
-param openAiModelDeploymentName string = 'gpt-4o'
+param openAiModelDeploymentName string = 'gpt-5.4-mini'
+
+@description('Azure AI Foundry で使用する OpenAI モデル名')
+param openAiModelName string = 'gpt-5.4-mini'
+
+@description('Azure AI Foundry で使用する OpenAI モデルバージョン')
+param openAiModelVersion string = '2026-03-17'
 
 @description('Embedding モデルデプロイ名')
 param embeddingModelDeploymentName string = 'text-embedding-3-small'
@@ -81,6 +87,8 @@ module aiServices 'modules/ai-services.bicep' = {
     location: location
     tags: tags
     openAiModelDeploymentName: openAiModelDeploymentName
+    openAiModelName: openAiModelName
+    openAiModelVersion: openAiModelVersion
     embeddingModelDeploymentName: embeddingModelDeploymentName
     keyVaultName: keyVault.outputs.name
   }

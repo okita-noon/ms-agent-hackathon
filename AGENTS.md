@@ -23,7 +23,7 @@
 | カテゴリ | 技術 |
 |---|---|
 | Agent基盤 | Azure AI Agent Service |
-| LLM/Embedding | Azure AI Foundry（GPT-4o, text-embedding-3-small） |
+| LLM/Embedding | Azure AI Foundry（gpt-5.4-mini, text-embedding-3-small） |
 | オーケストレーション | Semantic Kernel 1.28（Python SDK） |
 | ドキュメントDB | Azure Cosmos DB Serverless（受注・パターン学習・セッション） |
 | リレーショナルDB | Azure SQL Database Basic（マスタ・在庫） |
@@ -44,7 +44,7 @@
 | ACR | `ca61bef3ed27acr` | `ca61bef3ed27acr.azurecr.io` |
 | Cosmos DB | `cosmos-orderai-dev` | DB: `orders`, `intelligence` |
 | Azure SQL | `sql-orderai-dev` | DB: `db-orderai-dev` |
-| OpenAI | `ai-orderai-dev` | GPT-4o + text-embedding-3-small |
+| OpenAI | `ai-orderai-dev` | gpt-5.4-mini + text-embedding-3-small |
 | Speech | `ai-orderai-dev-speech` | |
 | AI Search | `search-orderai-dev` | |
 | Key Vault | `kv-orderai-dev` | RBAC認可 |
