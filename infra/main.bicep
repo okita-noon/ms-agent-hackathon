@@ -132,7 +132,7 @@ module monitoring 'modules/monitoring.bicep' = {
 }
 
 // ============================================================
-// Azure Container Apps Environment + App (ダッシュボード・API)
+// Azure Container Apps Environment + API
 // ============================================================
 module containerApps 'modules/container-apps.bicep' = {
   name: 'containerApps'
@@ -179,4 +179,5 @@ output sqlServerFqdn string = sqlDatabase.outputs.serverFqdn
 output aiServicesEndpoint string = aiServices.outputs.endpoint
 output aiSearchEndpoint string = aiSearch.outputs.endpoint
 output containerAppsUrl string = containerApps.outputs.appUrl
+output frontendUrl string = '${storage.outputs.webEndpoint}dashboard/'
 output functionsAppName string = functions.outputs.appName

@@ -1,4 +1,4 @@
-const API_BASE = "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "orderai_token";
 
 function getHeaders(): Record<string, string> {
@@ -19,7 +19,7 @@ async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   });
   if (resp.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
-    window.location.href = "/dashboard";
+    window.location.href = `${window.location.origin}/dashboard/`;
   }
   return resp;
 }

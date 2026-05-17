@@ -80,7 +80,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
      - 外部ユーザーも許可する場合は「任意の組織ディレクトリ」を選択
    - リダイレクト URI:
      - 種類: **SPA (Single Page Application)**
-     - URI: `https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io/dashboard`
+     - URI: `https://storderaidev.z11.web.core.windows.net/dashboard/`
 3. **登録** をクリック
 
 ### 3-2. アプリケーション情報の取得
@@ -115,10 +115,12 @@ az containerapp update \
   --resource-group rg-orderai-dev \
   --set-env-vars \
     "ENTRA_CLIENT_ID=<アプリケーション(クライアント)ID>" \
-    "ENTRA_TENANT_ID=<ディレクトリ(テナント)ID>"
+    "ENTRA_TENANT_ID=<ディレクトリ(テナント)ID>" \
+    "FRONTEND_ORIGINS=https://storderaidev.z11.web.core.windows.net" \
+    "FRONTEND_URL=https://storderaidev.z11.web.core.windows.net/dashboard/"
 ```
 
-**フロントエンド（ビルド時）:**
+**フロントエンド（GitHub Repository Variables / ビルド時）:**
 
 `.env` または CI で:
 ```
@@ -132,7 +134,6 @@ VITE_ENTRA_TENANT_ID=<ディレクトリ(テナント)ID>
 
 ローカルでSSO をテストする場合、Entra ID のアプリ登録に以下のリダイレクト URI を追加:
 - `http://localhost:5173/dashboard`（Vite dev server）
-- `http://localhost:8080/dashboard`（uvicorn）
 
 ---
 

@@ -28,7 +28,8 @@
 | ドキュメントDB | Azure Cosmos DB Serverless（受注・パターン学習・セッション） |
 | リレーショナルDB | Azure SQL Database Basic（マスタ・在庫） |
 | 検索 | Azure AI Search Basic（あいまいマッチング + ベクトル検索） |
-| アプリ実行 | Azure Container Apps（FastAPI + ダッシュボード） |
+| API実行 | Azure Container Apps（FastAPI） |
+| Frontend配信 | Azure Storage Static Website（React/Vite ダッシュボード） |
 | コンテナレジストリ | Azure Container Registry |
 | 認証 | Microsoft Entra ID |
 | 秘密管理 | Azure Key Vault（RBAC認可） |
@@ -40,7 +41,7 @@
 |---|---|---|
 | リソースグループ | `rg-orderai-dev` | Japan East |
 | Container Apps API | `ca-api-orderai-dev` | `https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io` |
-| ダッシュボード | 同上 | 上記URL `/dashboard/` |
+| ダッシュボード | `storderaidev` Static Website | `https://storderaidev.z11.web.core.windows.net/dashboard/` |
 | ACR | `ca61bef3ed27acr` | `ca61bef3ed27acr.azurecr.io` |
 | Cosmos DB | `cosmos-orderai-dev` | DB: `orders`, `intelligence` |
 | Azure SQL | `sql-orderai-dev` | DB: `db-orderai-dev` |
@@ -66,7 +67,7 @@
 ### Container Apps 環境変数
 
 `ca-api-orderai-dev` に以下の環境変数が設定済み:
-`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`
+`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
 
 ## APIエンドポイント
 
@@ -120,15 +121,24 @@
 
 ### Container Apps
 - FastAPI アプリ: `src/api/main.py`（`uvicorn src.api.main:app`）
-- ダッシュボード: `src/dashboard/` を `/dashboard` にマウント（StaticFiles）
 - LINE Webhook: `POST /api/line-webhook` → `LineWebhookHandler` → `OrderOrchestrator`
 - Learning Service: バックグラウンドタスク（非Agent）
 
+### Frontend
+- React/Vite アプリ: `frontend/`
+- 配信先: Azure Storage Static Website `/dashboard/`
+- API接続先: `VITE_API_BASE_URL`
+
 ### CI/CD
-- `.github/workflows/deploy-api.yml`: `main` ブランチへの push で自動デプロイ
+- `.github/workflows/deploy-api.yml`: `main` ブランチへの push でAPIを自動デプロイ
 - トリガー対象: `src/**`, `Dockerfile`, `requirements.txt`
+- `.github/workflows/deploy-frontend.yml`: `main` ブランチへの push でFrontendを自動デプロイ
+- トリガー対象: `frontend/**`
+- `.github/workflows/docs.yml`: `main` ブランチへの push でDocsを自動デプロイ
+- トリガー対象: `docs/**`, `mkdocs.yml`
 - GitHub Secret: `AZURE_CREDENTIALS`（サービスプリンシパル JSON）
-- フロー: ACR Build → Push（SHA tag + latest）→ Container Apps Update → Health Check
+- APIフロー: ACR Build → Push（SHA tag + latest）→ Container Apps Update → Health Check
+- Frontendフロー: Vite Build → Storage Static Website Upload
 
 ## セキュリティルール
 
@@ -141,7 +151,7 @@
 ```
 src/
 ├── api/                          # FastAPI アプリケーション
-│   └── main.py                   # エントリポイント（Webhook・REST API・静的ファイル配信）
+│   └── main.py                   # エントリポイント（Webhook・REST API）
 ├── agents/                       # Agent定義
 │   ├── definitions.py            # 各Agent の Instructions（日本語プロンプト）
 │   └── orchestrator.py           # OrderOrchestrator（SK Agent → Plugin呼び出し）
@@ -180,9 +190,10 @@ src/
 │   ├── intelligence.py           # OrderPattern, CustomerOrderProfile, ProductStats
 │   ├── session.py                # OrderSession
 │   └── tenant.py                 # TenantConfig, ConnectorConfig
-└── dashboard/                    # フロントエンド（HTML + Tailwind + Chart.js）
-    ├── index.html                # SPA メインページ
-    └── app.js                    # 受注一覧・統計・詳細モーダル
+frontend/                         # React/Vite ダッシュボード
+├── src/                           # 画面・認証・APIクライアント
+├── package.json                   # npm scripts
+└── vite.config.ts                 # /dashboard/ base・dev proxy
 
 infra/
 ├── main.bicep                    # Bicep メインテンプレート
@@ -195,6 +206,7 @@ infra/
 
 .github/workflows/
 ├── deploy-api.yml                # CI/CD: main push → ACR → Container Apps
+├── deploy-frontend.yml           # CI/CD: main push → Storage Static Website
 └── docs.yml                      # GitHub Pages（MkDocs）
 
 Dockerfile                        # Python 3.12 + ODBC Driver 18 + requirements

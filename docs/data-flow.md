@@ -5,6 +5,7 @@
 **MVP方針**: Azure Container Apps に API・Webhook・バックグラウンド処理を統合する。
 FastAPI アプリケーションとして LINE Webhook 受信・Agent 呼び出し・Learning Service を
 1コンテナで実装し、シンプルに運用する。
+ダッシュボードはチーム開発効率のため API コンテナから分離し、Azure Storage Static Website で配信する。
 Service Bus はスケール時（本番運用・マルチテナント）に導入する。
 
 ## ソフトウェア処理フロー図
