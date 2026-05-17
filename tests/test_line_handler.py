@@ -238,6 +238,32 @@ class TestProcessMessage:
             assert updated_session.pending_order_draft == {"customer_id": "C-001", "items": []}
 
     @pytest.mark.asyncio
+    async def test_history_failure_does_not_block_reply(self, mock_tenant_ctx):
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+        history_repo.list_recent_messages.side_effect = RuntimeError("container missing")
+        history_repo.create_message.side_effect = RuntimeError("container missing")
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(return_value={"response": "ご注文承りました"})
+            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+                result = await handler._process_message("U123", "りんご5箱", "token-1")
+
+                mock_orch.process_order_message.assert_called_once()
+                _, kwargs = mock_orch.process_order_message.call_args
+                assert kwargs["conversation_history"] == []
+                assert result["result"]["response"] == "ご注文承りました"
+                mock_push.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_no_duplicate_send_empty_response(self, mock_tenant_ctx):
         """Even when response is empty, handler should not attempt to send."""
         session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
