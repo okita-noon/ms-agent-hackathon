@@ -28,7 +28,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="OrderAI API", lifespan=lifespan)
+app = FastAPI(title="foogent API", lifespan=lifespan)
+
+frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+if frontend_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=frontend_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
 if frontend_origins:
@@ -51,7 +61,7 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "orderai-api"}
+    return {"status": "ok", "service": "foogent-api"}
 
 
 async def _process_line_events(handler: LineWebhookHandler, body_json: dict) -> None:
