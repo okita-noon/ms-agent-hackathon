@@ -45,4 +45,6 @@ nav:
   - Connector層・マルチテナント: connector-design.md
   - データフロー: data-flow.md
   - MVPスコープ: mvp-scope.md
+  - 認証セットアップ: auth-setup.md
+  - 電話チャネル テスト: phone-testing.md
   - セキュリティ: security.md
