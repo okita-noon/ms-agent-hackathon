@@ -3,7 +3,8 @@ import Header from "./components/Header";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
 import Inventory from "./pages/Inventory";
-import { getTenantId, setTenantId } from "./lib/api";
+import Login from "./pages/Login";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 
 type Tab = "orders" | "customers" | "inventory";
 
@@ -37,16 +38,11 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   },
 ];
 
-const TENANTS = [
-  { id: "T-001", label: "T-001 丸山食品" },
-  { id: "T-002", label: "T-002 鈴木青果" },
-];
-
-export default function App() {
+function Dashboard() {
   const [tab, setTab] = useState<Tab>("orders");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
-  const [tenantId, setTenantIdState] = useState<string>(getTenantId());
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const el = tabRefs.current[tab];
@@ -58,11 +54,6 @@ export default function App() {
       });
     }
   }, [tab]);
-
-  function handleTenantChange(id: string) {
-    setTenantId(id);
-    setTenantIdState(id);
-  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -89,35 +80,54 @@ export default function App() {
               className="tab-indicator absolute bottom-0 h-0.5 bg-brand-600 rounded-full"
               style={{ left: indicator.left, width: indicator.width }}
             />
-            {/* Tenant selector — pushed to the right of the tab bar */}
-            <div className="ml-auto mb-1 flex items-center gap-2">
-              <span className="text-[11px] text-gray-400 font-medium tracking-wide">テナント</span>
-              <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs font-medium">
-                {TENANTS.map((t, i) => (
-                  <button
-                    key={t.id}
-                    onClick={() => handleTenantChange(t.id)}
-                    className={`px-3 py-1.5 transition-colors duration-150 ${
-                      tenantId === t.id
-                        ? "bg-brand-600 text-white"
-                        : "bg-white text-gray-500 hover:bg-gray-50"
-                    } ${i > 0 ? "border-l border-gray-200" : ""}`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+            {/* User info & logout */}
+            <div className="ml-auto mb-1 flex items-center gap-3">
+              {user && (
+                <span className="text-xs text-gray-500">
+                  {user.display_name}
+                  <span className="text-gray-300 mx-1">|</span>
+                  <span className="text-gray-400">{user.tenant_id}</span>
+                </span>
+              )}
+              <button
+                onClick={logout}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ログアウト
+              </button>
             </div>
           </div>
         </nav>
         {tab === "orders" ? (
-          <Orders key={tenantId} />
+          <Orders />
         ) : tab === "inventory" ? (
-          <Inventory key={tenantId} />
+          <Inventory />
         ) : (
-          <Customers key={tenantId} />
+          <Customers />
         )}
       </main>
     </div>
+  );
+}
+
+function AppContent() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  return user ? <Dashboard /> : <Login />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

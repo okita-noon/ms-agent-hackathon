@@ -1,13 +1,27 @@
 const API_BASE = "";
+const TOKEN_KEY = "orderai_token";
 
-let currentTenantId = "T-001";
-
-export function setTenantId(id: string): void {
-  currentTenantId = id;
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
-export function getTenantId(): string {
-  return currentTenantId;
+async function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const resp = await fetch(url, {
+    ...init,
+    headers: { ...getHeaders(), ...init?.headers },
+  });
+  if (resp.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.href = "/dashboard";
+  }
+  return resp;
 }
 
 export interface OrderItem {
@@ -48,8 +62,8 @@ export interface Customer {
 }
 
 export async function fetchOrders(date: string): Promise<Order[]> {
-  const resp = await fetch(
-    `${API_BASE}/api/orders?delivery_date=${date}&tenant_id=${currentTenantId}`
+  const resp = await authFetch(
+    `${API_BASE}/api/orders?delivery_date=${date}`
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
@@ -57,7 +71,7 @@ export async function fetchOrders(date: string): Promise<Order[]> {
 }
 
 export async function fetchCustomers(): Promise<Customer[]> {
-  const resp = await fetch(`${API_BASE}/api/customers?tenant_id=${currentTenantId}`);
+  const resp = await authFetch(`${API_BASE}/api/customers`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   return data.customers || [];
@@ -75,7 +89,7 @@ export interface InventoryItem {
 }
 
 export async function fetchInventory(): Promise<InventoryItem[]> {
-  const resp = await fetch(`${API_BASE}/api/inventory?tenant_id=${currentTenantId}`);
+  const resp = await authFetch(`${API_BASE}/api/inventory`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   return data.inventory || [];
@@ -85,11 +99,10 @@ export async function updateCustomer(
   customerId: string,
   fields: Partial<Customer>
 ): Promise<Customer> {
-  const resp = await fetch(
-    `${API_BASE}/api/customers/${customerId}?tenant_id=${currentTenantId}`,
+  const resp = await authFetch(
+    `${API_BASE}/api/customers/${customerId}`,
     {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fields),
     }
   );

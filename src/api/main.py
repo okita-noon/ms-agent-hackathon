@@ -6,10 +6,12 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.auth.dependencies import get_tenant_id
+from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
 from src.services.line_handler import LineWebhookHandler
 from src.services.phone_handler import PhoneCallHandler
@@ -27,6 +29,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OrderAI API", lifespan=lifespan)
+
+# ── Auth routes (public) ──────────────────────────────────────────────────────
+app.include_router(auth_router, prefix="/api/auth")
 
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 legacy_dashboard = Path(__file__).resolve().parent.parent / "dashboard"
@@ -120,9 +125,12 @@ async def phone_webhook(request: Request):
     return Response(status_code=200)
 
 
+# ── Protected business endpoints ──────────────────────────────────────────────
+
+
 @app.get("/api/orders")
 async def list_orders(
-    tenant_id: str = "T-001",
+    tenant_id: str = Depends(get_tenant_id),
     delivery_date: str | None = None,
 ):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
@@ -138,7 +146,7 @@ async def list_orders(
 
 
 @app.get("/api/orders/{order_id}")
-async def get_order(order_id: str, tenant_id: str = "T-001"):
+async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
     order = await repo.find_by_id(order_id)
@@ -148,7 +156,7 @@ async def get_order(order_id: str, tenant_id: str = "T-001"):
 
 
 @app.get("/api/products")
-async def list_products(tenant_id: str = "T-001"):
+async def list_products(tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     master = tenant_ctx.get_connector("IProductMaster")
     products = await master.list_all(tenant_id)
@@ -156,22 +164,22 @@ async def list_products(tenant_id: str = "T-001"):
 
 
 @app.get("/api/inventory")
-async def list_inventory(tenant_id: str = "T-001"):
+async def list_inventory(tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     master = tenant_ctx.get_connector("IProductMaster")
     svc = tenant_ctx.get_connector("IInventoryService")
     products = await master.list_all(tenant_id)
     items = []
     for p in products:
-        status = await svc.check(tenant_id, p.id, 0)
+        inv_status = await svc.check(tenant_id, p.id, 0)
         items.append(
             {
                 "product_id": p.id,
                 "product_name": p.name,
                 "category": p.category,
                 "temperature_zone": p.temperature_zone.value if p.temperature_zone else "常温",
-                "quantity": status.available_qty,
-                "unit": status.unit,
+                "quantity": inv_status.available_qty,
+                "unit": inv_status.unit,
                 "is_variable_weight": p.is_variable_weight,
                 "price_per_unit": p.price_per_unit,
             }
@@ -183,16 +191,16 @@ async def list_inventory(tenant_id: str = "T-001"):
 async def check_inventory(
     product_id: str,
     required_qty: float = 0,
-    tenant_id: str = "T-001",
+    tenant_id: str = Depends(get_tenant_id),
 ):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     svc = tenant_ctx.get_connector("IInventoryService")
-    status = await svc.check(tenant_id, product_id, required_qty)
-    return status.model_dump()
+    inv_status = await svc.check(tenant_id, product_id, required_qty)
+    return inv_status.model_dump()
 
 
 @app.get("/api/customers")
-async def list_customers(tenant_id: str = "T-001"):
+async def list_customers(tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("ICustomerRepository")
     customers = await repo.list_all(tenant_id)
@@ -200,7 +208,7 @@ async def list_customers(tenant_id: str = "T-001"):
 
 
 @app.put("/api/customers/{customer_id}")
-async def update_customer(customer_id: str, request: Request, tenant_id: str = "T-001"):
+async def update_customer(customer_id: str, request: Request, tenant_id: str = Depends(get_tenant_id)):
     body = await request.json()
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("ICustomerRepository")
