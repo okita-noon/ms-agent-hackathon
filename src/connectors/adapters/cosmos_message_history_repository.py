@@ -45,3 +45,23 @@ class CosmosMessageHistoryRepository:
             messages.append(MessageHistory.model_validate(doc))
         messages.reverse()
         return messages
+
+    async def list_by_session_id(
+        self,
+        tenant_id: str,
+        session_id: str,
+    ) -> list[MessageHistory]:
+        query = (
+            "SELECT * FROM c WHERE c.tenant_id = @tid "
+            "AND c.session_id = @sid "
+            "ORDER BY c.created_at ASC"
+        )
+        params = [
+            {"name": "@tid", "value": tenant_id},
+            {"name": "@sid", "value": session_id},
+        ]
+        items = self._container.query_items(query, parameters=params)
+        messages: list[MessageHistory] = []
+        async for doc in items:
+            messages.append(MessageHistory.model_validate(doc))
+        return messages

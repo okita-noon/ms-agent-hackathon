@@ -1,4 +1,6 @@
-import type { Order } from "../lib/api";
+import { useEffect, useState } from "react";
+import type { Order, Message } from "../lib/api";
+import { fetchOrderMessages } from "../lib/api";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
 
@@ -16,8 +18,110 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function ChannelIcon({ channel }: { channel: string }) {
+  if (channel === "line") {
+    return (
+      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 5.92 2 10.66c0 2.75 1.53 5.18 3.93 6.76-.14.49-.9 3.15-.93 3.37 0 0-.02.15.07.21.09.06.2.03.2.03.27-.04 3.12-2.05 3.61-2.39.69.1 1.4.16 2.12.16 5.52 0 10-3.92 10-8.66S17.52 2 12 2z" />
+      </svg>
+    );
+  }
+  if (channel === "phone") {
+    return (
+      <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+    </svg>
+  );
+}
+
+function MessageThread({ orderId }: { orderId: string }) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    fetchOrderMessages(orderId)
+      .then((data) => {
+        if (!cancelled) setMessages(data.messages);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [orderId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-4 justify-center text-gray-400 text-xs">
+        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        会話履歴を読み込み中...
+      </div>
+    );
+  }
+
+  if (error || messages.length === 0) return null;
+
+  const channel = messages[0]?.channel || "";
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">注文会話履歴</h5>
+        <ChannelIcon channel={channel} />
+      </div>
+      <div className="border border-gray-100 rounded-xl bg-gray-50/40 p-4 space-y-3 max-h-72 overflow-y-auto">
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === "user" ? "justify-start" : "justify-end"}`}
+          >
+            <div
+              className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                msg.role === "user"
+                  ? "bg-white border border-gray-200 rounded-tl-md"
+                  : "bg-brand-50 border border-brand-100 rounded-tr-md"
+              }`}
+            >
+              <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.text}</p>
+              <p className={`text-[10px] mt-1 ${msg.role === "user" ? "text-gray-400" : "text-brand-400"}`}>
+                {msg.role === "user" ? "お客様" : "AI"} ・ {formatTime(msg.created_at)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OrderDetailModal({ order, onClose }: Props) {
   if (!order) return null;
+
+  const orderId = order.uid || order.id || "";
 
   return (
     <div
@@ -34,7 +138,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
             </div>
             <div>
               <h3 className="font-bold text-gray-900 text-sm">受注詳細</h3>
-              <p className="text-[11px] text-gray-400 font-mono">{order.uid || order.id}</p>
+              <p className="text-[11px] text-gray-400 font-mono">{orderId}</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
@@ -91,6 +195,11 @@ export default function OrderDetailModal({ order, onClose }: Props) {
               </table>
             </div>
           </div>
+
+          {/* 注文会話履歴 */}
+          {order.source !== "手入力" && orderId && (
+            <MessageThread orderId={orderId} />
+          )}
 
           {order.remarks && (
             <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-100">

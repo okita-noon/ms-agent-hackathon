@@ -190,6 +190,7 @@ class PhoneCallHandler:
                 reply_token=None,
                 source=OrderSource.PHONE,
                 response_callback=capture_response,
+                session_id=session.id if session else None,
             )
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)

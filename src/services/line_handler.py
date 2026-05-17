@@ -168,6 +168,7 @@ class LineWebhookHandler:
                 source=OrderSource.LINE,
                 conversation_history=conversation_history,
                 pending_order_draft=session.pending_order_draft,
+                session_id=session.id,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
