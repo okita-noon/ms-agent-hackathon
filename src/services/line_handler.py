@@ -121,7 +121,7 @@ class LineWebhookHandler:
         logger.info("Processing message from %s: %s", user_id, text[:100])
 
         session_repo = self._ctx.get_connector("ISessionRepository")
-        history_repo = self._ctx.get_connector("IMessageHistoryRepository")
+        history_repo = self._get_message_history_repo()
 
         session = await session_repo.find_active_session(self._ctx.tenant_id, "line", user_id)
 
@@ -141,13 +141,9 @@ class LineWebhookHandler:
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
 
-        conversation_history = await history_repo.list_recent_messages(
-            self._ctx.tenant_id,
-            "line",
-            user_id,
-            HISTORY_CONTEXT_LIMIT,
-        )
-        await history_repo.create_message(
+        conversation_history = await self._list_recent_history(history_repo, user_id)
+        await self._save_history_message(
+            history_repo,
             MessageHistory(
                 id=_build_message_history_id("user", session.id, webhook_event_id, message_id),
                 tenant_id=self._ctx.tenant_id,
@@ -159,7 +155,7 @@ class LineWebhookHandler:
                 message_id=message_id,
                 webhook_event_id=webhook_event_id,
                 created_at=received_at or datetime.utcnow(),
-            )
+            ),
         )
 
         try:
@@ -175,7 +171,8 @@ class LineWebhookHandler:
             logger.exception("Agent processing failed for user %s", user_id)
             fallback_message = "ご注文を受け付けました。担当者が確認いたします。"
             await self._send_line_push(user_id, fallback_message)
-            await history_repo.create_message(
+            await self._save_history_message(
+                history_repo,
                 MessageHistory(
                     id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
                     tenant_id=self._ctx.tenant_id,
@@ -185,7 +182,7 @@ class LineWebhookHandler:
                     role="assistant",
                     text=fallback_message,
                     webhook_event_id=webhook_event_id,
-                )
+                ),
             )
             return {
                 "session_id": session.id,
@@ -195,7 +192,8 @@ class LineWebhookHandler:
 
         response_text = result.get("response")
         if response_text:
-            await history_repo.create_message(
+            await self._save_history_message(
+                history_repo,
                 MessageHistory(
                     id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
                     tenant_id=self._ctx.tenant_id,
@@ -206,7 +204,7 @@ class LineWebhookHandler:
                     text=response_text,
                     webhook_event_id=webhook_event_id,
                     metadata={"order_id": result.get("order_id")},
-                )
+                ),
             )
 
         if result.get("session_status") == "awaiting_reply":
@@ -228,6 +226,35 @@ class LineWebhookHandler:
             "user_id": user_id,
             "result": result,
         }
+
+    def _get_message_history_repo(self):
+        try:
+            return self._ctx.get_connector("IMessageHistoryRepository")
+        except Exception:
+            logger.exception("Message history connector unavailable; continuing without LINE memory")
+            return None
+
+    async def _list_recent_history(self, history_repo, user_id: str) -> list[MessageHistory]:
+        if not history_repo:
+            return []
+        try:
+            return await history_repo.list_recent_messages(
+                self._ctx.tenant_id,
+                "line",
+                user_id,
+                HISTORY_CONTEXT_LIMIT,
+            )
+        except Exception:
+            logger.exception("Failed to load LINE message history; continuing without memory")
+            return []
+
+    async def _save_history_message(self, history_repo, message: MessageHistory) -> None:
+        if not history_repo:
+            return
+        try:
+            await history_repo.create_message(message)
+        except Exception:
+            logger.exception("Failed to save LINE message history; reply flow will continue")
 
     async def _run_learning(self, order_id: str, user_id: str, original_message: str) -> None:
         try:
