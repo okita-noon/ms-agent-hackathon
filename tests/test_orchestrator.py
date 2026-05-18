@@ -9,11 +9,12 @@ from src.agents.orchestrator import (
     OrderOrchestrator,
     _build_draft_from_intake,
     _format_memory_context,
+    _inventory_requires_operator_review,
     _is_affirmative_reply,
     _parse_order_items,
 )
 from src.models.message_history import MessageHistory
-from src.models.order import OrderSource
+from src.models.order import OrderSource, OrderStatus
 
 
 def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
@@ -98,6 +99,20 @@ class TestExtractJson:
 
     def test_invalid_json(self):
         assert self._orch._extract_json("{broken: json}") is None
+
+
+class TestInventoryReview:
+    def test_all_reserved_is_accepted(self):
+        assert not _inventory_requires_operator_review({"all_reserved": True, "items": [{"available": True}]})
+
+    def test_all_available_false_requires_review(self):
+        assert _inventory_requires_operator_review({"all_available": False})
+
+    def test_item_reserve_failure_requires_review(self):
+        assert _inventory_requires_operator_review({"items": [{"product_id": "P-001", "reserved": False}]})
+
+    def test_alternatives_require_review(self):
+        assert _inventory_requires_operator_review({"alternatives": [{"product_id": "P-ALT"}]})
 
 
 class TestMemoryContext:
@@ -273,6 +288,59 @@ class TestProcessOrderMessageSendsOnce:
             )
 
             assert result["order_id"] == "ORD-OK"
+            assert mock_send.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_inventory_shortage_saves_review_order_not_confirmed_order(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders = []
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-REVIEW"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            if call_count == 3:
+                return '```json\n{"all_available": false, "items": [{"product_id": "P-001", "available": false}], "message": "在庫不足です"}\n```'
+            assert "受注確定していません" in message
+            return "在庫確認が必要なため、担当者が確認いたします。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="りんご10箱",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert result["review_order_id"] == "ORD-REVIEW"
+            assert "order_id" not in result
+            assert result["session_status"] == "awaiting_reply"
+            assert saved_orders[0].status == OrderStatus.NEEDS_REVIEW
+            assert saved_orders[0].remarks == "在庫不足です"
             assert mock_send.call_count == 1
 
 
