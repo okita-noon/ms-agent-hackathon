@@ -7,12 +7,15 @@ let currentTab = 'orders';
 
 const STATUS_COLORS = {
   '未処理': { bg: 'bg-yellow-100', text: 'text-yellow-800', chart: '#eab308' },
+  '要対応': { bg: 'bg-red-100', text: 'text-red-800', chart: '#e11d48' },
   '製造': { bg: 'bg-blue-100', text: 'text-blue-800', chart: '#3b82f6' },
   '配送': { bg: 'bg-orange-100', text: 'text-orange-800', chart: '#f97316' },
   '完了': { bg: 'bg-green-100', text: 'text-green-800', chart: '#22c55e' },
   'キャンセル': { bg: 'bg-gray-100', text: 'text-gray-800', chart: '#6b7280' },
   '返信待ち': { bg: 'bg-red-100', text: 'text-red-800', chart: '#ef4444' },
 };
+
+const ACCEPTED_ORDER_STATUSES = new Set(['未処理', '製造', '配送', '完了']);
 
 const SOURCE_COLORS = {
   'LINE': '#06c755',
@@ -70,21 +73,21 @@ function getDemoOrders() {
     { uid: 'ORD-002', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-002', customer_name: '株式会社B', source: 'LINE', items: [{ product_name: 'もも', quantity: 5, unit: '箱', temperature_zone: '冷蔵' }], delivery_carrier: '芦川便', delivery_route: '西日本便', status: '完了', remarks: null },
     { uid: 'ORD-003', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-003', customer_name: '株式会社C', source: 'Phone', items: [{ product_name: 'メロン', quantity: 3, unit: '玉', temperature_zone: '冷凍' }], delivery_carrier: '自社便', delivery_route: '中部便', status: '製造', remarks: null },
     { uid: 'ORD-004', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-004', customer_name: '株式会社D', source: 'LINE', items: [{ product_name: 'いちご', quantity: 15, unit: 'パック', temperature_zone: '常温' }, { product_name: 'ぶどう', quantity: 8, unit: '房', temperature_zone: '常温' }], delivery_carrier: '自社便', delivery_route: '九州便', status: '配送', remarks: null },
-    { uid: 'ORD-005', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-005', customer_name: '株式会社E', source: 'Phone', items: [{ product_name: 'みかん', quantity: 100, unit: '個', temperature_zone: '冷凍' }], delivery_carrier: '冷凍ヤマト便', delivery_route: '北海道便', status: '返信待ち', remarks: '数量確認中' },
+    { uid: 'ORD-005', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-005', customer_name: '株式会社E', source: 'Phone', items: [{ product_name: 'みかん', quantity: 100, unit: '個', temperature_zone: '冷凍' }], delivery_carrier: '冷凍ヤマト便', delivery_route: '北海道便', status: '要対応', remarks: '在庫不足のため担当者確認中' },
     { uid: 'ORD-006', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-006', customer_name: '株式会社F', source: 'LINE', items: [{ product_name: 'レモン', quantity: 30, unit: '個', temperature_zone: '常温' }], delivery_carrier: '自社便', delivery_route: '東北便', status: '完了', remarks: null },
   ];
 }
 
 function renderStats() {
   const container = document.getElementById('statsCards');
-  const total = orders.length;
+  const total = orders.filter(o => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
   const statusCounts = {};
   for (const s of Object.keys(STATUS_COLORS)) statusCounts[s] = 0;
   orders.forEach(o => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
 
   let html = `
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 card-hover">
-      <p class="text-xs font-medium text-gray-500 mb-1">合計</p>
+      <p class="text-xs font-medium text-gray-500 mb-1">受注合計</p>
       <p class="text-2xl font-bold text-gray-900">${total}</p>
     </div>`;
 
