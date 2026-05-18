@@ -253,7 +253,13 @@ class TestProcessOrderMessageSendsOnce:
                 return "ご注文承りました。りんご1個ですね。"
 
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
-        order_repo.save = AsyncMock(return_value="ORD-001")
+        saved_orders = []
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-001"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
@@ -264,10 +270,12 @@ class TestProcessOrderMessageSendsOnce:
                 line_user_id="U123",
                 reply_token="tok",
                 source=OrderSource.LINE,
+                session_id="sess-order",
             )
 
             assert mock_send.call_count == 1
             assert result.get("order_id") == "ORD-001"
+            assert saved_orders[0].session_id == "sess-order"
 
     @pytest.mark.asyncio
     async def test_sends_once_on_confirmation_needed(self, mock_tenant_ctx):
@@ -322,7 +330,13 @@ class TestProcessOrderMessageSendsOnce:
     async def test_affirmative_reply_creates_order_from_pending_draft(self, mock_tenant_ctx):
         orch = _make_orchestrator(mock_tenant_ctx)
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
-        order_repo.save = AsyncMock(return_value="ORD-OK")
+        saved_orders = []
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-OK"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
 
         pending_draft = {
             "customer_id": "C-001",
@@ -349,10 +363,12 @@ class TestProcessOrderMessageSendsOnce:
                 reply_token="tok",
                 source=OrderSource.LINE,
                 pending_order_draft=pending_draft,
+                session_id="sess-confirm",
             )
 
             assert result["order_id"] == "ORD-OK"
             assert mock_send.call_count == 1
+            assert saved_orders[0].session_id == "sess-confirm"
 
     @pytest.mark.asyncio
     async def test_inventory_shortage_saves_review_order_not_confirmed_order(self, mock_tenant_ctx):
@@ -398,6 +414,7 @@ class TestProcessOrderMessageSendsOnce:
                 line_user_id="U123",
                 reply_token="tok",
                 source=OrderSource.LINE,
+                session_id="sess-review",
             )
 
             assert result["review_order_id"] == "ORD-REVIEW"
@@ -405,6 +422,7 @@ class TestProcessOrderMessageSendsOnce:
             assert result["session_status"] == "awaiting_reply"
             assert saved_orders[0].status == OrderStatus.NEEDS_REVIEW
             assert saved_orders[0].remarks == "在庫不足です"
+            assert saved_orders[0].session_id == "sess-review"
             assert mock_send.call_count == 1
 
     @pytest.mark.asyncio
