@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import Header from "./components/Header";
+import LoadingState from "./components/LoadingState";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
 import Inventory from "./pages/Inventory";
@@ -98,8 +99,16 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-gray-400 text-sm">Loading...</div>
+      <div className="min-h-screen bg-surface">
+        <LoadingState
+          title="foogentを起動しています"
+          message="受注データとログイン状態を確認中です"
+          icon={
+            <svg className="w-8 h-8 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          }
+        />
       </div>
     );
   }

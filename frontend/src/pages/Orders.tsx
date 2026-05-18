@@ -4,6 +4,7 @@ import { Doughnut } from "react-chartjs-2";
 import { fetchOrders, type Order } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
+import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
@@ -151,7 +152,13 @@ export default function Orders() {
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
           <span className="text-xs text-gray-300 tabular-nums">受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
         </div>
-        {orders.length === 0 ? (
+        {loading && orders.length === 0 ? (
+          <LoadingState
+            compact
+            title="受注を集計しています"
+            message="今日の注文とステータスを読み込んでいます"
+          />
+        ) : orders.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
