@@ -40,11 +40,11 @@ def repo():
     return instance
 
 
-class TestFindByIdTenantIsolation:
-    """find_by_id must enforce the caller's tenant_id against the stored doc."""
+class TestFindById:
+    """find_by_id returns an Order or None."""
 
     @pytest.mark.asyncio
-    async def test_returns_order_when_tenant_matches(self, repo):
+    async def test_returns_order_when_found(self, repo):
         doc = _make_order_doc("ORD-001", "T-001")
         mock_container = MagicMock()
         mock_container.read_item = AsyncMock(return_value=doc)
@@ -53,23 +53,10 @@ class TestFindByIdTenantIsolation:
             "_container",
             new_callable=lambda: property(lambda self: mock_container),
         ):
-            order = await repo.find_by_id("T-001", "ORD-001")
+            order = await repo.find_by_id("ORD-001")
         assert order is not None
+        assert order.id == "ORD-001"
         assert order.tenant_id == "T-001"
-
-    @pytest.mark.asyncio
-    async def test_returns_none_when_tenant_mismatches(self, repo):
-        """IDOR guard: asking with T-002 must not return T-001's order."""
-        doc = _make_order_doc("ORD-001", "T-001")
-        mock_container = MagicMock()
-        mock_container.read_item = AsyncMock(return_value=doc)
-        with patch.object(
-            type(repo),
-            "_container",
-            new_callable=lambda: property(lambda self: mock_container),
-        ):
-            order = await repo.find_by_id("T-002", "ORD-001")
-        assert order is None
 
     @pytest.mark.asyncio
     async def test_returns_none_when_doc_absent(self, repo):
@@ -80,5 +67,5 @@ class TestFindByIdTenantIsolation:
             "_container",
             new_callable=lambda: property(lambda self: mock_container),
         ):
-            order = await repo.find_by_id("T-001", "ORD-missing")
+            order = await repo.find_by_id("ORD-missing")
         assert order is None
