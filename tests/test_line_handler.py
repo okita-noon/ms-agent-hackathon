@@ -59,14 +59,15 @@ class TestVerifySignature:
         )
         assert handler.verify_signature(b"body", "invalid-sig") is False
 
-    def test_no_secret_configured(self, mock_tenant_ctx):
+    def test_no_secret_configured_rejects(self, mock_tenant_ctx):
+        """Fail-closed: when channel secret is missing, signature check must fail."""
         mock_tenant_ctx.config.line_channel_secret = None
         handler = LineWebhookHandler(
             tenant_ctx=mock_tenant_ctx,
             azure_openai_endpoint="https://test.openai.azure.com/",
             azure_openai_key="test-key",
         )
-        assert handler.verify_signature(b"body", "any") is True
+        assert handler.verify_signature(b"body", "any") is False
 
 
 class TestHandleWebhook:
@@ -80,7 +81,11 @@ class TestHandleWebhook:
         body = {
             "events": [
                 {"type": "follow", "source": {"userId": "U123"}},
-                {"type": "message", "message": {"type": "image"}, "source": {"userId": "U123"}},
+                {
+                    "type": "message",
+                    "message": {"type": "image"},
+                    "source": {"userId": "U123"},
+                },
             ]
         }
 
@@ -239,7 +244,10 @@ class TestProcessMessage:
             assert session_repo.update_session.call_count == 1
             updated_session = session_repo.update_session.call_args.args[0]
             assert updated_session.status == "awaiting_reply"
-            assert updated_session.pending_order_draft == {"customer_id": "C-001", "items": []}
+            assert updated_session.pending_order_draft == {
+                "customer_id": "C-001",
+                "items": [],
+            }
 
     @pytest.mark.asyncio
     async def test_history_failure_does_not_block_reply(self, mock_tenant_ctx):

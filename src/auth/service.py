@@ -14,9 +14,22 @@ logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "24"))
+JWT_ISSUER = os.environ.get("JWT_ISSUER", "orderai-api")
+JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "orderai-dashboard")
+
+_INSECURE_SECRETS = {"", "dev-secret-change-in-production"}
+
+
+def _get_jwt_secret() -> str:
+    key = os.environ.get("JWT_SECRET_KEY", "")
+    if key in _INSECURE_SECRETS:
+        raise RuntimeError(
+            "JWT_SECRET_KEY environment variable must be set to a strong random value. "
+            "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(48))'"
+        )
+    return key
 
 
 def hash_password(plain: str) -> str:
@@ -28,20 +41,29 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(user: UserInDB) -> str:
-    expire = datetime.now(UTC) + timedelta(hours=JWT_EXPIRE_HOURS)
+    now = datetime.now(UTC)
     payload = {
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "iat": now,
+        "exp": now + timedelta(hours=JWT_EXPIRE_HOURS),
         "sub": user.user_id,
         "tenant_id": user.tenant_id,
         "email": user.email,
         "display_name": user.display_name,
-        "exp": expire,
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> CurrentUser | None:
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            _get_jwt_secret(),
+            algorithms=[JWT_ALGORITHM],
+            issuer=JWT_ISSUER,
+            audience=JWT_AUDIENCE,
+        )
         return CurrentUser(
             user_id=payload["sub"],
             tenant_id=payload["tenant_id"],
@@ -133,7 +155,15 @@ class UserStore:
                     "INSERT INTO users (user_id, tenant_id, email, password_hash, "
                     "display_name, auth_provider, entra_oid) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (user_id, tenant_id, email, password_hash, display_name, auth_provider, entra_oid),
+                    (
+                        user_id,
+                        tenant_id,
+                        email,
+                        password_hash,
+                        display_name,
+                        auth_provider,
+                        entra_oid,
+                    ),
                 )
                 await conn.commit()
             return UserInDB(

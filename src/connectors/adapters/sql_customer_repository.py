@@ -26,7 +26,10 @@ class SqlCustomerRepository:
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(query, (tenant_id, identifier, identifier, identifier, f"%{identifier}%"))
+                await cur.execute(
+                    query,
+                    (tenant_id, identifier, identifier, identifier, f"%{identifier}%"),
+                )
                 row = await cur.fetchone()
                 if not row:
                     return None
@@ -78,7 +81,15 @@ class SqlCustomerRepository:
                 return [_row_to_customer(r) for r in rows]
 
     async def update(self, tenant_id: str, customer_id: str, fields: dict) -> Customer:
-        allowed = {"name", "short_name", "line_user_id", "email", "phone", "fax", "active"}
+        allowed = {
+            "name",
+            "short_name",
+            "line_user_id",
+            "email",
+            "phone",
+            "fax",
+            "active",
+        }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             existing = await self.get_by_id(tenant_id, customer_id)

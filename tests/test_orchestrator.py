@@ -67,7 +67,14 @@ class TestBuildDraftFromIntake:
         intake = {
             "customer_id": "C-001",
             "customer_name": "テスト社",
-            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 5, "unit": "箱"}],
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                }
+            ],
         }
         draft = _build_draft_from_intake(intake)
         assert draft is not None
@@ -219,7 +226,14 @@ class TestProcessOrderMessageSendsOnce:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
                 "needs_confirmation": False,
             }
         )
@@ -264,7 +278,14 @@ class TestProcessOrderMessageSendsOnce:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 150, "unit": "kg"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 150,
+                        "unit": "kg",
+                    }
+                ],
                 "needs_confirmation": True,
             }
         )
@@ -306,7 +327,14 @@ class TestProcessOrderMessageSendsOnce:
         pending_draft = {
             "customer_id": "C-001",
             "customer_name": "テスト社",
-            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 1,
+                    "unit": "個",
+                }
+            ],
         }
 
         with (
@@ -446,7 +474,14 @@ class TestEndToEndMessageFlow:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
                 "needs_confirmation": False,
             }
         )

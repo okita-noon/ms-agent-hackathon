@@ -31,12 +31,14 @@ class CosmosOrderRepository:
         await self._container.upsert_item(doc)
         return order.id
 
-    async def find_by_id(self, order_id: str) -> Order | None:
+    async def find_by_id(self, tenant_id: str, order_id: str) -> Order | None:
         try:
             doc = await self._container.read_item(order_id, partition_key=order_id)
-            return Order.model_validate(doc)
         except Exception:
             return None
+        if doc.get("tenant_id") != tenant_id:
+            return None
+        return Order.model_validate(doc)
 
     async def list_by_date(self, tenant_id: str, target_date: date) -> list[Order]:
         query = "SELECT * FROM c WHERE c.tenant_id = @tid AND c.delivery_date = @d ORDER BY c.customer_name"

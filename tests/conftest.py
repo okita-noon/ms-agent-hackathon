@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+# Auth-related env vars must be set before importing src.auth.* (fail-closed defaults).
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-32bytes-aaaaaaaaaaaaaaaaaaa")
+os.environ.setdefault("JWT_ISSUER", "orderai-api-test")
+os.environ.setdefault("JWT_AUDIENCE", "orderai-dashboard-test")
 
 # Mock aioodbc before any src imports (requires ODBC driver at import time)
 if "aioodbc" not in sys.modules:
@@ -11,7 +17,12 @@ if "aioodbc" not in sys.modules:
 
 from src.connectors.context import TenantContext
 from src.models.customer import Customer, CustomerDeliveryPreference
-from src.models.intelligence import CustomerOrderProfile, OrderPattern, ProductStats, ResolvedItem
+from src.models.intelligence import (
+    CustomerOrderProfile,
+    OrderPattern,
+    ProductStats,
+    ResolvedItem,
+)
 from src.models.product import Product, UnitType
 from src.models.order import TemperatureZone
 from src.models.tenant import ConnectorConfig, TenantConfig

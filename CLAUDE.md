@@ -14,7 +14,7 @@
 - Agent（Plugin）からDB/APIを直接呼ばない。必ず `TenantContext.get_connector("I...名")` 経由
 - 新しいPluginを追加したら `src/agents/orchestrator.py` の `_build_kernel()` に登録する
 - 新しいAdapterを追加したら `src/connectors/adapters/registry.py` に登録する
-- REST APIを追加したら `AGENTS.md` のAPIエンドポイント表を更新する
+- **アプリケーション変更時は同じ PR 内でドキュメントも必ず更新する**（`AGENTS.md` のドキュメント更新ルール表を参照）
 
 ### デプロイ
 - `main` ブランチへ push すると GitHub Actions で自動デプロイされる
@@ -35,12 +35,5 @@
 
 ### フロントエンド UI 変更時のルール（必須）
 UI を変更したら **毎回** 以下を行うこと:
-1. `frontend/e2e/` に Playwright スクリーンショットテストを追加・更新する
-2. `npx playwright test --update-snapshots` でスクリーンショットを生成
-3. `npx playwright test` でテストが通ることを確認
-4. 撮影したスクリーンショット画像をユーザーに提示してレビューしてもらう
-5. スクリーンショット画像（`e2e/__screenshots__/`）もコミットに含める
-
-- Playwright 設定: `frontend/playwright.config.ts`
-- テストファイル: `frontend/e2e/*.spec.ts`
-- 認証が必要な画面は `/api/auth/me` を `page.route()` でモックしてテストする
+1. ローカルで dev server を起動してスクリーンショットを撮影する
+2. 撮影したスクリーンショット画像をユーザーに提示してレビューしてもらう
