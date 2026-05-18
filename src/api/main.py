@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -94,10 +95,16 @@ async def _process_line_events(handler: LineWebhookHandler, body_json: dict) -> 
 async def line_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    x_line_signature: str = Header(None),
+    x_line_signature: str | None = Header(None),
 ):
+    if not x_line_signature:
+        raise HTTPException(status_code=401, detail="x-line-signature header is required")
+
     body_bytes = await request.body()
-    body_json = await request.json()
+    try:
+        body_json = json.loads(body_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     tenant_ctx = resolve_tenant_for_line(body_json.get("destination"))
     handler = LineWebhookHandler(
@@ -107,14 +114,13 @@ async def line_webhook(
         azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
     )
 
-    if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
+    if not handler.verify_signature(body_bytes, x_line_signature):
         raise HTTPException(
             status_code=403,
             detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。",
         )
 
     background_tasks.add_task(_process_line_events, handler, body_json)
-
     return Response(status_code=200)
 
 

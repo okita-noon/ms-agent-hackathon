@@ -59,14 +59,15 @@ class TestVerifySignature:
         )
         assert handler.verify_signature(b"body", "invalid-sig") is False
 
-    def test_no_secret_configured(self, mock_tenant_ctx):
+    def test_no_secret_configured_rejects(self, mock_tenant_ctx):
+        """Fail-closed: when channel secret is missing, signature check must fail."""
         mock_tenant_ctx.config.line_channel_secret = None
         handler = LineWebhookHandler(
             tenant_ctx=mock_tenant_ctx,
             azure_openai_endpoint="https://test.openai.azure.com/",
             azure_openai_key="test-key",
         )
-        assert handler.verify_signature(b"body", "any") is True
+        assert handler.verify_signature(b"body", "any") is False
 
 
 class TestHandleWebhook:

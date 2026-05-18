@@ -75,3 +75,8 @@ class TestLineWebhook:
                 headers={"x-line-signature": "bad-sig"},
             )
             assert resp.status_code == 403
+
+    def test_rejects_missing_signature_header(self, client):
+        """The signature header is mandatory; missing it must yield 401."""
+        resp = client.post("/api/line-webhook", json={"events": []})
+        assert resp.status_code == 401
