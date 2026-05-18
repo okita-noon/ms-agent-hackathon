@@ -9,25 +9,29 @@ from src.services.line_handler import LineWebhookHandler, _EventDedup
 
 
 class TestEventDedup:
-    def test_first_event_not_duplicate(self):
+    @pytest.mark.asyncio
+    async def test_first_event_not_duplicate(self):
         dedup = _EventDedup(ttl=60)
-        assert dedup.is_duplicate("evt-001") is False
+        assert await dedup.is_duplicate("evt-001") is False
 
-    def test_second_event_is_duplicate(self):
+    @pytest.mark.asyncio
+    async def test_second_event_is_duplicate(self):
         dedup = _EventDedup(ttl=60)
-        dedup.is_duplicate("evt-001")
-        assert dedup.is_duplicate("evt-001") is True
+        await dedup.is_duplicate("evt-001")
+        assert await dedup.is_duplicate("evt-001") is True
 
-    def test_different_events_not_duplicate(self):
+    @pytest.mark.asyncio
+    async def test_different_events_not_duplicate(self):
         dedup = _EventDedup(ttl=60)
-        dedup.is_duplicate("evt-001")
-        assert dedup.is_duplicate("evt-002") is False
+        await dedup.is_duplicate("evt-001")
+        assert await dedup.is_duplicate("evt-002") is False
 
-    def test_expired_event_not_duplicate(self):
+    @pytest.mark.asyncio
+    async def test_expired_event_not_duplicate(self):
         dedup = _EventDedup(ttl=1)
-        dedup.is_duplicate("evt-001")
+        await dedup.is_duplicate("evt-001")
         time.sleep(1.1)
-        assert dedup.is_duplicate("evt-001") is False
+        assert await dedup.is_duplicate("evt-001") is False
 
 
 class TestVerifySignature:
