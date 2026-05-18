@@ -88,9 +88,7 @@ class TestIntakePlugin:
         assert result["needs_confirmation"] is True  # 0.7 < 0.9 threshold
 
     @pytest.mark.asyncio
-    async def test_resolve_with_pattern_high_confidence(
-        self, mock_tenant_ctx, sample_pattern
-    ):
+    async def test_resolve_with_pattern_high_confidence(self, mock_tenant_ctx, sample_pattern):
         sample_pattern.confidence = 0.95
         store = mock_tenant_ctx.get_connector("IOrderIntelligenceStore")
         store.find_pattern_exact.return_value = sample_pattern

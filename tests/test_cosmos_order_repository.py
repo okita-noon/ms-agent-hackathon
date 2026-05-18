@@ -28,12 +28,8 @@ def repo():
     """CosmosOrderRepository with the underlying Cosmos client patched out."""
     from src.connectors.adapters.cosmos_order_repository import CosmosOrderRepository
 
-    config = ConnectorConfig(
-        type="cosmosdb", connection="AccountEndpoint=https://test/;AccountKey=dGVzdA==;"
-    )
-    with patch(
-        "src.connectors.adapters.cosmos_order_repository.CosmosClient"
-    ) as mock_client_cls:
+    config = ConnectorConfig(type="cosmosdb", connection="AccountEndpoint=https://test/;AccountKey=dGVzdA==;")
+    with patch("src.connectors.adapters.cosmos_order_repository.CosmosClient") as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.from_connection_string.return_value = mock_client
         instance = CosmosOrderRepository(config)

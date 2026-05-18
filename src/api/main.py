@@ -40,11 +40,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="foogent API", lifespan=lifespan)
 
-frontend_origins = [
-    origin.strip()
-    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
-    if origin.strip()
-]
+frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
 if frontend_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -54,11 +50,7 @@ if frontend_origins:
         allow_headers=["*"],
     )
 
-frontend_origins = [
-    origin.strip()
-    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
-    if origin.strip()
-]
+frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
 if frontend_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -112,9 +104,7 @@ async def line_webhook(
         tenant_ctx=tenant_ctx,
         azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
         azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
-        azure_openai_deployment_name=os.environ.get(
-            "AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT
-        ),
+        azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
     )
 
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
@@ -215,9 +205,7 @@ async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_
     order_repo = tenant_ctx.get_connector("IOrderRepository")
     order = await order_repo.find_by_id(order_id)
     if not order:
-        raise HTTPException(
-            status_code=404, detail=f"受注ID「{order_id}」が見つかりません。"
-        )
+        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。")
 
     if not order.session_id:
         return {"messages": [], "session_id": None}
@@ -253,9 +241,7 @@ async def list_inventory(tenant_id: str = Depends(get_tenant_id)):
                 "product_id": p.id,
                 "product_name": p.name,
                 "category": p.category,
-                "temperature_zone": p.temperature_zone.value
-                if p.temperature_zone
-                else "常温",
+                "temperature_zone": p.temperature_zone.value if p.temperature_zone else "常温",
                 "quantity": inv_status.available_qty,
                 "unit": inv_status.unit,
                 "is_variable_weight": p.is_variable_weight,
@@ -286,9 +272,7 @@ async def list_customers(tenant_id: str = Depends(get_tenant_id)):
 
 
 @app.put("/api/customers/{customer_id}")
-async def update_customer(
-    customer_id: str, request: Request, tenant_id: str = Depends(get_tenant_id)
-):
+async def update_customer(customer_id: str, request: Request, tenant_id: str = Depends(get_tenant_id)):
     body = await request.json()
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("ICustomerRepository")

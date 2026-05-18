@@ -34,9 +34,7 @@ class InventoryPlugin:
         required_qty: Annotated[float, "必要数量"],
     ) -> list[dict]:
         svc = self._ctx.get_connector("IInventoryService")
-        results = await svc.find_alternatives(
-            self._ctx.tenant_id, product_id, required_qty
-        )
+        results = await svc.find_alternatives(self._ctx.tenant_id, product_id, required_qty)
         return [r.model_dump() for r in results]
 
     @kernel_function(

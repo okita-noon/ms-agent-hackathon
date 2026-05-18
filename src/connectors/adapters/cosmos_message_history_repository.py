@@ -51,11 +51,7 @@ class CosmosMessageHistoryRepository:
         tenant_id: str,
         session_id: str,
     ) -> list[MessageHistory]:
-        query = (
-            "SELECT * FROM c WHERE c.tenant_id = @tid "
-            "AND c.session_id = @sid "
-            "ORDER BY c.created_at ASC"
-        )
+        query = "SELECT * FROM c WHERE c.tenant_id = @tid AND c.session_id = @sid ORDER BY c.created_at ASC"
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@sid", "value": session_id},

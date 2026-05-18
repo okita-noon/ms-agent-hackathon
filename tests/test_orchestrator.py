@@ -152,9 +152,7 @@ class TestProcessOrderMessageSendsOnce:
 
         with (
             patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
-            patch.object(
-                orch, "_send_line_message", new_callable=AsyncMock
-            ) as mock_send,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
             mock_invoke.return_value = "すみません、理解できませんでした。"
 
@@ -208,9 +206,7 @@ class TestProcessOrderMessageSendsOnce:
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
-            patch.object(
-                orch, "_send_line_message", new_callable=AsyncMock
-            ) as mock_send,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
             result = await orch.process_order_message(
                 message="りんご1個お願い",
@@ -257,9 +253,7 @@ class TestProcessOrderMessageSendsOnce:
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
-            patch.object(
-                orch, "_send_line_message", new_callable=AsyncMock
-            ) as mock_send,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
             result = await orch.process_order_message(
                 message="りんご150kg",
@@ -274,9 +268,7 @@ class TestProcessOrderMessageSendsOnce:
             assert "order_id" not in result
 
     @pytest.mark.asyncio
-    async def test_affirmative_reply_creates_order_from_pending_draft(
-        self, mock_tenant_ctx
-    ):
+    async def test_affirmative_reply_creates_order_from_pending_draft(self, mock_tenant_ctx):
         orch = _make_orchestrator(mock_tenant_ctx)
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
         order_repo.save = AsyncMock(return_value="ORD-OK")
@@ -296,9 +288,7 @@ class TestProcessOrderMessageSendsOnce:
 
         with (
             patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
-            patch.object(
-                orch, "_send_line_message", new_callable=AsyncMock
-            ) as mock_send,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
             mock_invoke.return_value = "ご注文を確定しました。"
 
@@ -377,12 +367,8 @@ class TestEndToEndMessageFlow:
         # Mock the agent invocation but let the real orchestrator flow run
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
-            patch.object(
-                orch, "_send_line_message", new_callable=AsyncMock
-            ) as mock_orch_send,
-            patch.object(
-                handler, "_send_line_push", side_effect=track_push
-            ) as mock_handler_push,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_orch_send,
+            patch.object(handler, "_send_line_push", side_effect=track_push) as mock_handler_push,
         ):
             await handler._process_message("U123", "りんご1個", "tok-1")
 
@@ -414,9 +400,7 @@ class TestEndToEndMessageFlow:
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("LLM down"),
             ),
-            patch.object(
-                handler, "_send_line_push", new_callable=AsyncMock
-            ) as mock_push,
+            patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push,
         ):
             mock_push.return_value = True
 

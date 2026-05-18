@@ -175,9 +175,7 @@ def main() -> None:
         help="API base URL (default: http://localhost:8080)",
     )
     parser.add_argument("--caller", default="+81312345678", help="Caller phone number")
-    parser.add_argument(
-        "--called", default="+81501234567", help="Called phone number (ACS)"
-    )
+    parser.add_argument("--called", default="+81501234567", help="Called phone number (ACS)")
     parser.add_argument(
         "--messages",
         nargs="+",

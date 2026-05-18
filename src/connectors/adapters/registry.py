@@ -15,9 +15,7 @@ from src.connectors.adapters.search_product_master import SearchProductMaster
 def register_all_adapters() -> None:
     register_adapter("IOrderRepository", "cosmosdb", CosmosOrderRepository)
     register_adapter("ISessionRepository", "cosmosdb", CosmosSessionRepository)
-    register_adapter(
-        "IMessageHistoryRepository", "cosmosdb", CosmosMessageHistoryRepository
-    )
+    register_adapter("IMessageHistoryRepository", "cosmosdb", CosmosMessageHistoryRepository)
     register_adapter("IOrderIntelligenceStore", "cosmosdb", CosmosIntelligenceStore)
     register_adapter("IProductMaster", "azure_sql", SqlProductMaster)
     register_adapter("IProductMaster", "ai_search", SearchProductMaster)

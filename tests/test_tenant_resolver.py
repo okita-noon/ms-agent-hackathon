@@ -37,17 +37,13 @@ class TestGetDemoTenantConfig:
 
 
 class TestResolveTenant:
-    @patch.dict(
-        "os.environ", {"COSMOS_CONNECTION_STRING": "c", "SQL_CONNECTION_STRING": "s"}
-    )
+    @patch.dict("os.environ", {"COSMOS_CONNECTION_STRING": "c", "SQL_CONNECTION_STRING": "s"})
     def test_resolve_for_line(self):
         _TENANT_CACHE.clear()
         ctx = resolve_tenant_for_line("some-destination")
         assert ctx.tenant_id == "T-001"
 
-    @patch.dict(
-        "os.environ", {"COSMOS_CONNECTION_STRING": "c", "SQL_CONNECTION_STRING": "s"}
-    )
+    @patch.dict("os.environ", {"COSMOS_CONNECTION_STRING": "c", "SQL_CONNECTION_STRING": "s"})
     def test_resolve_by_id(self):
         _TENANT_CACHE.clear()
         ctx = resolve_tenant_by_id("T-002")

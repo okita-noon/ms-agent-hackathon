@@ -25,9 +25,7 @@ class ConnectorFactory:
 
         connector_cfg = self._tenant_config.connectors.get(interface_name)
         if not connector_cfg:
-            raise ValueError(
-                f"No connector config for {interface_name} in tenant {self._tenant_config.tenant_id}"
-            )
+            raise ValueError(f"No connector config for {interface_name} in tenant {self._tenant_config.tenant_id}")
 
         adapters = _ADAPTER_REGISTRY.get(interface_name, {})
         adapter_cls = adapters.get(connector_cfg.type)

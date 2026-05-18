@@ -18,9 +18,7 @@ class SqlInventoryService:
     async def _get_connection(self):
         return await aioodbc.connect(dsn=self._conn_str, autocommit=False)
 
-    async def check(
-        self, tenant_id: str, product_id: str, required_qty: float
-    ) -> InventoryStatus:
+    async def check(self, tenant_id: str, product_id: str, required_qty: float) -> InventoryStatus:
         query = """
         SELECT i.quantity - i.reserved_qty AS available_qty, i.unit, p.name
         FROM inventory i
@@ -47,9 +45,7 @@ class SqlInventoryService:
                     is_sufficient=float(row[0]) >= required_qty,
                 )
 
-    async def find_alternatives(
-        self, tenant_id: str, product_id: str, qty: float
-    ) -> list[Alternative]:
+    async def find_alternatives(self, tenant_id: str, product_id: str, qty: float) -> list[Alternative]:
         query = """
         SELECT p.product_id, p.name, i.quantity - i.reserved_qty AS available_qty, i.unit
         FROM products p
@@ -61,9 +57,7 @@ class SqlInventoryService:
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    query, (tenant_id, product_id, tenant_id, product_id, qty)
-                )
+                await cur.execute(query, (tenant_id, product_id, tenant_id, product_id, qty))
                 rows = await cur.fetchall()
                 return [
                     Alternative(
@@ -75,9 +69,7 @@ class SqlInventoryService:
                     for r in rows
                 ]
 
-    async def reserve(
-        self, tenant_id: str, product_id: str, qty: float
-    ) -> ReservationResult:
+    async def reserve(self, tenant_id: str, product_id: str, qty: float) -> ReservationResult:
         query = """
         UPDATE inventory SET reserved_qty = reserved_qty + ?
         WHERE tenant_id = ? AND product_id = ? AND (quantity - reserved_qty) >= ?
@@ -88,9 +80,7 @@ class SqlInventoryService:
                     await cur.execute(query, (qty, tenant_id, product_id, qty))
                     if cur.rowcount > 0:
                         await conn.commit()
-                        return ReservationResult(
-                            product_id=product_id, reserved_qty=qty, success=True
-                        )
+                        return ReservationResult(product_id=product_id, reserved_qty=qty, success=True)
                     await conn.rollback()
                     return ReservationResult(
                         product_id=product_id,

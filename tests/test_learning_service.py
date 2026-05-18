@@ -56,9 +56,7 @@ class TestLearningServiceRecordPattern:
             input_expression="りんご5箱",
             input_expression_normalized="りんご5箱",
             resolved_items=[
-                ResolvedItem(
-                    product_id="P-001", product_name="りんご", qty=5, unit="箱"
-                ),
+                ResolvedItem(product_id="P-001", product_name="りんご", qty=5, unit="箱"),
             ],
             confidence=0.7,
             occurrence_count=1,
@@ -70,9 +68,7 @@ class TestLearningServiceRecordPattern:
             customer_id="C-001",
             input_expression="りんご5箱",
             resolved_items=[
-                ResolvedItem(
-                    product_id="P-001", product_name="りんご", qty=5, unit="箱"
-                ),
+                ResolvedItem(product_id="P-001", product_name="りんご", qty=5, unit="箱"),
             ],
         )
 
@@ -91,9 +87,7 @@ class TestLearningServiceRecordPattern:
             customer_id="C-001",
             input_expression="ツナ缶100g",
             resolved_items=[
-                ResolvedItem(
-                    product_id="P-010", product_name="ツナ缶", qty=1, unit="個"
-                ),
+                ResolvedItem(product_id="P-010", product_name="ツナ缶", qty=1, unit="個"),
             ],
         )
 
