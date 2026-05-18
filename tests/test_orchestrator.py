@@ -181,7 +181,6 @@ class TestResponsePolicy:
 
         assert response == "ご注文承りました。りんご5箱、本日配送予定です。"
 
-
 class TestMemoryContext:
     def test_format_memory_context(self):
         history = [

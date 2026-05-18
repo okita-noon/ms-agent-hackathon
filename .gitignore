@@ -55,6 +55,11 @@ yarn-error.log*
 .vscode/
 !.vscode/extensions.json
 .idea/
+
+# Claude Code のローカル worktree / 設定（マシン固有・コミット禁止）
+.claude/worktrees/
+.claude/settings.local.json
+**/.claude/settings.local.json
 *.swp
 *.swo
 *~
