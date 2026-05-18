@@ -1,13 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import { fetchOrders, type Order } from "../lib/api";
+import {
+  fetchAgentExceptions,
+  fetchAgentFeatures,
+  fetchOrders,
+  type AgentExceptionCase,
+  type Order,
+} from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
 import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
+import DashboardAgentPanel from "../components/DashboardAgentPanel";
 import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -17,6 +24,9 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
+  const [agentLoading, setAgentLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,7 +39,39 @@ export default function Orders() {
     }
   }, [date]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void Promise.resolve().then(load);
+  }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    fetchAgentFeatures()
+      .then((features) => {
+        if (active) setAgentEnabled(features.dashboard_agent);
+      })
+      .catch(() => {
+        if (active) setAgentEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const loadAgentExceptions = useCallback(async () => {
+    if (!agentEnabled) return;
+    setAgentLoading(true);
+    try {
+      setAgentExceptions(await fetchAgentExceptions(date));
+    } catch {
+      setAgentExceptions([]);
+    } finally {
+      setAgentLoading(false);
+    }
+  }, [agentEnabled, date]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadAgentExceptions);
+  }, [loadAgentExceptions]);
 
   const statusCounts: Record<string, number> = {};
   const sourceCounts: Record<string, number> = {};
@@ -75,7 +117,10 @@ export default function Orders() {
             className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
           />
           <button
-            onClick={load}
+            onClick={() => {
+              load();
+              loadAgentExceptions();
+            }}
             disabled={loading}
             className="btn-press bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 shadow-sm shadow-brand-600/20"
           >
@@ -87,6 +132,8 @@ export default function Orders() {
         </div>
       </div>
 
+      <div className={agentEnabled ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start" : ""}>
+        <div className="min-w-0">
       {/* Stats cards */}
       {loading && orders.length === 0 ? (
         <SkeletonStatCards count={8} />
@@ -222,6 +269,14 @@ export default function Orders() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+        </div>
+        {agentEnabled && (
+          <div className="xl:sticky xl:top-5">
+            <DashboardAgentPanel exceptions={agentExceptions} loading={agentLoading} date={date} />
           </div>
         )}
       </div>

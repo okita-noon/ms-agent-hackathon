@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT
+from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
@@ -63,6 +64,7 @@ if frontend_origins:
 
 # ── Auth routes (public) ──────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/auth")
+app.include_router(dashboard_agent_router)
 
 
 @app.get("/")
