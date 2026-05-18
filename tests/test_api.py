@@ -113,10 +113,12 @@ class TestPhoneWebhook:
 
     def test_subscription_validation_requires_key(self, client):
         """Even the EventGrid subscription validation handshake must auth."""
-        validation_event = [{
-            "type": "Microsoft.EventGrid.SubscriptionValidationEvent",
-            "data": {"validationCode": "abc"},
-        }]
+        validation_event = [
+            {
+                "type": "Microsoft.EventGrid.SubscriptionValidationEvent",
+                "data": {"validationCode": "abc"},
+            }
+        ]
         with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}):
             resp = client.post("/api/phone-webhook", json=validation_event)
             assert resp.status_code == 401

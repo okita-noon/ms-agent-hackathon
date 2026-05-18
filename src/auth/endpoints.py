@@ -148,7 +148,9 @@ async def microsoft_login(req: MicrosoftLoginRequest):
         if not result:
             logger.warning(
                 "SSO login rejected for unregistered user: email=%s oid=%s tid=%s",
-                email, oid, claims.get("tid", ""),
+                email,
+                oid,
+                claims.get("tid", ""),
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

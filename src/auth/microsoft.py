@@ -50,9 +50,7 @@ async def validate_microsoft_id_token(id_token: str) -> dict | None:
         logger.error("ENTRA_CLIENT_ID is not set — cannot validate Microsoft tokens")
         return None
     if not ALLOWED_TIDS:
-        logger.error(
-            "AZURE_AD_ALLOWED_TENANTS is not set — refusing all Microsoft SSO logins (fail-closed)"
-        )
+        logger.error("AZURE_AD_ALLOWED_TENANTS is not set — refusing all Microsoft SSO logins (fail-closed)")
         return None
 
     try:
