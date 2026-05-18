@@ -14,28 +14,34 @@
 - [x] サービスプリンシパル `github-orderai-deploy` 作成済み
 
 ### バックエンド
-- [x] データモデル（7 Pydantic モデル）
-- [x] Connector インターフェース（6 Protocol）
-- [x] Cosmos DB アダプタ（受注・セッション・パターン学習）
+- [x] データモデル（8 Pydantic モデル）
+- [x] Connector インターフェース（7 Protocol）
+- [x] Cosmos DB アダプタ（受注・セッション・メッセージ履歴・パターン学習）
 - [x] Azure SQL アダプタ（商品・顧客・在庫）
 - [x] Semantic Kernel Plugin（Intake・Inventory・Exception・Communication）
 - [x] Agent 定義 + Orchestrator（gpt-5.4-mini 連携）
-- [x] LINE Webhook ハンドラ（署名検証・セッション管理）
+- [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
+- [x] 電話 Webhook ハンドラ（ACS Call Automation・音声認識・TTS応答）
+- [x] チャネル×ユーザー単位の非同期ロック（並行処理の安全性）
 - [x] Learning Service（パターン記録・プロファイル更新）
-- [x] テナント解決サービス（デモ環境用）
-- [x] FastAPI アプリ（REST API 7エンドポイント）
+- [x] テナント解決サービス（LINE/電話→テナント紐付け）
+- [x] 認証（ID/パスワード + Microsoft SSO、JWT発行）
+- [x] FastAPI アプリ（REST API 10エンドポイント）
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
-- [x] MessageHistory の session_id 検索（IMessageHistoryRepository.list_by_session_id）
+- [x] 受注ステータス分離（未処理 / 要対応 の自動判定）
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
+  - ログイン画面（ID/パスワード + Microsoft SSO）
   - サイドバーナビゲーション（受注・在庫・顧客）
   - 受注一覧テーブル（日付選択・ステータスバッジ・温度帯表示）
+  - 受注ステータス分離表示（未処理 / 要対応）
   - 統計カード（合計・ステータス別件数）
   - ドーナツチャート（ステータス別・チャネル別）
   - 受注詳細モーダル（注文会話履歴チャット表示付き）
   - 顧客一覧（常設編集ボタン）
+  - プロフィールドロップダウン（ログアウト）
   - API未接続時のデモデータフォールバック
 
 ### CI/CD
@@ -61,7 +67,6 @@
 |---|---|---|
 | AI Search インデックス作成 | 2h | 現在は SQL LIKE 検索。AI Search にすると「りんご」「リンゴ」「林檎」等の表記ゆれに対応 |
 | Embedding ベースのパターン検索 | 2h | `cosmos_intelligence_store.py` の `find_pattern_by_embedding` を AI Search ベクトル検索に置換 |
-| 電話チャネル（ACS Call Automation + AI Speech） | 4h | ACS リソースはデプロイ済み。着信→文字起こし→Agent のパイプライン実装が必要 |
 | ピッキングリストPDF生成 | 2h | `src/models/picking.py` のモデルは定義済み。PDF生成ロジック + API エンドポイント追加 |
 | ダッシュボードにリアルタイム更新 | 1h | WebSocket or SSE で新規受注の自動反映 |
 
@@ -69,7 +74,7 @@
 
 | タスク | 見積もり | 備考 |
 |---|---|---|
-| pytest テストスイート | 3h | Connector Interface に対するユニットテスト |
+| pytest テストスイート拡充 | 2h | 基本テストはCI済み。E2E・統合テストの追加 |
 | メールチャネル（Graph API） | 4h | |
 | 管理コンソール | 4h | テナント設定・商品マスタ編集UI |
 
