@@ -242,6 +242,8 @@ class OrderOrchestrator:
 
         # ── Step 3: Inventory Agent ────────────────────────────────────────────
         inventory_text: str | None = None
+        inventory_result: dict | None = None
+        inventory_needs_review = False
         if not anomaly_confirmation_needed and items:
             inventory_agent = self._make_inventory_agent()
             items_summary = json.dumps(items, ensure_ascii=False)
@@ -255,11 +257,28 @@ class OrderOrchestrator:
             )
             inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
             logger.info("Inventory result: %s", inventory_text[:500])
-            self._extract_json(inventory_text)
+            inventory_result = self._extract_json(inventory_text)
+            inventory_needs_review = _inventory_requires_operator_review(inventory_result)
+            if inventory_needs_review:
+                needs_confirmation = True
 
         # ── Step 4: Save order if no confirmation needed ───────────────────────
         saved_order: Order | None = None
-        if not needs_confirmation:
+        if inventory_needs_review:
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        status=OrderStatus.NEEDS_REVIEW,
+                        remarks=_build_inventory_review_remarks(inventory_result),
+                    )
+                    logger.info("Created review order %s from inventory result", saved_order.id)
+                    result["review_order_id"] = saved_order.id
+            except Exception:
+                logger.exception("Failed to save review order from inventory result")
+        elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
@@ -279,6 +298,7 @@ class OrderOrchestrator:
             source=source,
             conversation_history=conversation_history,
             pending_order_draft=pending_order_draft,
+            processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
         )
         result["response"] = response_text
 
@@ -304,6 +324,7 @@ class OrderOrchestrator:
         source: OrderSource = OrderSource.LINE,
         conversation_history: list[MessageHistory] | None = None,
         pending_order_draft: dict | None = None,
+        processing_note: str | None = None,
     ) -> str:
         orchestrator_agent = self._make_orchestrator_agent()
         context_parts = [
@@ -319,6 +340,8 @@ class OrderOrchestrator:
             context_parts.append(f"[Exception Agent結果]\n{exception_text}")
         if inventory_text:
             context_parts.append(f"[Inventory Agent結果]\n{inventory_text}")
+        if processing_note:
+            context_parts.append(f"[処理ステータス]\n{processing_note}")
 
         if source == OrderSource.PHONE:
             channel_instruction = (
@@ -356,6 +379,8 @@ class OrderOrchestrator:
         draft: dict,
         source: OrderSource = OrderSource.LINE,
         session_id: str | None = None,
+        status: OrderStatus = OrderStatus.PENDING,
+        remarks: str | None = None,
     ) -> Order:
         items = []
         for item_data in draft.get("items", []):
@@ -381,7 +406,8 @@ class OrderOrchestrator:
             delivery_route=draft.get("delivery_route"),
             delivery_carrier=draft.get("delivery_carrier"),
             delivery_time_slot=draft.get("delivery_time_slot"),
-            status=OrderStatus.PENDING,
+            status=status,
+            remarks=remarks,
             session_id=session_id,
         )
 
@@ -457,6 +483,58 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),
     }
+
+
+def _inventory_requires_operator_review(inventory_result: dict | None) -> bool:
+    if not inventory_result:
+        return False
+
+    for key in ("all_available", "all_reserved", "accepted", "reservable"):
+        if inventory_result.get(key) is False:
+            return True
+
+    if inventory_result.get("alternatives"):
+        return True
+
+    for item in inventory_result.get("items", []) or []:
+        if not isinstance(item, dict):
+            continue
+        for key in ("available", "reserved", "reserve_success", "accepted"):
+            if item.get(key) is False:
+                return True
+        shortage = item.get("shortage_qty") or item.get("shortage")
+        if isinstance(shortage, int | float) and shortage > 0:
+            return True
+
+    return False
+
+
+def _build_inventory_review_remarks(inventory_result: dict | None) -> str:
+    if not inventory_result:
+        return "在庫確認結果が不明のため担当者確認"
+
+    message = inventory_result.get("message")
+    if isinstance(message, str) and message.strip():
+        return message.strip()[:200]
+
+    if inventory_result.get("alternatives"):
+        return "在庫不足または代替提案あり。担当者確認が必要"
+
+    return "在庫不足または引当不可のため担当者確認"
+
+
+def _build_processing_note(needs_confirmation: bool, inventory_needs_review: bool) -> str | None:
+    if inventory_needs_review:
+        return (
+            "在庫不足または引当不可のため、受注確定していません。"
+            "顧客には担当者確認中であることを伝え、受注承りました・確定しましたとは言わないでください。"
+        )
+    if needs_confirmation:
+        return (
+            "顧客確認が必要なため、受注確定していません。"
+            "顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。"
+        )
+    return None
 
 
 def _parse_order_items(message: str) -> list[dict]:

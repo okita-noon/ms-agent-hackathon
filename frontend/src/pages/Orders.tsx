@@ -3,7 +3,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import { fetchOrders, type Order } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
-import { STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
+import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
@@ -36,6 +36,8 @@ export default function Orders() {
     statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
     sourceCounts[o.source] = (sourceCounts[o.source] || 0) + 1;
   });
+  const acceptedOrderCount = orders.filter((o) => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
+  const reviewOrderCount = orders.length - acceptedOrderCount;
 
   const chartOpts = {
     responsive: true,
@@ -58,7 +60,9 @@ export default function Orders() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-lg font-bold text-gray-900 tracking-tight">受注ダッシュボード</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{orders.length > 0 ? `${orders.length}件の受注` : "データを読み込み中..."}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {orders.length > 0 ? `受注 ${acceptedOrderCount}件 / 要対応 ${reviewOrderCount}件` : "データを読み込み中..."}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-500">配送日</label>
@@ -82,10 +86,10 @@ export default function Orders() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6 stagger-in">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 stagger-in">
         <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">合計</p>
-          <p className="text-2xl font-bold text-gray-900 tabular-nums">{orders.length}</p>
+          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">受注合計</p>
+          <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
         </div>
         {Object.entries(STATUS_COLORS).map(([status, color]) => (
           <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
@@ -144,8 +148,8 @@ export default function Orders() {
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">受注一覧</h3>
-          <span className="text-xs text-gray-300 tabular-nums">{orders.length}件</span>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
+          <span className="text-xs text-gray-300 tabular-nums">受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
         </div>
         {orders.length === 0 ? (
           <div className="py-20 text-center">

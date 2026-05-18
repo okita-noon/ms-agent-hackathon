@@ -56,6 +56,7 @@ class TestOrderModel:
 
     def test_order_status_enum(self):
         assert OrderStatus.PENDING == "未処理"
+        assert OrderStatus.NEEDS_REVIEW == "要対応"
         assert OrderStatus.COMPLETED == "完了"
         assert OrderStatus.AWAITING_REPLY == "返信待ち"
 

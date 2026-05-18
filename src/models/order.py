@@ -17,6 +17,7 @@ class OrderSource(StrEnum):
 
 class OrderStatus(StrEnum):
     PENDING = "未処理"
+    NEEDS_REVIEW = "要対応"
     MANUFACTURING = "製造"
     SHIPPING = "配送"
     COMPLETED = "完了"
