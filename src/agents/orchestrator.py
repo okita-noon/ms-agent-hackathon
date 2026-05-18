@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import date
 
@@ -151,6 +152,27 @@ class OrderOrchestrator:
         }
 
         if pending_order_draft and _is_affirmative_reply(message):
+            inferred_time_slot = await self._infer_delivery_time_slot(pending_order_draft)
+            if inferred_time_slot:
+                pending_order_draft["delivery_time_slot"] = inferred_time_slot
+            delivery_date_missing = _draft_missing_delivery_date(pending_order_draft)
+            delivery_time_missing = _draft_missing_delivery_time_slot(pending_order_draft)
+            if delivery_date_missing or delivery_time_missing:
+                response_text = _sanitize_line_reply(
+                    _build_missing_delivery_reply(
+                        delivery_date_missing=delivery_date_missing,
+                        delivery_time_missing=delivery_time_missing,
+                    )
+                )
+                result["response"] = response_text
+                result["session_status"] = "awaiting_reply"
+                result["pending_order_draft"] = pending_order_draft
+                if response_callback:
+                    await response_callback(response_text)
+                else:
+                    await self._send_line_message(response_text, reply_token, line_user_id)
+                return result
+
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
                 source=source,
@@ -220,6 +242,13 @@ class OrderOrchestrator:
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
+        inferred_time_slot = await self._infer_delivery_time_slot(intake_draft)
+        if inferred_time_slot:
+            intake_draft["delivery_time_slot"] = inferred_time_slot
+        delivery_date_missing = _draft_missing_delivery_date(intake_draft)
+        delivery_time_missing = _draft_missing_delivery_time_slot(intake_draft)
+        if delivery_date_missing or delivery_time_missing:
+            needs_confirmation = True
 
         # ── Step 2: Exception Agent ────────────────────────────────────────────
         exception_text: str | None = None
@@ -248,7 +277,12 @@ class OrderOrchestrator:
         inventory_text: str | None = None
         inventory_result: dict | None = None
         inventory_needs_review = False
-        if not anomaly_confirmation_needed and items:
+        if (
+            not anomaly_confirmation_needed
+            and not delivery_date_missing
+            and not delivery_time_missing
+            and items
+        ):
             inventory_agent = self._make_inventory_agent()
             items_summary = json.dumps(items, ensure_ascii=False)
             inventory_prompt = (
@@ -303,7 +337,12 @@ class OrderOrchestrator:
             source=source,
             conversation_history=conversation_history,
             pending_order_draft=pending_order_draft,
-            processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+            processing_note=_build_processing_note(
+                needs_confirmation,
+                inventory_needs_review,
+                delivery_date_missing=delivery_date_missing,
+                delivery_time_missing=delivery_time_missing,
+            ),
         )
         result["response"] = response_text
 
@@ -357,16 +396,27 @@ class OrderOrchestrator:
         else:
             channel_instruction = (
                 "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
+                "会社名・店舗名・顧客名の呼びかけ（例: 「○○様」）は"
+                "書かないでください。\n"
+                "「他の注文や不明点があれば連絡ください」等の"
+                "汎用的な締め文は書かないでください。\n"
+                "原則2行以内、80文字以内で、注文内容と次アクションだけを"
+                "書いてください。\n"
                 "返信メッセージのみを出力してください（JSON不要）。\n\n"
             )
 
         final_prompt = channel_instruction + "\n\n".join(context_parts)
         response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
-        return _enforce_response_policy(
+        response_text = _enforce_response_policy(
             response_text,
             needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
             inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+            delivery_date_missing=processing_note is not None and "配達日の確認が必要" in processing_note,
+            delivery_time_missing=processing_note is not None and "配達時間の確認が必要" in processing_note,
         )
+        if source == OrderSource.LINE:
+            return _sanitize_line_reply(response_text)
+        return response_text
 
     async def _send_line_message(
         self,
@@ -382,6 +432,34 @@ class OrderOrchestrator:
                 await comm_plugin.send_line_push(user_id=line_user_id, message=message)
         except Exception:
             logger.exception("Failed to send LINE message")
+
+    async def _infer_delivery_time_slot(self, draft: dict) -> str | None:
+        if not _draft_missing_delivery_time_slot(draft):
+            return None
+
+        customer_id = draft.get("customer_id")
+        if not isinstance(customer_id, str) or not customer_id:
+            return None
+
+        try:
+            repo = self._ctx.get_connector("IOrderRepository")
+            recent_orders = await repo.list_by_customer(customer_id, limit=50)
+        except Exception:
+            logger.exception("Failed to infer delivery time slot from order history")
+            return None
+
+        if not isinstance(recent_orders, list):
+            return None
+
+        slots = [
+            order.delivery_time_slot.strip()
+            for order in recent_orders
+            if isinstance(order.delivery_time_slot, str) and order.delivery_time_slot.strip()
+        ]
+        if not slots:
+            return None
+
+        return Counter(slots).most_common(1)[0][0]
 
     async def create_order_from_draft(
         self,
@@ -407,7 +485,7 @@ class OrderOrchestrator:
             uid="",
             tenant_id=self._ctx.tenant_id,
             order_date=date.today(),
-            delivery_date=draft.get("delivery_date") or date.today(),
+            delivery_date=draft.get("delivery_date"),
             customer_id=draft["customer_id"],
             customer_name=draft.get("customer_name", ""),
             source=source,
@@ -434,6 +512,15 @@ class OrderOrchestrator:
         try:
             draft = await self._build_order_draft(message, line_user_id)
             if not draft:
+                return None
+            if _draft_missing_delivery_date(draft):
+                logger.info("Skipping direct order creation because delivery date is missing")
+                return None
+            inferred_time_slot = await self._infer_delivery_time_slot(draft)
+            if inferred_time_slot:
+                draft["delivery_time_slot"] = inferred_time_slot
+            if _draft_missing_delivery_time_slot(draft):
+                logger.info("Skipping direct order creation because delivery time slot is missing")
                 return None
             order = await self.create_order_from_draft(draft, source=source)
             logger.info("Created order %s from LINE message", order.id)
@@ -473,7 +560,7 @@ class OrderOrchestrator:
             "customer_id": customer.id,
             "customer_name": customer.name,
             "items": items,
-            "delivery_date": date.today(),
+            "delivery_date": None,
             "delivery_route": preference.default_route,
             "delivery_carrier": preference.default_carrier,
             "delivery_time_slot": preference.default_time_slot,
@@ -487,7 +574,7 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "customer_id": intake_draft["customer_id"],
         "customer_name": intake_draft.get("customer_name", ""),
         "items": intake_draft["items"],
-        "delivery_date": intake_draft.get("delivery_date") or date.today(),
+        "delivery_date": intake_draft.get("delivery_date"),
         "delivery_route": intake_draft.get("delivery_route"),
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),
@@ -532,11 +619,33 @@ def _build_inventory_review_remarks(inventory_result: dict | None) -> str:
     return "在庫不足または引当不可のため担当者確認"
 
 
-def _build_processing_note(needs_confirmation: bool, inventory_needs_review: bool) -> str | None:
+def _build_processing_note(
+    needs_confirmation: bool,
+    inventory_needs_review: bool,
+    *,
+    delivery_date_missing: bool = False,
+    delivery_time_missing: bool = False,
+) -> str | None:
     if inventory_needs_review:
         return (
             "在庫不足または引当不可のため、受注確定していません。"
             "顧客には担当者確認中であることを伝え、受注承りました・確定しましたとは言わないでください。"
+        )
+    if delivery_date_missing:
+        if delivery_time_missing:
+            return (
+                "配達日と配達時間の確認が必要なため、受注確定していません。"
+                "顧客には配達日と配達時間だけを短く確認し、"
+                "受注承りました・確定しましたとは言わないでください。"
+            )
+        return (
+            "配達日の確認が必要なため、受注確定していません。"
+            "顧客には配達日だけを短く確認し、受注承りました・確定しましたとは言わないでください。"
+        )
+    if delivery_time_missing:
+        return (
+            "配達時間の確認が必要なため、受注確定していません。"
+            "顧客には配達時間だけを短く確認し、受注承りました・確定しましたとは言わないでください。"
         )
     if needs_confirmation:
         return (
@@ -565,9 +674,22 @@ def _enforce_response_policy(
     *,
     needs_confirmation: bool,
     inventory_needs_review: bool,
+    delivery_date_missing: bool = False,
+    delivery_time_missing: bool = False,
 ) -> str:
-    if not (needs_confirmation or inventory_needs_review):
+    if not (
+        needs_confirmation
+        or inventory_needs_review
+        or delivery_date_missing
+        or delivery_time_missing
+    ):
         return response_text
+
+    if delivery_date_missing or delivery_time_missing:
+        return _build_missing_delivery_reply(
+            delivery_date_missing=delivery_date_missing,
+            delivery_time_missing=delivery_time_missing,
+        )
 
     normalized = re.sub(r"\s+", "", response_text)
     if not any(pattern in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS):
@@ -576,6 +698,81 @@ def _enforce_response_policy(
     if inventory_needs_review:
         return "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
     return "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+
+
+def _draft_missing_delivery_date(draft: dict | None) -> bool:
+    if not draft:
+        return False
+    delivery_date = draft.get("delivery_date")
+    if delivery_date is None:
+        return True
+    if isinstance(delivery_date, str) and not delivery_date.strip():
+        return True
+    return False
+
+
+def _draft_missing_delivery_time_slot(draft: dict | None) -> bool:
+    if not draft:
+        return False
+    delivery_time_slot = draft.get("delivery_time_slot")
+    if delivery_time_slot is None:
+        return True
+    if isinstance(delivery_time_slot, str) and not delivery_time_slot.strip():
+        return True
+    return False
+
+
+def _build_missing_delivery_reply(
+    *,
+    delivery_date_missing: bool,
+    delivery_time_missing: bool,
+) -> str:
+    if delivery_date_missing and delivery_time_missing:
+        return "配達日と配達時間を教えてください。"
+    if delivery_date_missing:
+        return "配達日を教えてください。"
+    return "配達時間を教えてください。"
+
+
+GENERIC_LINE_CLOSING_PATTERNS = (
+    re.compile(
+        r"他の.*(?:注文|ご注文).*?(?:連絡|ご連絡|返信|お知らせ).*?(?:ください|下さい)",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"(?:不明点|ご不明点|ご質問|質問).*?"
+        r"(?:連絡|ご連絡|返信|お知らせ).*?(?:ください|下さい)",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"何か.*?(?:ありましたら|ございましたら).*?"
+        r"(?:連絡|ご連絡|返信|お知らせ).*?(?:ください|下さい)",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"お気軽に.*?(?:連絡|ご連絡|返信|お知らせ).*?(?:ください|下さい)",
+        re.DOTALL,
+    ),
+)
+
+
+def _sanitize_line_reply(response_text: str) -> str:
+    text = response_text.strip()
+    if not text:
+        return text
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines and re.fullmatch(r".{1,40}様[、,。．.]?", lines[0]):
+        lines = lines[1:]
+    text = "\n".join(lines)
+    text = re.sub(r"^.{1,40}様(?:[、,。．.]|\s+)", "", text)
+
+    for pattern in GENERIC_LINE_CLOSING_PATTERNS:
+        text = pattern.sub("", text)
+
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ 　]{2,}", " ", text)
+    return text.strip()
 
 
 def _parse_order_items(message: str) -> list[dict]:
