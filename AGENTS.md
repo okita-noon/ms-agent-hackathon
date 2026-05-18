@@ -67,7 +67,22 @@
 ### Container Apps 環境変数
 
 `ca-api-orderai-dev` に以下の環境変数が設定済み:
+
+**基盤**
 `COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
+
+**認証・セキュリティ**（詳細は `docs/auth-setup.md`）
+| 変数名 | 必須 | 説明 |
+|---|---|---|
+| `JWT_SECRET_KEY` | ✅ | JWT 署名鍵。`secrets.token_urlsafe(48)` で生成 |
+| `JWT_ISSUER` | 任意 | デフォルト `orderai-api` |
+| `JWT_AUDIENCE` | 任意 | デフォルト `orderai-dashboard` |
+| `AZURE_AD_ALLOWED_TENANTS` | SSO 使用時必須 | Microsoft Entra `tid` のカンマ区切り allowlist。未設定だと全 SSO ログイン拒否 |
+| `AZURE_AD_ALLOWED_DOMAINS` | 任意 | email/UPN ドメインの追加 allowlist（小文字） |
+| `ENTRA_CLIENT_ID` | SSO 使用時必須 | Entra アプリ登録のクライアント ID |
+| `REGISTRATION_ENABLED` | 任意 | `true` でセルフ登録解放（デフォルト無効） |
+| `REGISTRATION_INVITE_TOKEN` | 登録有効時必須 | `X-Invite-Token` ヘッダで照合する招待トークン |
+| `EVENTGRID_WEBHOOK_KEY` | Phone 使用時必須 | EventGrid サブスクリプション URL の `?code=...` または `X-EventGrid-Webhook-Key` ヘッダで送られる共有鍵 |
 
 ## APIエンドポイント
 

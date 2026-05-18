@@ -206,13 +206,22 @@ class TestLoginEndpoint:
 
 
 class TestRegisterEndpoint:
+    _INVITE = "test-invite-token-abc123"
+    _REGISTER_ENV = {
+        "REGISTRATION_ENABLED": "true",
+        "REGISTRATION_INVITE_TOKEN": _INVITE,
+    }
+
     def test_register_success(self):
         app = _make_app()
         mock_store = AsyncMock()
         mock_store.find_by_email.return_value = None
         mock_store.create_user.return_value = _mock_user()
 
-        with patch("src.auth.endpoints._get_user_store", return_value=mock_store):
+        with (
+            patch.dict("os.environ", self._REGISTER_ENV),
+            patch("src.auth.endpoints._get_user_store", return_value=mock_store),
+        ):
             client = TestClient(app)
             resp = client.post(
                 "/api/auth/register",
@@ -222,6 +231,7 @@ class TestRegisterEndpoint:
                     "display_name": "New User",
                     "tenant_id": "T-001",
                 },
+                headers={"X-Invite-Token": self._INVITE},
             )
 
         assert resp.status_code == 200
@@ -232,7 +242,10 @@ class TestRegisterEndpoint:
         mock_store = AsyncMock()
         mock_store.find_by_email.return_value = (_mock_user(), "hash")
 
-        with patch("src.auth.endpoints._get_user_store", return_value=mock_store):
+        with (
+            patch.dict("os.environ", self._REGISTER_ENV),
+            patch("src.auth.endpoints._get_user_store", return_value=mock_store),
+        ):
             client = TestClient(app)
             resp = client.post(
                 "/api/auth/register",
@@ -242,9 +255,58 @@ class TestRegisterEndpoint:
                     "display_name": "Dup",
                     "tenant_id": "T-001",
                 },
+                headers={"X-Invite-Token": self._INVITE},
             )
 
         assert resp.status_code == 409
+
+    def test_register_disabled_returns_404(self):
+        """When REGISTRATION_ENABLED is false (default), endpoint must look absent."""
+        app = _make_app()
+        with patch.dict("os.environ", {"REGISTRATION_ENABLED": "false"}):
+            client = TestClient(app)
+            resp = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "new@example.com",
+                    "password": "p",
+                    "display_name": "x",
+                    "tenant_id": "T-001",
+                },
+                headers={"X-Invite-Token": self._INVITE},
+            )
+        assert resp.status_code == 404
+
+    def test_register_missing_invite_token_forbidden(self):
+        app = _make_app()
+        with patch.dict("os.environ", self._REGISTER_ENV):
+            client = TestClient(app)
+            resp = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "new@example.com",
+                    "password": "p",
+                    "display_name": "x",
+                    "tenant_id": "T-001",
+                },
+            )
+        assert resp.status_code == 403
+
+    def test_register_wrong_invite_token_forbidden(self):
+        app = _make_app()
+        with patch.dict("os.environ", self._REGISTER_ENV):
+            client = TestClient(app)
+            resp = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "new@example.com",
+                    "password": "p",
+                    "display_name": "x",
+                    "tenant_id": "T-001",
+                },
+                headers={"X-Invite-Token": "wrong-token"},
+            )
+        assert resp.status_code == 403
 
 
 class TestMeEndpoint:
