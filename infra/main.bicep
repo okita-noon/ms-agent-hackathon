@@ -160,6 +160,20 @@ module functions 'modules/functions.bicep' = {
 }
 
 // ============================================================
+// Budget (コスト管理アラート)
+// ============================================================
+module budget 'modules/budget.bicep' = {
+  name: 'budget'
+  params: {
+    budgetName: 'budget-${suffix}'
+    amount: 30000
+    contactEmails: [
+      'inaba.y.ac@gmail.com'
+    ]
+  }
+}
+
+// ============================================================
 // Communication Services (メール送信・電話)
 // ============================================================
 module communicationServices 'modules/communication-services.bicep' = {
