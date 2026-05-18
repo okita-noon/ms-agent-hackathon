@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-15
+> 最終更新: 2026-05-18
 
 ## 実装済み
 
@@ -23,18 +23,25 @@
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理）
 - [x] Learning Service（パターン記録・プロファイル更新）
 - [x] テナント解決サービス（デモ環境用）
-- [x] FastAPI アプリ（REST API 6エンドポイント）
+- [x] FastAPI アプリ（REST API 7エンドポイント）
+- [x] 受注→会話セッション紐付け（Order.session_id）
+- [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
+- [x] MessageHistory の session_id 検索（IMessageHistoryRepository.list_by_session_id）
 
 ### フロントエンド
-- [x] ダッシュボード（HTML + Tailwind + Chart.js）
+- [x] ダッシュボード（React + Vite + Tailwind）
+  - サイドバーナビゲーション（受注・在庫・顧客）
   - 受注一覧テーブル（日付選択・ステータスバッジ・温度帯表示）
   - 統計カード（合計・ステータス別件数）
   - ドーナツチャート（ステータス別・チャネル別）
-  - 受注詳細モーダル
+  - 受注詳細モーダル（注文会話履歴チャット表示付き）
+  - 顧客一覧（常設編集ボタン）
   - API未接続時のデモデータフォールバック
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
+- [x] `deploy-frontend.yml`: main push → Vite Build → Storage Static Website Upload
+- [x] `test.yml`: PR → ruff check/format + pytest
 
 ## 未実装（残タスク）
 
