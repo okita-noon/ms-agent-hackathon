@@ -6,7 +6,11 @@ from src.models.intelligence import (
     OrderPattern,
     ResolvedItem,
 )
-from src.services.learning_service import LearningService, _normalize_expression, _same_resolution
+from src.services.learning_service import (
+    LearningService,
+    _normalize_expression,
+    _same_resolution,
+)
 
 
 class TestNormalizeExpression:

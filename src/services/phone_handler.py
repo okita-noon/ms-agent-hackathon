@@ -102,7 +102,10 @@ class PhoneCallHandler:
         tenant_ctx = resolve_tenant_for_phone(called_number)
         acs_conn = tenant_ctx.config.acs_connection_string
         if not acs_conn:
-            logger.error("ACS connection string not configured for tenant %s", tenant_ctx.tenant_id)
+            logger.error(
+                "ACS connection string not configured for tenant %s",
+                tenant_ctx.tenant_id,
+            )
             return {"error": "acs_not_configured"}
 
         client = self._get_acs_client(acs_conn)
@@ -191,6 +194,7 @@ class PhoneCallHandler:
                 reply_token=None,
                 source=OrderSource.PHONE,
                 response_callback=capture_response,
+                session_id=session.id if session else None,
             )
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)
@@ -242,7 +246,10 @@ class PhoneCallHandler:
         if state.turn_count >= MAX_TURNS:
             await self._play_tts(state, GOODBYE_MESSAGE)
             state.order_confirmed = True
-            return {"call_connection_id": call_connection_id, "status": "max_turns_reached"}
+            return {
+                "call_connection_id": call_connection_id,
+                "status": "max_turns_reached",
+            }
 
         await self._play_tts(state, RETRY_MESSAGE)
         return {"call_connection_id": call_connection_id, "status": "retry"}
@@ -259,14 +266,22 @@ class PhoneCallHandler:
             await self._hangup(state)
             return {"call_connection_id": call_connection_id, "status": "hangup"}
 
-        logger.info("Call %s: starting next recognize (turn %d)", call_connection_id, state.turn_count + 1)
+        logger.info(
+            "Call %s: starting next recognize (turn %d)",
+            call_connection_id,
+            state.turn_count + 1,
+        )
         await self._start_recognize(state)
         return {"call_connection_id": call_connection_id, "status": "recognizing"}
 
     async def _handle_play_failed(self, event: dict) -> dict | None:
         data = event.get("data", {})
         call_connection_id = data.get("callConnectionId", "")
-        logger.error("PlayFailed for call %s: %s", call_connection_id, data.get("resultInformation"))
+        logger.error(
+            "PlayFailed for call %s: %s",
+            call_connection_id,
+            data.get("resultInformation"),
+        )
         state = self._calls.get(call_connection_id)
         if state:
             await self._hangup(state)

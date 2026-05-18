@@ -5,7 +5,15 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -100,7 +108,10 @@ async def line_webhook(
     )
 
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
-        raise HTTPException(status_code=403, detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。")
+        raise HTTPException(
+            status_code=403,
+            detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。",
+        )
 
     background_tasks.add_task(_process_line_events, handler, body_json)
 
@@ -169,7 +180,10 @@ async def list_orders(
         target = date.today()
 
     orders = await repo.list_by_date(tenant_id, target)
-    return {"orders": [o.model_dump(mode="json") for o in orders], "date": target.isoformat()}
+    return {
+        "orders": [o.model_dump(mode="json") for o in orders],
+        "date": target.isoformat(),
+    }
 
 
 @app.get("/api/orders/{order_id}")
@@ -178,8 +192,31 @@ async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     repo = tenant_ctx.get_connector("IOrderRepository")
     order = await repo.find_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
     return order.model_dump(mode="json")
+
+
+@app.get("/api/orders/{order_id}/messages")
+async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_id)):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    order_repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await order_repo.find_by_id(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。")
+
+    if not order.session_id:
+        return {"messages": [], "session_id": None}
+
+    history_repo = tenant_ctx.get_connector("IMessageHistoryRepository")
+    messages = await history_repo.list_by_session_id(tenant_id, order.session_id)
+    filtered = [m for m in messages if m.role in ("user", "assistant")]
+    return {
+        "messages": [m.model_dump(mode="json") for m in filtered],
+        "session_id": order.session_id,
+    }
 
 
 @app.get("/api/products")
@@ -241,6 +278,9 @@ async def update_customer(customer_id: str, request: Request, tenant_id: str = D
     repo = tenant_ctx.get_connector("ICustomerRepository")
     customer = await repo.get_by_id(tenant_id, customer_id)
     if not customer:
-        raise HTTPException(status_code=404, detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。",
+        )
     updated = await repo.update(tenant_id, customer_id, body)
     return updated.model_dump()

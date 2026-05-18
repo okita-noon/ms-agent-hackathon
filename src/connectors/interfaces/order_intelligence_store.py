@@ -7,7 +7,11 @@ from src.models.intelligence import CustomerOrderProfile, OrderPattern
 
 class IOrderIntelligenceStore(Protocol):
     async def find_pattern_by_embedding(
-        self, tenant_id: str, customer_id: str, embedding: list[float], similarity_threshold: float = 0.85
+        self,
+        tenant_id: str,
+        customer_id: str,
+        embedding: list[float],
+        similarity_threshold: float = 0.85,
     ) -> OrderPattern | None: ...
 
     async def find_pattern_exact(

@@ -11,7 +11,12 @@ if "aioodbc" not in sys.modules:
 
 from src.connectors.context import TenantContext
 from src.models.customer import Customer, CustomerDeliveryPreference
-from src.models.intelligence import CustomerOrderProfile, OrderPattern, ProductStats, ResolvedItem
+from src.models.intelligence import (
+    CustomerOrderProfile,
+    OrderPattern,
+    ProductStats,
+    ResolvedItem,
+)
 from src.models.product import Product, UnitType
 from src.models.order import TemperatureZone
 from src.models.tenant import ConnectorConfig, TenantConfig

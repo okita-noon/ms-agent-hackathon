@@ -133,7 +133,15 @@ class UserStore:
                     "INSERT INTO users (user_id, tenant_id, email, password_hash, "
                     "display_name, auth_provider, entra_oid) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (user_id, tenant_id, email, password_hash, display_name, auth_provider, entra_oid),
+                    (
+                        user_id,
+                        tenant_id,
+                        email,
+                        password_hash,
+                        display_name,
+                        auth_provider,
+                        entra_oid,
+                    ),
                 )
                 await conn.commit()
             return UserInDB(

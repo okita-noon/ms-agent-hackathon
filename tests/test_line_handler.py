@@ -80,7 +80,11 @@ class TestHandleWebhook:
         body = {
             "events": [
                 {"type": "follow", "source": {"userId": "U123"}},
-                {"type": "message", "message": {"type": "image"}, "source": {"userId": "U123"}},
+                {
+                    "type": "message",
+                    "message": {"type": "image"},
+                    "source": {"userId": "U123"},
+                },
             ]
         }
 
@@ -239,7 +243,10 @@ class TestProcessMessage:
             assert session_repo.update_session.call_count == 1
             updated_session = session_repo.update_session.call_args.args[0]
             assert updated_session.status == "awaiting_reply"
-            assert updated_session.pending_order_draft == {"customer_id": "C-001", "items": []}
+            assert updated_session.pending_order_draft == {
+                "customer_id": "C-001",
+                "items": [],
+            }
 
     @pytest.mark.asyncio
     async def test_history_failure_does_not_block_reply(self, mock_tenant_ctx):

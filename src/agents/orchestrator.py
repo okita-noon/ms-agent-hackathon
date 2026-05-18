@@ -142,6 +142,7 @@ class OrderOrchestrator:
         response_callback: Callable[[str], Awaitable[None]] | None = None,
         conversation_history: list[MessageHistory] | None = None,
         pending_order_draft: dict | None = None,
+        session_id: str | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
@@ -150,7 +151,7 @@ class OrderOrchestrator:
         }
 
         if pending_order_draft and _is_affirmative_reply(message):
-            saved_order = await self.create_order_from_draft(pending_order_draft, source=source)
+            saved_order = await self.create_order_from_draft(pending_order_draft, source=source, session_id=session_id)
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -281,7 +282,7 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
-                    saved_order = await self.create_order_from_draft(draft, source=source)
+                    saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
                     logger.info("Created order %s from multi-agent chain", saved_order.id)
                     result["order_id"] = saved_order.id
             except Exception:
@@ -377,6 +378,7 @@ class OrderOrchestrator:
         self,
         draft: dict,
         source: OrderSource = OrderSource.LINE,
+        session_id: str | None = None,
         status: OrderStatus = OrderStatus.PENDING,
         remarks: str | None = None,
     ) -> Order:
@@ -406,6 +408,7 @@ class OrderOrchestrator:
             delivery_time_slot=draft.get("delivery_time_slot"),
             status=status,
             remarks=remarks,
+            session_id=session_id,
         )
 
         repo = self._ctx.get_connector("IOrderRepository")

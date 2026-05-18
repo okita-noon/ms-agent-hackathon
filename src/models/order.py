@@ -82,6 +82,7 @@ class Order(BaseModel):
     yamato_tracking_number: str | None = None
     status: OrderStatus = OrderStatus.PENDING
     remarks: str | None = None
+    session_id: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
