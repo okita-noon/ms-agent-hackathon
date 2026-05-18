@@ -12,6 +12,7 @@ import httpx
 
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
+from src.services.channel_locks import get_channel_user_lock
 from src.models.intelligence import ResolvedItem
 from src.models.message_history import MessageHistory
 from src.models.order import OrderSource
@@ -49,16 +50,6 @@ class _EventDedup:
 
 
 _dedup = _EventDedup()
-
-# Per-user locks to serialize concurrent messages from the same LINE user.
-# Prevents duplicate session creation and lost-update on pending_order_draft.
-_user_process_locks: dict[str, asyncio.Lock] = {}
-
-
-def _get_user_lock(user_id: str) -> asyncio.Lock:
-    if user_id not in _user_process_locks:
-        _user_process_locks[user_id] = asyncio.Lock()
-    return _user_process_locks[user_id]
 
 
 class LineWebhookHandler:
@@ -131,7 +122,7 @@ class LineWebhookHandler:
     ) -> dict:
         logger.info("Processing message from %s: %s", user_id, text[:100])
 
-        async with _get_user_lock(user_id):
+        async with get_channel_user_lock("line", user_id):
             return await self._process_message_locked(
                 user_id=user_id,
                 text=text,

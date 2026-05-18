@@ -14,6 +14,7 @@ from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrches
 from src.connectors.context import TenantContext
 from src.models.order import OrderSource
 from src.models.session import OrderSession
+from src.services.channel_locks import get_channel_user_lock
 from src.services.learning_service import LearningService
 from src.services.tenant_resolver import resolve_tenant_for_phone
 
@@ -342,21 +343,22 @@ class PhoneCallHandler:
     async def _ensure_session(self, state: CallState) -> OrderSession:
         session_repo = state.tenant_ctx.get_connector("ISessionRepository")
 
-        session = await session_repo.find_active_session(state.tenant_ctx.tenant_id, "phone", state.caller_number)
-        if session:
-            session.last_message_at = datetime.utcnow()
-            await session_repo.update_session(session)
-            return session
+        async with get_channel_user_lock("phone", state.caller_number):
+            session = await session_repo.find_active_session(state.tenant_ctx.tenant_id, "phone", state.caller_number)
+            if session:
+                session.last_message_at = datetime.utcnow()
+                await session_repo.update_session(session)
+                return session
 
-        session = OrderSession(
-            id=f"sess-phone-{state.caller_number[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-            tenant_id=state.tenant_ctx.tenant_id,
-            channel="phone",
-            channel_user_id=state.caller_number,
-            status="active",
-            expires_at=datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS),
-        )
-        return await session_repo.create_session(session)
+            session = OrderSession(
+                id=f"sess-phone-{state.caller_number[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                tenant_id=state.tenant_ctx.tenant_id,
+                channel="phone",
+                channel_user_id=state.caller_number,
+                status="active",
+                expires_at=datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+            )
+            return await session_repo.create_session(session)
 
     async def _run_learning(
         self,
