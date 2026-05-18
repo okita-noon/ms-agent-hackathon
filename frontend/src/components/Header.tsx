@@ -19,7 +19,7 @@ export default function Header() {
   }, [menuOpen]);
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <header className="bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 text-white sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.3)]">
       <div className="px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
@@ -31,10 +31,10 @@ export default function Header() {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-full hover:ring-2 hover:ring-gray-200 transition-all"
+                className="flex items-center gap-2 rounded-full hover:ring-2 hover:ring-brand-400/40 transition-all"
                 aria-label="ユーザーメニュー"
               >
-                <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white">
+                <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white ring-2 ring-brand-400/30">
                   {user.display_name?.charAt(0)?.toUpperCase() || "U"}
                 </div>
               </button>
