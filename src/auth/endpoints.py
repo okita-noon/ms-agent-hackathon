@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from src.auth.dependencies import get_current_user
 from src.auth.microsoft import validate_microsoft_id_token
@@ -25,8 +25,13 @@ logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(tags=["auth"])
 
-# Default tenant for SSO auto-registration
-SSO_DEFAULT_TENANT = os.environ.get("SSO_DEFAULT_TENANT", "T-001")
+
+def _registration_enabled() -> bool:
+    return os.environ.get("REGISTRATION_ENABLED", "false").lower() == "true"
+
+
+def _registration_invite_token() -> str:
+    return os.environ.get("REGISTRATION_INVITE_TOKEN", "")
 
 
 def _get_user_store() -> UserStore:
@@ -74,7 +79,22 @@ async def login(req: LoginRequest):
 
 
 @auth_router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest):
+async def register(
+    req: RegisterRequest,
+    x_invite_token: str | None = Header(None, alias="X-Invite-Token"),
+):
+    if not _registration_enabled():
+        # Endpoint must look like it does not exist when public registration is off.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    expected_token = _registration_invite_token()
+    if not expected_token or not x_invite_token or x_invite_token != expected_token:
+        logger.warning("Registration attempt with invalid or missing invite token: %s", req.email)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="招待トークンが必要です",
+        )
+
     store = _get_user_store()
     existing = await store.find_by_email(req.email)
     if existing:
@@ -112,7 +132,6 @@ async def microsoft_login(req: MicrosoftLoginRequest):
 
     oid = claims["oid"]
     email = claims["email"]
-    name = claims["name"] or email
 
     if not oid or not email:
         raise HTTPException(
@@ -122,23 +141,20 @@ async def microsoft_login(req: MicrosoftLoginRequest):
 
     store = _get_user_store()
 
-    # Check if user already exists by Entra OID
+    # Auto-registration is disabled. Only pre-provisioned users may sign in via SSO.
     user = await store.find_by_entra_oid(oid)
     if user is None:
-        # Check by email (may have been pre-registered)
         result = await store.find_by_email(email)
-        if result:
-            user, _ = result
-        else:
-            # Auto-create new user
-            user = await store.create_user(
-                tenant_id=SSO_DEFAULT_TENANT,
-                email=email,
-                display_name=name,
-                auth_provider="microsoft",
-                entra_oid=oid,
+        if not result:
+            logger.warning(
+                "SSO login rejected for unregistered user: email=%s oid=%s tid=%s",
+                email, oid, claims.get("tid", ""),
             )
-            logger.info("Auto-created SSO user: %s (%s)", email, user.user_id)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="アカウントが登録されていません。管理者にお問い合わせください。",
+            )
+        user, _ = result
 
     if not user.active:
         raise HTTPException(
