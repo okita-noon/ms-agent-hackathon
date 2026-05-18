@@ -12,6 +12,8 @@ class OrderSession(BaseModel):
     channel_user_id: str
     customer_id: str | None = None
     agent_thread_id: str | None = None
+    conversation_id: str | None = None
+    last_external_message_id: str | None = None
     status: str = "active"
     pending_order_draft: dict | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

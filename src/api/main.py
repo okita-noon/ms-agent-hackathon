@@ -25,7 +25,7 @@ from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
-from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_line
+from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_email, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,6 +86,24 @@ async def _process_line_events(handler: Any, body_json: dict) -> None:
         logger.exception("Error processing LINE webhook in background")
 
 
+async def _process_email_notification(
+    message_id: str,
+    recipient_address: str,
+    azure_openai_endpoint: str,
+    azure_openai_key: str,
+) -> None:
+    try:
+        tenant_ctx = resolve_tenant_for_email(recipient_address)
+        service = EmailIngestionService(
+            tenant_ctx=tenant_ctx,
+            azure_openai_endpoint=azure_openai_endpoint,
+            azure_openai_key=azure_openai_key,
+        )
+        await service.process_notification(message_id, recipient_address)
+    except Exception:
+        logger.exception("Error processing email notification in background")
+
+
 @app.post("/api/line-webhook")
 async def line_webhook(
     request: Request,
@@ -123,6 +141,43 @@ async def line_webhook(
 
     background_tasks.add_task(_process_line_events, handler, body_json)
     return Response(status_code=200)
+
+
+@app.post("/api/email-webhook")
+async def email_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    validationToken: str | None = None,
+):
+    if validationToken:
+        return Response(content=validationToken, media_type="text/plain")
+
+    body = await request.json()
+    notifications = body.get("value", [])
+    default_recipient = os.environ.get("GRAPH_MAILBOX_ADDRESS", "order@example.com")
+    azure_openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+    azure_openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
+
+    for notification in notifications:
+        resource_data = notification.get("resourceData", {}) or {}
+        message_id = resource_data.get("id")
+        if not message_id:
+            continue
+        recipient_address = (
+            notification.get("recipientAddress")
+            or notification.get("toAddress")
+            or resource_data.get("recipientAddress")
+            or default_recipient
+        )
+        background_tasks.add_task(
+            _process_email_notification,
+            message_id,
+            recipient_address,
+            azure_openai_endpoint,
+            azure_openai_key,
+        )
+
+    return Response(status_code=202)
 
 
 # ── Phone (ACS Call Automation) webhook ───────────────────────────────────────

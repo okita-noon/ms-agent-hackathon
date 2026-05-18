@@ -35,6 +35,22 @@ class SqlCustomerRepository:
                     return None
                 return _row_to_customer(row)
 
+    async def find_by_email(self, tenant_id: str, email: str) -> Customer | None:
+        query = """
+        SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
+               email, phone, fax, default_route, default_carrier,
+               default_time_slot, active
+        FROM customers
+        WHERE tenant_id = ? AND email = ? AND active = 1
+        """
+        async with await self._get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(query, (tenant_id, email))
+                row = await cur.fetchone()
+                if not row:
+                    return None
+                return _row_to_customer(row)
+
     async def find_by_line_user_id(self, tenant_id: str, line_user_id: str) -> Customer | None:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,

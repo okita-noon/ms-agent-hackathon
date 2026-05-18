@@ -74,3 +74,29 @@ class CommunicationPlugin:
                 return {"success": True}
             logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
             return {"success": False, "error": resp.text}
+
+    @kernel_function(
+        name="send_email",
+        description="メールを顧客へ送信する。Phase 1 ではモック実装としてログ出力のみ行う。",
+    )
+    async def send_email(
+        self,
+        to_address: Annotated[str, "送信先メールアドレス"],
+        subject: Annotated[str, "メール件名"],
+        body: Annotated[str, "メール本文"],
+        reply_to_message_id: Annotated[str | None, "返信元メッセージID"] = None,
+    ) -> dict:
+        logger.info(
+            "Mock email send: to=%s subject=%s reply_to=%s body=%s",
+            to_address,
+            subject,
+            reply_to_message_id,
+            body[:500],
+        )
+        return {
+            "success": True,
+            "mock": True,
+            "to_address": to_address,
+            "subject": subject,
+            "reply_to_message_id": reply_to_message_id,
+        }
