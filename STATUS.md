@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-18（Dashboard Agent 機能追加）
+> 最終更新: 2026-05-18
 
 ## 実装済み
 
@@ -30,10 +30,6 @@
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
 - [x] 受注ステータス分離（未処理 / 要対応 の自動判定）
-- [x] LINE返信ポリシー（会社名呼びかけ・汎用締め文の抑制、配達日/配達時間の確認）
-- [x] Dashboard Agent サービス（Exception Triage：Z-score 数量異常 / 単位異常 / 在庫不足 / 要対応 / 返信待ち）
-- [x] Resolution Agent プレビュー API（推奨アクション・顧客向け文面・確認待ち）
-- [x] `/api/agent/features`, `/api/agent/exceptions`, `/api/agent/resolutions/preview` の REST API
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
@@ -44,7 +40,6 @@
   - 統計カード（合計・ステータス別件数）
   - ドーナツチャート（ステータス別・チャネル別）
   - 受注詳細モーダル（注文会話履歴チャット表示付き）
-  - Dashboard Agent サイドパネル（Exception Case 一覧・Resolution プレビュー・推奨アクション表示）
   - 顧客一覧（常設編集ボタン）
   - プロフィールドロップダウン（ログアウト）
   - API未接続時のデモデータフォールバック

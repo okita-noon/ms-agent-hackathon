@@ -71,15 +71,6 @@
 **基盤**
 `COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
 
-**Dashboard Agent**（詳細は `docs/multi-agent-design.md` の「ダッシュボード連携」節）
-| 変数名 | 必須 | 説明 |
-|---|---|---|
-| `DASHBOARD_AGENT_ENABLED` | 任意 | `true` で Dashboard Agent 機能を有効化（既定 `false`） |
-| `DASHBOARD_EXCEPTION_TRIAGE_ENABLED` | 任意 | Exception Triage の表示制御。既定は有効 |
-| `DASHBOARD_RESOLUTION_AGENT_ENABLED` | 任意 | Resolution プレビュー API の表示制御。既定は有効 |
-| `DASHBOARD_RESOLUTION_EXECUTE_ENABLED` | 任意 | プレビュー承認後の自動送信の許可（既定 `false`、デモ中は手動運用） |
-| `DASHBOARD_AGENT_DEMO_MODE` | 任意 | デモ用挙動を切り替えるフラグ |
-
 **認証・セキュリティ**（詳細は `docs/auth-setup.md`）
 | 変数名 | 必須 | 説明 |
 |---|---|---|
@@ -112,9 +103,6 @@
 | GET | `/api/customers?tenant_id=T-001` | 顧客一覧 |
 | GET | `/api/orders/{order_id}/messages?tenant_id=T-001` | 受注に紐づく会話メッセージ一覧 |
 | PUT | `/api/customers/{customer_id}?tenant_id=T-001` | 顧客更新（LINE User ID紐付け等） |
-| GET | `/api/agent/features` | Dashboard Agent 機能フラグ（dashboard_agent/exception_triage/resolution_agent/resolution_execute/demo_mode） |
-| GET | `/api/agent/exceptions?delivery_date=YYYY-MM-DD` | 配送日単位の Exception Case 一覧（Z-score 数量異常・単位異常・在庫不足・要対応・返信待ち） |
-| POST | `/api/agent/resolutions/preview` | Resolution Agent によるプレビュー（推奨アクション・顧客向け文面） |
 
 ## アーキテクチャドキュメント
 
@@ -196,8 +184,7 @@
 ```
 src/
 ├── api/                          # FastAPI アプリケーション
-│   ├── main.py                   # エントリポイント（Webhook・REST API）
-│   └── dashboard_agent.py        # /api/agent/* ルータ（Dashboard Agent）
+│   └── main.py                   # エントリポイント（Webhook・REST API）
 ├── agents/                       # Agent定義
 │   ├── definitions.py            # 各Agent の Instructions（日本語プロンプト）
 │   └── orchestrator.py           # OrderOrchestrator（SK Agent → Plugin呼び出し）
@@ -237,7 +224,6 @@ src/
 │   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation）
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
-│   ├── dashboard_agent.py        # Dashboard Agent サービス（Exception Triage / Resolution プレビュー）
 │   └── tenant_resolver.py        # テナント解決（LINE/電話→テナント紐付け）
 ├── models/                       # Pydantic データモデル
 │   ├── order.py                  # Order, OrderItem, OrderStatus, OrderSource, etc.
