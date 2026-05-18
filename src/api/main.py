@@ -145,8 +145,29 @@ def _get_phone_handler() -> PhoneCallHandler:
     return _phone_handler
 
 
+def _verify_eventgrid_key(request: Request, header_key: str | None) -> bool:
+    """Verify the shared secret EventGrid presents on each delivery.
+
+    Accepts the key in the ``X-EventGrid-Webhook-Key`` header or in a ``code``
+    query parameter (Functions-style). Fails closed if ``EVENTGRID_WEBHOOK_KEY``
+    is not configured.
+    """
+    expected = os.environ.get("EVENTGRID_WEBHOOK_KEY", "")
+    if not expected:
+        logger.error("EVENTGRID_WEBHOOK_KEY is not configured — rejecting phone webhook")
+        return False
+    presented = header_key or request.query_params.get("code", "")
+    return bool(presented) and presented == expected
+
+
 @app.post("/api/phone-webhook")
-async def phone_webhook(request: Request):
+async def phone_webhook(
+    request: Request,
+    x_eventgrid_webhook_key: str | None = Header(None, alias="X-EventGrid-Webhook-Key"),
+):
+    if not _verify_eventgrid_key(request, x_eventgrid_webhook_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     events = await request.json()
     if not isinstance(events, list):
         events = [events]
