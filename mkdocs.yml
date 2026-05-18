@@ -47,6 +47,7 @@ nav:
   - Connector層・マルチテナント: connector-design.md
   - データフロー: data-flow.md
   - LINE会話履歴参照設計: line-conversation-memory.md
+  - Agent動作設計・テスト戦略: agent-behavior-testing.md
   - メールチャネル設計: email-channel-design.md
   - デプロイ分割設計: deployment-split.md
   - MVPスコープ: mvp-scope.md
