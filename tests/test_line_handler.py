@@ -42,7 +42,9 @@ class TestVerifySignature:
 
         secret = "test-secret"
         body = b'{"events":[]}'
-        expected = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
+        expected = base64.b64encode(
+            hmac.new(secret.encode(), body, hashlib.sha256).digest()
+        ).decode()
 
         handler = LineWebhookHandler(
             tenant_ctx=mock_tenant_ctx,
@@ -80,11 +82,17 @@ class TestHandleWebhook:
         body = {
             "events": [
                 {"type": "follow", "source": {"userId": "U123"}},
-                {"type": "message", "message": {"type": "image"}, "source": {"userId": "U123"}},
+                {
+                    "type": "message",
+                    "message": {"type": "image"},
+                    "source": {"userId": "U123"},
+                },
             ]
         }
 
-        with patch.object(handler, "_process_message", new_callable=AsyncMock) as mock_proc:
+        with patch.object(
+            handler, "_process_message", new_callable=AsyncMock
+        ) as mock_proc:
             results = await handler.handle_webhook(body)
             mock_proc.assert_not_called()
             assert results == []
@@ -109,7 +117,9 @@ class TestHandleWebhook:
             ]
         }
 
-        with patch.object(handler, "_process_message", new_callable=AsyncMock) as mock_proc:
+        with patch.object(
+            handler, "_process_message", new_callable=AsyncMock
+        ) as mock_proc:
             mock_proc.return_value = {"status": "ok"}
             results = await handler.handle_webhook(body)
             assert len(results) == 1
@@ -173,13 +183,21 @@ class TestProcessMessage:
         )
 
         with patch.object(handler, "_orchestrator") as mock_orch:
-            mock_orch.process_order_message = AsyncMock(return_value={"response": "ご注文承りました"})
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            mock_orch.process_order_message = AsyncMock(
+                return_value={"response": "ご注文承りました"}
+            )
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 await handler._process_message("U123", "テスト", None)
 
                 session_repo.create_session.assert_called_once()
-                history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
-                history_repo.list_recent_messages.assert_called_once_with("T-TEST", "line", "U123", 20)
+                history_repo = mock_tenant_ctx.get_connector(
+                    "IMessageHistoryRepository"
+                )
+                history_repo.list_recent_messages.assert_called_once_with(
+                    "T-TEST", "line", "U123", 20
+                )
                 assert history_repo.create_message.call_count == 2
                 # Handler must NOT send — orchestrator already sent the message
                 mock_push.assert_not_called()
@@ -201,7 +219,9 @@ class TestProcessMessage:
             mock_orch.process_order_message = AsyncMock(
                 return_value={"response": "確認しました", "order_id": "ORD-001"}
             )
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 result = await handler._process_message("U123", "りんご5箱", "token-1")
 
                 mock_push.assert_not_called()
@@ -230,7 +250,9 @@ class TestProcessMessage:
                 }
             )
 
-            await handler._process_message("U123", "りんご150kg", "token-1", webhook_event_id="evt-history-1")
+            await handler._process_message(
+                "U123", "りんご150kg", "token-1", webhook_event_id="evt-history-1"
+            )
 
             mock_orch.process_order_message.assert_called_once()
             _, kwargs = mock_orch.process_order_message.call_args
@@ -239,7 +261,10 @@ class TestProcessMessage:
             assert session_repo.update_session.call_count == 1
             updated_session = session_repo.update_session.call_args.args[0]
             assert updated_session.status == "awaiting_reply"
-            assert updated_session.pending_order_draft == {"customer_id": "C-001", "items": []}
+            assert updated_session.pending_order_draft == {
+                "customer_id": "C-001",
+                "items": [],
+            }
 
     @pytest.mark.asyncio
     async def test_history_failure_does_not_block_reply(self, mock_tenant_ctx):
@@ -247,7 +272,9 @@ class TestProcessMessage:
         session_repo.find_active_session.return_value = None
         session_repo.create_session.side_effect = lambda s: s
         history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
-        history_repo.list_recent_messages.side_effect = RuntimeError("container missing")
+        history_repo.list_recent_messages.side_effect = RuntimeError(
+            "container missing"
+        )
         history_repo.create_message.side_effect = RuntimeError("container missing")
 
         handler = LineWebhookHandler(
@@ -257,8 +284,12 @@ class TestProcessMessage:
         )
 
         with patch.object(handler, "_orchestrator") as mock_orch:
-            mock_orch.process_order_message = AsyncMock(return_value={"response": "ご注文承りました"})
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            mock_orch.process_order_message = AsyncMock(
+                return_value={"response": "ご注文承りました"}
+            )
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 result = await handler._process_message("U123", "りんご5箱", "token-1")
 
                 mock_orch.process_order_message.assert_called_once()
@@ -282,7 +313,9 @@ class TestProcessMessage:
 
         with patch.object(handler, "_orchestrator") as mock_orch:
             mock_orch.process_order_message = AsyncMock(return_value={"response": ""})
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 await handler._process_message("U123", "テスト", None)
                 mock_push.assert_not_called()
 
@@ -299,13 +332,19 @@ class TestProcessMessage:
         )
 
         with patch.object(handler, "_orchestrator") as mock_orch:
-            mock_orch.process_order_message = AsyncMock(side_effect=RuntimeError("LLM error"))
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            mock_orch.process_order_message = AsyncMock(
+                side_effect=RuntimeError("LLM error")
+            )
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 mock_push.return_value = True
                 result = await handler._process_message("U123", "テスト", None)
 
                 assert result["error"] == "agent_processing_failed"
-                mock_push.assert_called_once_with("U123", "ご注文を受け付けました。担当者が確認いたします。")
+                mock_push.assert_called_once_with(
+                    "U123", "ご注文を受け付けました。担当者が確認いたします。"
+                )
 
     @pytest.mark.asyncio
     async def test_fallback_sends_exactly_once(self, mock_tenant_ctx):
@@ -322,7 +361,9 @@ class TestProcessMessage:
 
         with patch.object(handler, "_orchestrator") as mock_orch:
             mock_orch.process_order_message = AsyncMock(side_effect=Exception("boom"))
-            with patch.object(handler, "_send_line_push", new_callable=AsyncMock) as mock_push:
+            with patch.object(
+                handler, "_send_line_push", new_callable=AsyncMock
+            ) as mock_push:
                 mock_push.return_value = True
                 await handler._process_message("U123", "りんご", None)
                 assert mock_push.call_count == 1

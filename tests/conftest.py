@@ -11,7 +11,12 @@ if "aioodbc" not in sys.modules:
 
 from src.connectors.context import TenantContext
 from src.models.customer import Customer, CustomerDeliveryPreference
-from src.models.intelligence import CustomerOrderProfile, OrderPattern, ProductStats, ResolvedItem
+from src.models.intelligence import (
+    CustomerOrderProfile,
+    OrderPattern,
+    ProductStats,
+    ResolvedItem,
+)
 from src.models.product import Product, UnitType
 from src.models.order import TemperatureZone
 from src.models.tenant import ConnectorConfig, TenantConfig
@@ -31,8 +36,12 @@ def tenant_config() -> TenantConfig:
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection="test"),
             "ISessionRepository": ConnectorConfig(type="cosmosdb", connection="test"),
-            "IMessageHistoryRepository": ConnectorConfig(type="cosmosdb", connection="test"),
-            "IOrderIntelligenceStore": ConnectorConfig(type="cosmosdb", connection="test"),
+            "IMessageHistoryRepository": ConnectorConfig(
+                type="cosmosdb", connection="test"
+            ),
+            "IOrderIntelligenceStore": ConnectorConfig(
+                type="cosmosdb", connection="test"
+            ),
             "IProductMaster": ConnectorConfig(type="azure_sql", connection="test"),
             "ICustomerRepository": ConnectorConfig(type="azure_sql", connection="test"),
             "IInventoryService": ConnectorConfig(type="azure_sql", connection="test"),
@@ -52,7 +61,9 @@ def mock_tenant_ctx(tenant_config) -> TenantContext:
             ctx._connectors[name] = AsyncMock()
             if name == "IMessageHistoryRepository":
                 ctx._connectors[name].list_recent_messages.return_value = []
-                ctx._connectors[name].create_message.side_effect = lambda message: message
+                ctx._connectors[name].create_message.side_effect = lambda message: (
+                    message
+                )
         return ctx._connectors[name]
 
     ctx.get_connector = _get_connector

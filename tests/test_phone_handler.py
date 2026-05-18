@@ -83,7 +83,9 @@ def _make_call_disconnected_event(call_connection_id: str = "conn-001") -> dict:
     }
 
 
-def _register_call_state(handler: PhoneCallHandler, mock_tenant_ctx, conn_id: str = "conn-001") -> CallState:
+def _register_call_state(
+    handler: PhoneCallHandler, mock_tenant_ctx, conn_id: str = "conn-001"
+) -> CallState:
     state = CallState(
         call_connection_id=conn_id,
         server_call_id="mock-server-id",
@@ -178,7 +180,9 @@ class TestHandleRecognizeCompleted:
             ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
-            result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+            result = await handler.handle_event(
+                _make_recognize_completed_event(speech="りんご10箱")
+            )
 
         assert result["status"] == "processed"
         assert result["order_id"] == "ORD-001"
@@ -203,7 +207,10 @@ class TestHandleRecognizeCompleted:
         mock_orchestrator.process_order_message.return_value = {"response": "OK"}
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             await handler.handle_event(_make_recognize_completed_event())
@@ -226,7 +233,10 @@ class TestHandleRecognizeCompleted:
         mock_orchestrator.process_order_message.side_effect = RuntimeError("LLM down")
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
         ):
             result = await handler.handle_event(_make_recognize_completed_event())
@@ -241,7 +251,9 @@ class TestHandleRecognizeCompleted:
         _register_call_state(handler, mock_tenant_ctx)
 
         with patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play:
-            result = await handler.handle_event(_make_recognize_completed_event(speech=""))
+            result = await handler.handle_event(
+                _make_recognize_completed_event(speech="")
+            )
 
         assert result["status"] == "empty_speech"
         mock_play.assert_called_once_with(handler._calls["conn-001"], RETRY_MESSAGE)
@@ -254,7 +266,9 @@ class TestHandlePlayCompleted:
         state = _register_call_state(handler, mock_tenant_ctx)
         state.order_confirmed = False
 
-        with patch.object(handler, "_start_recognize", new_callable=AsyncMock) as mock_rec:
+        with patch.object(
+            handler, "_start_recognize", new_callable=AsyncMock
+        ) as mock_rec:
             result = await handler.handle_event(_make_play_completed_event())
 
         assert result["status"] == "recognizing"
@@ -357,7 +371,10 @@ class TestOrchestratorCallback:
         mock_orchestrator.process_order_message.side_effect = mock_process
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
         ):
             await handler.handle_event(_make_recognize_completed_event())

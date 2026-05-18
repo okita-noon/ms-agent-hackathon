@@ -5,7 +5,15 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -32,7 +40,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="foogent API", lifespan=lifespan)
 
-frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+frontend_origins = [
+    origin.strip()
+    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
 if frontend_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -42,7 +54,11 @@ if frontend_origins:
         allow_headers=["*"],
     )
 
-frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+frontend_origins = [
+    origin.strip()
+    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
 if frontend_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -96,11 +112,16 @@ async def line_webhook(
         tenant_ctx=tenant_ctx,
         azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
         azure_openai_key=os.environ.get("AZURE_OPENAI_KEY", ""),
-        azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
+        azure_openai_deployment_name=os.environ.get(
+            "AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT
+        ),
     )
 
     if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
-        raise HTTPException(status_code=403, detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。")
+        raise HTTPException(
+            status_code=403,
+            detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。",
+        )
 
     background_tasks.add_task(_process_line_events, handler, body_json)
 
@@ -169,7 +190,10 @@ async def list_orders(
         target = date.today()
 
     orders = await repo.list_by_date(tenant_id, target)
-    return {"orders": [o.model_dump(mode="json") for o in orders], "date": target.isoformat()}
+    return {
+        "orders": [o.model_dump(mode="json") for o in orders],
+        "date": target.isoformat(),
+    }
 
 
 @app.get("/api/orders/{order_id}")
@@ -178,7 +202,10 @@ async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     repo = tenant_ctx.get_connector("IOrderRepository")
     order = await repo.find_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
     return order.model_dump(mode="json")
 
 
@@ -188,7 +215,9 @@ async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_
     order_repo = tenant_ctx.get_connector("IOrderRepository")
     order = await order_repo.find_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。")
+        raise HTTPException(
+            status_code=404, detail=f"受注ID「{order_id}」が見つかりません。"
+        )
 
     if not order.session_id:
         return {"messages": [], "session_id": None}
@@ -224,7 +253,9 @@ async def list_inventory(tenant_id: str = Depends(get_tenant_id)):
                 "product_id": p.id,
                 "product_name": p.name,
                 "category": p.category,
-                "temperature_zone": p.temperature_zone.value if p.temperature_zone else "常温",
+                "temperature_zone": p.temperature_zone.value
+                if p.temperature_zone
+                else "常温",
                 "quantity": inv_status.available_qty,
                 "unit": inv_status.unit,
                 "is_variable_weight": p.is_variable_weight,
@@ -255,12 +286,17 @@ async def list_customers(tenant_id: str = Depends(get_tenant_id)):
 
 
 @app.put("/api/customers/{customer_id}")
-async def update_customer(customer_id: str, request: Request, tenant_id: str = Depends(get_tenant_id)):
+async def update_customer(
+    customer_id: str, request: Request, tenant_id: str = Depends(get_tenant_id)
+):
     body = await request.json()
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("ICustomerRepository")
     customer = await repo.get_by_id(tenant_id, customer_id)
     if not customer:
-        raise HTTPException(status_code=404, detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。",
+        )
     updated = await repo.update(tenant_id, customer_id, body)
     return updated.model_dump()

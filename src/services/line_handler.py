@@ -73,7 +73,9 @@ class LineWebhookHandler:
         if not channel_secret:
             logger.warning("LINE channel secret not configured, skipping verification")
             return True
-        hash_value = hmac.new(channel_secret.encode("utf-8"), body, hashlib.sha256).digest()
+        hash_value = hmac.new(
+            channel_secret.encode("utf-8"), body, hashlib.sha256
+        ).digest()
         expected = base64.b64encode(hash_value).decode("utf-8")
         return hmac.compare_digest(expected, signature)
 
@@ -144,7 +146,9 @@ class LineWebhookHandler:
         session_repo = self._ctx.get_connector("ISessionRepository")
         history_repo = self._get_message_history_repo()
 
-        session = await session_repo.find_active_session(self._ctx.tenant_id, "line", user_id)
+        session = await session_repo.find_active_session(
+            self._ctx.tenant_id, "line", user_id
+        )
 
         if session and session.status == "awaiting_reply":
             session.last_message_at = datetime.utcnow()
@@ -166,7 +170,9 @@ class LineWebhookHandler:
         await self._save_history_message(
             history_repo,
             MessageHistory(
-                id=_build_message_history_id("user", session.id, webhook_event_id, message_id),
+                id=_build_message_history_id(
+                    "user", session.id, webhook_event_id, message_id
+                ),
                 tenant_id=self._ctx.tenant_id,
                 session_id=session.id,
                 channel="line",
@@ -196,7 +202,9 @@ class LineWebhookHandler:
             await self._save_history_message(
                 history_repo,
                 MessageHistory(
-                    id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
+                    id=_build_message_history_id(
+                        "assistant", session.id, webhook_event_id, None
+                    ),
                     tenant_id=self._ctx.tenant_id,
                     session_id=session.id,
                     channel="line",
@@ -217,7 +225,9 @@ class LineWebhookHandler:
             await self._save_history_message(
                 history_repo,
                 MessageHistory(
-                    id=_build_message_history_id("assistant", session.id, webhook_event_id, None),
+                    id=_build_message_history_id(
+                        "assistant", session.id, webhook_event_id, None
+                    ),
                     tenant_id=self._ctx.tenant_id,
                     session_id=session.id,
                     channel="line",
@@ -231,8 +241,12 @@ class LineWebhookHandler:
 
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"
-            session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
-            session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS)
+            session.pending_order_draft = (
+                result.get("pending_order_draft") or session.pending_order_draft
+            )
+            session.expires_at = datetime.utcnow() + timedelta(
+                hours=SESSION_TIMEOUT_HOURS
+            )
             await session_repo.update_session(session)
         elif result.get("order_id"):
             session.status = "completed"
@@ -241,7 +255,11 @@ class LineWebhookHandler:
 
         order_id = result.get("order_id")
         if order_id:
-            asyncio.create_task(self._run_learning(order_id=order_id, user_id=user_id, original_message=text))
+            asyncio.create_task(
+                self._run_learning(
+                    order_id=order_id, user_id=user_id, original_message=text
+                )
+            )
 
         return {
             "session_id": session.id,
@@ -253,10 +271,14 @@ class LineWebhookHandler:
         try:
             return self._ctx.get_connector("IMessageHistoryRepository")
         except Exception:
-            logger.exception("Message history connector unavailable; continuing without LINE memory")
+            logger.exception(
+                "Message history connector unavailable; continuing without LINE memory"
+            )
             return None
 
-    async def _list_recent_history(self, history_repo, user_id: str) -> list[MessageHistory]:
+    async def _list_recent_history(
+        self, history_repo, user_id: str
+    ) -> list[MessageHistory]:
         if not history_repo:
             return []
         try:
@@ -267,18 +289,26 @@ class LineWebhookHandler:
                 HISTORY_CONTEXT_LIMIT,
             )
         except Exception:
-            logger.exception("Failed to load LINE message history; continuing without memory")
+            logger.exception(
+                "Failed to load LINE message history; continuing without memory"
+            )
             return []
 
-    async def _save_history_message(self, history_repo, message: MessageHistory) -> None:
+    async def _save_history_message(
+        self, history_repo, message: MessageHistory
+    ) -> None:
         if not history_repo:
             return
         try:
             await history_repo.create_message(message)
         except Exception:
-            logger.exception("Failed to save LINE message history; reply flow will continue")
+            logger.exception(
+                "Failed to save LINE message history; reply flow will continue"
+            )
 
-    async def _run_learning(self, order_id: str, user_id: str, original_message: str) -> None:
+    async def _run_learning(
+        self, order_id: str, user_id: str, original_message: str
+    ) -> None:
         try:
             order_repo = self._ctx.get_connector("IOrderRepository")
             customer_repo = self._ctx.get_connector("ICustomerRepository")
@@ -288,9 +318,13 @@ class LineWebhookHandler:
                 logger.warning("Learning skipped: order %s not found", order_id)
                 return
 
-            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
+            customer = await customer_repo.find_by_line_user_id(
+                self._ctx.tenant_id, user_id
+            )
             if not customer:
-                logger.warning("Learning skipped: customer not found for LINE user %s", user_id)
+                logger.warning(
+                    "Learning skipped: customer not found for LINE user %s", user_id
+                )
                 return
 
             learning_service = LearningService(self._ctx)
@@ -319,7 +353,9 @@ class LineWebhookHandler:
                     unit=item.unit,
                 )
 
-            logger.info("Learning completed for order %s, customer %s", order_id, customer.id)
+            logger.info(
+                "Learning completed for order %s, customer %s", order_id, customer.id
+            )
         except Exception:
             logger.exception(
                 "Learning failed for order %s (user %s) — order flow unaffected",
@@ -355,7 +391,9 @@ class LineWebhookHandler:
 def _line_timestamp_to_datetime(timestamp: int | None) -> datetime | None:
     if timestamp is None:
         return None
-    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(
+        tzinfo=None
+    )
 
 
 def _build_message_history_id(
@@ -364,5 +402,7 @@ def _build_message_history_id(
     webhook_event_id: str | None,
     message_id: str | None,
 ) -> str:
-    source_id = webhook_event_id or message_id or datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    source_id = (
+        webhook_event_id or message_id or datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    )
     return f"hist-{session_id}-{role}-{source_id}"

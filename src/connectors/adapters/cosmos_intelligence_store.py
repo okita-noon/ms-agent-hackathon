@@ -78,15 +78,21 @@ class CosmosIntelligenceStore:
         await self._patterns().upsert_item(doc)
         return pattern
 
-    async def get_customer_profile(self, tenant_id: str, customer_id: str) -> CustomerOrderProfile | None:
+    async def get_customer_profile(
+        self, tenant_id: str, customer_id: str
+    ) -> CustomerOrderProfile | None:
         profile_id = f"prof-{customer_id}"
         try:
-            doc = await self._profiles().read_item(profile_id, partition_key=customer_id)
+            doc = await self._profiles().read_item(
+                profile_id, partition_key=customer_id
+            )
             return CustomerOrderProfile.model_validate(doc)
         except Exception:
             return None
 
-    async def upsert_profile(self, profile: CustomerOrderProfile) -> CustomerOrderProfile:
+    async def upsert_profile(
+        self, profile: CustomerOrderProfile
+    ) -> CustomerOrderProfile:
         if not profile.id:
             profile.id = f"prof-{profile.customer_id}"
         doc = profile.model_dump(mode="json")

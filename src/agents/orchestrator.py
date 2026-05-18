@@ -151,7 +151,9 @@ class OrderOrchestrator:
         }
 
         if pending_order_draft and _is_affirmative_reply(message):
-            saved_order = await self.create_order_from_draft(pending_order_draft, source=source, session_id=session_id)
+            saved_order = await self.create_order_from_draft(
+                pending_order_draft, source=source, session_id=session_id
+            )
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -195,7 +197,9 @@ class OrderOrchestrator:
         intake_draft = self._extract_json(intake_text)
         if not intake_draft or not intake_draft.get("items"):
             # Could not parse order → fall back to orchestrator for natural reply
-            logger.warning("Intake agent returned no parseable draft; falling back to orchestrator")
+            logger.warning(
+                "Intake agent returned no parseable draft; falling back to orchestrator"
+            )
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -263,8 +267,12 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
-                    saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
-                    logger.info("Created order %s from multi-agent chain", saved_order.id)
+                    saved_order = await self.create_order_from_draft(
+                        draft, source=source, session_id=session_id
+                    )
+                    logger.info(
+                        "Created order %s from multi-agent chain", saved_order.id
+                    )
                     result["order_id"] = saved_order.id
             except Exception:
                 logger.exception("Failed to save order from multi-agent chain")
@@ -310,7 +318,9 @@ class OrderOrchestrator:
             f"元のメッセージ: {message}",
             f"LINE User ID: {line_user_id}",
         ]
-        memory_context = _format_memory_context(conversation_history, pending_order_draft).strip()
+        memory_context = _format_memory_context(
+            conversation_history, pending_order_draft
+        ).strip()
         if memory_context:
             context_parts.append(memory_context)
         if intake_text:
@@ -345,7 +355,9 @@ class OrderOrchestrator:
         comm_plugin = CommunicationPlugin(self._ctx)
         try:
             if reply_token:
-                await comm_plugin.send_line_reply(reply_token=reply_token, message=message)
+                await comm_plugin.send_line_reply(
+                    reply_token=reply_token, message=message
+                )
             else:
                 await comm_plugin.send_line_push(user_id=line_user_id, message=message)
         except Exception:
@@ -365,7 +377,9 @@ class OrderOrchestrator:
                     product_name=item_data["product_name"],
                     quantity=item_data.get("quantity"),
                     unit=item_data.get("unit", "kg"),
-                    temperature_zone=TemperatureZone(item_data.get("temperature_zone", "常温")),
+                    temperature_zone=TemperatureZone(
+                        item_data.get("temperature_zone", "常温")
+                    ),
                 )
             )
 
@@ -409,16 +423,22 @@ class OrderOrchestrator:
 
     async def _build_order_draft(self, message: str, line_user_id: str) -> dict | None:
         customer_repo = self._ctx.get_connector("ICustomerRepository")
-        customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
+        customer = await customer_repo.find_by_line_user_id(
+            self._ctx.tenant_id, line_user_id
+        )
         if not customer:
             return None
 
         product_master = self._ctx.get_connector("IProductMaster")
         items = []
         for parsed in _parse_order_items(message):
-            product = await product_master.fuzzy_match(self._ctx.tenant_id, parsed["raw_name"])
+            product = await product_master.fuzzy_match(
+                self._ctx.tenant_id, parsed["raw_name"]
+            )
             if not product:
-                logger.warning("Product not found while saving order: %s", parsed["raw_name"])
+                logger.warning(
+                    "Product not found while saving order: %s", parsed["raw_name"]
+                )
                 continue
             items.append(
                 {
@@ -495,14 +515,23 @@ def _format_memory_context(
     if conversation_history:
         lines = []
         for history in conversation_history[-20:]:
-            role = "顧客" if history.role == "user" else "AI" if history.role == "assistant" else "システム"
+            role = (
+                "顧客"
+                if history.role == "user"
+                else "AI"
+                if history.role == "assistant"
+                else "システム"
+            )
             text = history.text.replace("\n", " ").strip()
             if len(text) > 240:
                 text = text[:237] + "..."
             lines.append(f"- {role}: {text}")
         parts.append("会話履歴:\n" + "\n".join(lines))
     if pending_order_draft:
-        parts.append("確認待ち注文ドラフト:\n" + json.dumps(pending_order_draft, ensure_ascii=False, default=str))
+        parts.append(
+            "確認待ち注文ドラフト:\n"
+            + json.dumps(pending_order_draft, ensure_ascii=False, default=str)
+        )
     if not parts:
         return ""
     return "\n\n".join(parts) + "\n\n"

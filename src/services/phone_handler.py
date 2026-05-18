@@ -63,7 +63,9 @@ class PhoneCallHandler:
 
     def _get_acs_client(self, connection_string: str) -> CallAutomationClient:
         if connection_string not in self._acs_clients:
-            self._acs_clients[connection_string] = CallAutomationClient.from_connection_string(connection_string)
+            self._acs_clients[connection_string] = (
+                CallAutomationClient.from_connection_string(connection_string)
+            )
         return self._acs_clients[connection_string]
 
     async def handle_event(self, event: dict) -> dict | None:
@@ -94,15 +96,22 @@ class PhoneCallHandler:
 
         from_info = data.get("from", {})
         to_info = data.get("to", {})
-        caller_number = from_info.get("phoneNumber", {}).get("value", "") or from_info.get("rawId", "")
-        called_number = to_info.get("phoneNumber", {}).get("value", "") or to_info.get("rawId", "")
+        caller_number = from_info.get("phoneNumber", {}).get(
+            "value", ""
+        ) or from_info.get("rawId", "")
+        called_number = to_info.get("phoneNumber", {}).get("value", "") or to_info.get(
+            "rawId", ""
+        )
 
         logger.info("Incoming call from %s to %s", caller_number, called_number)
 
         tenant_ctx = resolve_tenant_for_phone(called_number)
         acs_conn = tenant_ctx.config.acs_connection_string
         if not acs_conn:
-            logger.error("ACS connection string not configured for tenant %s", tenant_ctx.tenant_id)
+            logger.error(
+                "ACS connection string not configured for tenant %s",
+                tenant_ctx.tenant_id,
+            )
             return {"error": "acs_not_configured"}
 
         client = self._get_acs_client(acs_conn)
@@ -150,7 +159,9 @@ class PhoneCallHandler:
         call_connection_id = data.get("callConnectionId", "")
         state = self._calls.get(call_connection_id)
         if not state:
-            logger.warning("RecognizeCompleted for unknown call: %s", call_connection_id)
+            logger.warning(
+                "RecognizeCompleted for unknown call: %s", call_connection_id
+            )
             return {"error": "unknown_call"}
 
         speech_result = data.get("speechResult", {})
@@ -195,7 +206,9 @@ class PhoneCallHandler:
             )
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)
-            await self._play_tts(state, "ご注文を受け付けました。担当者が確認いたします。")
+            await self._play_tts(
+                state, "ご注文を受け付けました。担当者が確認いたします。"
+            )
             state.order_confirmed = True
             return {"call_connection_id": call_connection_id, "error": "agent_failed"}
 
@@ -215,7 +228,11 @@ class PhoneCallHandler:
         if result.get("session_status") == "awaiting_reply":
             state.order_confirmed = False
 
-        response_text = response_text_holder[0] if response_text_holder else result.get("response", "")
+        response_text = (
+            response_text_holder[0]
+            if response_text_holder
+            else result.get("response", "")
+        )
         if response_text:
             await self._play_tts(state, response_text)
 
@@ -243,7 +260,10 @@ class PhoneCallHandler:
         if state.turn_count >= MAX_TURNS:
             await self._play_tts(state, GOODBYE_MESSAGE)
             state.order_confirmed = True
-            return {"call_connection_id": call_connection_id, "status": "max_turns_reached"}
+            return {
+                "call_connection_id": call_connection_id,
+                "status": "max_turns_reached",
+            }
 
         await self._play_tts(state, RETRY_MESSAGE)
         return {"call_connection_id": call_connection_id, "status": "retry"}
@@ -256,18 +276,28 @@ class PhoneCallHandler:
             return None
 
         if state.order_confirmed or state.turn_count >= MAX_TURNS:
-            logger.info("Call %s: order confirmed or max turns, hanging up", call_connection_id)
+            logger.info(
+                "Call %s: order confirmed or max turns, hanging up", call_connection_id
+            )
             await self._hangup(state)
             return {"call_connection_id": call_connection_id, "status": "hangup"}
 
-        logger.info("Call %s: starting next recognize (turn %d)", call_connection_id, state.turn_count + 1)
+        logger.info(
+            "Call %s: starting next recognize (turn %d)",
+            call_connection_id,
+            state.turn_count + 1,
+        )
         await self._start_recognize(state)
         return {"call_connection_id": call_connection_id, "status": "recognizing"}
 
     async def _handle_play_failed(self, event: dict) -> dict | None:
         data = event.get("data", {})
         call_connection_id = data.get("callConnectionId", "")
-        logger.error("PlayFailed for call %s: %s", call_connection_id, data.get("resultInformation"))
+        logger.error(
+            "PlayFailed for call %s: %s",
+            call_connection_id,
+            data.get("resultInformation"),
+        )
         state = self._calls.get(call_connection_id)
         if state:
             await self._hangup(state)
@@ -326,7 +356,9 @@ class PhoneCallHandler:
             play_source=play_source,
             play_to=[PhoneNumberIdentifier(state.caller_number)],
         )
-        logger.info("Playing TTS (%d chars) on call %s", len(text), state.call_connection_id)
+        logger.info(
+            "Playing TTS (%d chars) on call %s", len(text), state.call_connection_id
+        )
 
     async def _hangup(self, state: CallState) -> None:
         acs_conn = state.tenant_ctx.config.acs_connection_string
@@ -345,7 +377,9 @@ class PhoneCallHandler:
         session_repo = state.tenant_ctx.get_connector("ISessionRepository")
 
         async with get_channel_user_lock("phone", state.caller_number):
-            session = await session_repo.find_active_session(state.tenant_ctx.tenant_id, "phone", state.caller_number)
+            session = await session_repo.find_active_session(
+                state.tenant_ctx.tenant_id, "phone", state.caller_number
+            )
             if session:
                 session.last_message_at = datetime.utcnow()
                 await session_repo.update_session(session)
@@ -378,7 +412,9 @@ class PhoneCallHandler:
             if not order:
                 return
 
-            customer = await customer_repo.find_by_identifier(tenant_ctx.tenant_id, user_id)
+            customer = await customer_repo.find_by_identifier(
+                tenant_ctx.tenant_id, user_id
+            )
             if not customer:
                 return
 

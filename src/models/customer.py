@@ -20,5 +20,7 @@ class Customer(BaseModel):
     email: str | None = None
     phone: str | None = None
     fax: str | None = None
-    delivery_preference: CustomerDeliveryPreference = Field(default_factory=CustomerDeliveryPreference)
+    delivery_preference: CustomerDeliveryPreference = Field(
+        default_factory=CustomerDeliveryPreference
+    )
     active: bool = True

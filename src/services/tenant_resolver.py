@@ -39,9 +39,15 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
         tenant_id = "T-001"
 
     # T-001 uses the shared LINE channel; T-002 shares the same infra for the demo.
-    line_channel_id = os.environ.get("LINE_CHANNEL_ID") if tenant_id == "T-001" else None
-    line_channel_secret = os.environ.get("LINE_CHANNEL_SECRET") if tenant_id == "T-001" else None
-    line_channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN") if tenant_id == "T-001" else None
+    line_channel_id = (
+        os.environ.get("LINE_CHANNEL_ID") if tenant_id == "T-001" else None
+    )
+    line_channel_secret = (
+        os.environ.get("LINE_CHANNEL_SECRET") if tenant_id == "T-001" else None
+    )
+    line_channel_access_token = (
+        os.environ.get("LINE_CHANNEL_ACCESS_TOKEN") if tenant_id == "T-001" else None
+    )
 
     # T-001 uses the shared ACS phone number for the demo.
     acs_conn = os.environ.get("ACS_CONNECTION_STRING") if tenant_id == "T-001" else None
@@ -57,14 +63,22 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
         acs_phone_number=acs_phone,
         auto_confirm_threshold=0.9,
         connectors={
-            "IOrderRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
-            "ISessionRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
-            "IMessageHistoryRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
+            "IOrderRepository": ConnectorConfig(
+                type="cosmosdb", connection=cosmos_conn, database="orders"
+            ),
+            "ISessionRepository": ConnectorConfig(
+                type="cosmosdb", connection=cosmos_conn, database="orders"
+            ),
+            "IMessageHistoryRepository": ConnectorConfig(
+                type="cosmosdb", connection=cosmos_conn, database="orders"
+            ),
             "IOrderIntelligenceStore": ConnectorConfig(
                 type="cosmosdb", connection=cosmos_conn, database="intelligence"
             ),
             "IProductMaster": ConnectorConfig(type="azure_sql", connection=sql_conn),
-            "ICustomerRepository": ConnectorConfig(type="azure_sql", connection=sql_conn),
+            "ICustomerRepository": ConnectorConfig(
+                type="azure_sql", connection=sql_conn
+            ),
             "IInventoryService": ConnectorConfig(type="azure_sql", connection=sql_conn),
         },
     )

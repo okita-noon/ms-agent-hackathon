@@ -15,7 +15,9 @@ class SqlCustomerRepository:
     async def _get_connection(self):
         return await aioodbc.connect(dsn=self._conn_str)
 
-    async def find_by_identifier(self, tenant_id: str, identifier: str) -> Customer | None:
+    async def find_by_identifier(
+        self, tenant_id: str, identifier: str
+    ) -> Customer | None:
         query = """
         SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
@@ -26,13 +28,18 @@ class SqlCustomerRepository:
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(query, (tenant_id, identifier, identifier, identifier, f"%{identifier}%"))
+                await cur.execute(
+                    query,
+                    (tenant_id, identifier, identifier, identifier, f"%{identifier}%"),
+                )
                 row = await cur.fetchone()
                 if not row:
                     return None
                 return _row_to_customer(row)
 
-    async def find_by_line_user_id(self, tenant_id: str, line_user_id: str) -> Customer | None:
+    async def find_by_line_user_id(
+        self, tenant_id: str, line_user_id: str
+    ) -> Customer | None:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
@@ -78,7 +85,15 @@ class SqlCustomerRepository:
                 return [_row_to_customer(r) for r in rows]
 
     async def update(self, tenant_id: str, customer_id: str, fields: dict) -> Customer:
-        allowed = {"name", "short_name", "line_user_id", "email", "phone", "fax", "active"}
+        allowed = {
+            "name",
+            "short_name",
+            "line_user_id",
+            "email",
+            "phone",
+            "fax",
+            "active",
+        }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             existing = await self.get_by_id(tenant_id, customer_id)
@@ -88,7 +103,9 @@ class SqlCustomerRepository:
 
         set_clause = ", ".join(f"{col} = ?" for col in updates)
         values = list(updates.values()) + [tenant_id, customer_id]
-        query = f"UPDATE customers SET {set_clause} WHERE tenant_id = ? AND customer_id = ?"
+        query = (
+            f"UPDATE customers SET {set_clause} WHERE tenant_id = ? AND customer_id = ?"
+        )
 
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
@@ -97,7 +114,9 @@ class SqlCustomerRepository:
 
         updated = await self.get_by_id(tenant_id, customer_id)
         if not updated:
-            raise ValueError(f"顧客ID「{customer_id}」の更新後データの取得に失敗しました。")
+            raise ValueError(
+                f"顧客ID「{customer_id}」の更新後データの取得に失敗しました。"
+            )
         return updated
 
 

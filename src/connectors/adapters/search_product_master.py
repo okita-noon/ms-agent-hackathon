@@ -50,7 +50,9 @@ class SearchProductMaster:
                 credential=AzureKeyCredential(api_key),
             )
         except ImportError:
-            logger.error("azure-search-documents package is not installed; SearchProductMaster will not function.")
+            logger.error(
+                "azure-search-documents package is not installed; SearchProductMaster will not function."
+            )
             self._client = None
 
     # ------------------------------------------------------------------
@@ -136,9 +138,13 @@ def _doc_to_product(doc: dict[str, Any]) -> Product:
         name=doc.get("name", ""),
         display_name=doc.get("display_name"),
         category=doc.get("category"),
-        default_unit=UnitType(doc["default_unit"]) if doc.get("default_unit") else UnitType.KG,
+        default_unit=UnitType(doc["default_unit"])
+        if doc.get("default_unit")
+        else UnitType.KG,
         temperature_zone=(
-            TemperatureZone(doc["temperature_zone"]) if doc.get("temperature_zone") else TemperatureZone.AMBIENT
+            TemperatureZone(doc["temperature_zone"])
+            if doc.get("temperature_zone")
+            else TemperatureZone.AMBIENT
         ),
         unit_weight_kg=doc.get("unit_weight_kg"),
         is_variable_weight=bool(doc.get("is_variable_weight", False)),
