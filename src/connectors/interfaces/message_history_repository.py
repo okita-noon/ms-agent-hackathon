@@ -15,3 +15,9 @@ class IMessageHistoryRepository(Protocol):
         channel_user_id: str,
         limit: int = 20,
     ) -> list[MessageHistory]: ...
+
+    async def list_by_session_id(
+        self,
+        tenant_id: str,
+        session_id: str,
+    ) -> list[MessageHistory]: ...

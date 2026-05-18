@@ -32,6 +32,21 @@
 - **pre-commit フック**: コミット時に秘密情報の混入を自動チェックします
 - **PR テンプレート**: PRを出す際にセキュリティチェックリストを確認してください
 
+## ランタイム上の認証境界
+
+| 経路 | 認証 |
+|---|---|
+| `/api/auth/login` | 公開（パスワード検証） |
+| `/api/auth/register` | デフォルト無効。`REGISTRATION_ENABLED=true` + `X-Invite-Token` ヘッダ必須 |
+| `/api/auth/microsoft` | Microsoft Entra の id_token を検証。`AZURE_AD_ALLOWED_TENANTS` allowlist の `tid` のみ受理。自動登録なし（事前 provision 必須） |
+| `/api/auth/me` ほかビジネス API | Bearer JWT 必須。`tenant_id` は JWT クレームから取得（クエリ不可） |
+| `GET /api/orders/{id}` | JWT の `tenant_id` と doc の `tenant_id` 一致時のみ返却（IDOR ガード） |
+| `/api/line-webhook` | `x-line-signature` ヘッダで HMAC-SHA256 を検証（必須） |
+| `/api/phone-webhook` | `EVENTGRID_WEBHOOK_KEY` を `?code=` クエリか `X-EventGrid-Webhook-Key` ヘッダで検証（必須） |
+
+JWT は `iss` / `aud` も検証する（`JWT_ISSUER` / `JWT_AUDIENCE`）。
+`JWT_SECRET_KEY` は未設定だと起動時に `RuntimeError`（フェイルクローズ）。
+
 ### pre-commit フックのセットアップ
 
 クローン後に以下を実行してください:

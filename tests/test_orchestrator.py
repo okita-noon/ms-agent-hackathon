@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,6 +15,7 @@ from src.agents.orchestrator import (
     _inventory_requires_operator_review,
     _is_affirmative_reply,
     _parse_order_items,
+    _sanitize_line_reply,
 )
 from src.models.message_history import MessageHistory
 from src.models.order import OrderSource, OrderStatus
@@ -67,7 +69,14 @@ class TestBuildDraftFromIntake:
         intake = {
             "customer_id": "C-001",
             "customer_name": "テスト社",
-            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 5, "unit": "箱"}],
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                }
+            ],
         }
         draft = _build_draft_from_intake(intake)
         assert draft is not None
@@ -150,6 +159,27 @@ class TestResponsePolicy:
 
         assert _enforce_response_policy(response, needs_confirmation=True, inventory_needs_review=True) == response
 
+    def test_sanitizes_company_name_greeting_from_line_reply(self):
+        response = _sanitize_line_reply(
+            "テスト食堂 様\nご注文承りました。りんご5箱、本日配送予定です。"
+        )
+
+        assert response == "ご注文承りました。りんご5箱、本日配送予定です。"
+
+    def test_sanitizes_inline_company_name_greeting_from_line_reply(self):
+        response = _sanitize_line_reply(
+            "株式会社テスト様、ご注文承りました。りんご5箱です。"
+        )
+
+        assert response == "ご注文承りました。りんご5箱です。"
+
+    def test_sanitizes_generic_line_closing(self):
+        response = _sanitize_line_reply(
+            "ご注文承りました。りんご5箱、本日配送予定です。\n"
+            "他のご注文やご不明点がございましたらお気軽にご連絡ください。"
+        )
+
+        assert response == "ご注文承りました。りんご5箱、本日配送予定です。"
 
 class TestMemoryContext:
     def test_format_memory_context(self):
@@ -219,7 +249,16 @@ class TestProcessOrderMessageSendsOnce:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": "午前中",
                 "needs_confirmation": False,
             }
         )
@@ -239,7 +278,13 @@ class TestProcessOrderMessageSendsOnce:
                 return "ご注文承りました。りんご1個ですね。"
 
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
-        order_repo.save = AsyncMock(return_value="ORD-001")
+        saved_orders = []
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-001"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
@@ -250,10 +295,12 @@ class TestProcessOrderMessageSendsOnce:
                 line_user_id="U123",
                 reply_token="tok",
                 source=OrderSource.LINE,
+                session_id="sess-order",
             )
 
             assert mock_send.call_count == 1
             assert result.get("order_id") == "ORD-001"
+            assert saved_orders[0].session_id == "sess-order"
 
     @pytest.mark.asyncio
     async def test_sends_once_on_confirmation_needed(self, mock_tenant_ctx):
@@ -264,7 +311,14 @@ class TestProcessOrderMessageSendsOnce:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 150, "unit": "kg"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 150,
+                        "unit": "kg",
+                    }
+                ],
                 "needs_confirmation": True,
             }
         )
@@ -298,15 +352,243 @@ class TestProcessOrderMessageSendsOnce:
             assert "order_id" not in result
 
     @pytest.mark.asyncio
-    async def test_affirmative_reply_creates_order_from_pending_draft(self, mock_tenant_ctx):
+    async def test_missing_delivery_date_asks_customer_without_saving_order(
+        self, mock_tenant_ctx
+    ):
         orch = _make_orchestrator(mock_tenant_ctx)
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
-        order_repo.save = AsyncMock(return_value="ORD-OK")
+        order_repo.save = AsyncMock(return_value="ORD-NO-DATE")
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
+                "delivery_date": None,
+                "delivery_time_slot": "午前中",
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            assert "配達日の確認が必要" in message
+            return "ご注文承りました。りんご1個で確定しました。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="りんご1個お願い",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                session_id="sess-no-date",
+            )
+
+            assert "order_id" not in result
+            assert result["session_status"] == "awaiting_reply"
+            assert result["pending_order_draft"]["delivery_date"] is None
+            assert "配達日" in result["response"]
+            assert order_repo.save.await_count == 0
+            assert mock_send.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_ok_on_pending_draft_without_delivery_date_keeps_asking_date(
+        self, mock_tenant_ctx
+    ):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-SHOULD-NOT-SAVE")
 
         pending_draft = {
             "customer_id": "C-001",
             "customer_name": "テスト社",
-            "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 1,
+                    "unit": "個",
+                }
+            ],
+            "delivery_date": None,
+            "delivery_time_slot": "午前中",
+        }
+
+        with patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send:
+            result = await orch.process_order_message(
+                message="OK",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                pending_order_draft=pending_draft,
+            )
+
+            assert "order_id" not in result
+            assert result["session_status"] == "awaiting_reply"
+            assert result["pending_order_draft"] == pending_draft
+            assert "配達日" in result["response"]
+            assert order_repo.save.await_count == 0
+            assert mock_send.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_missing_delivery_time_uses_recent_order_history(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders = []
+        order_repo.list_by_customer.return_value = [
+            SimpleNamespace(delivery_time_slot="14:00-16:00"),
+            SimpleNamespace(delivery_time_slot="14:00-16:00"),
+            SimpleNamespace(delivery_time_slot="午前中"),
+        ]
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-WITH-TIME"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": None,
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            if call_count == 3:
+                return '```json\n{"all_reserved": true}\n```'
+            return "ご注文承りました。りんご1個、14:00-16:00配送予定です。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+        ):
+            result = await orch.process_order_message(
+                message="りんご1個、5/20で",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert result["order_id"] == "ORD-WITH-TIME"
+            assert saved_orders[0].delivery_time_slot == "14:00-16:00"
+            order_repo.list_by_customer.assert_awaited_once_with("C-001", limit=50)
+
+    @pytest.mark.asyncio
+    async def test_missing_delivery_time_asks_customer_when_history_unknown(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = []
+        order_repo.save = AsyncMock(return_value="ORD-NO-TIME")
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": None,
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            assert "配達時間の確認が必要" in message
+            return "ご注文承りました。りんご1個で確定しました。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+        ):
+            result = await orch.process_order_message(
+                message="りんご1個、5/20で",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            assert "order_id" not in result
+            assert result["session_status"] == "awaiting_reply"
+            assert result["pending_order_draft"]["delivery_time_slot"] is None
+            assert result["response"] == "配達時間を教えてください。"
+            assert order_repo.save.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_affirmative_reply_creates_order_from_pending_draft(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders = []
+
+        async def save_order(order):
+            saved_orders.append(order)
+            return "ORD-OK"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 1,
+                    "unit": "個",
+                }
+            ],
+            "delivery_date": "2026-05-20",
+            "delivery_time_slot": "午前中",
         }
 
         with (
@@ -321,10 +603,12 @@ class TestProcessOrderMessageSendsOnce:
                 reply_token="tok",
                 source=OrderSource.LINE,
                 pending_order_draft=pending_draft,
+                session_id="sess-confirm",
             )
 
             assert result["order_id"] == "ORD-OK"
             assert mock_send.call_count == 1
+            assert saved_orders[0].session_id == "sess-confirm"
 
     @pytest.mark.asyncio
     async def test_inventory_shortage_saves_review_order_not_confirmed_order(self, mock_tenant_ctx):
@@ -343,6 +627,8 @@ class TestProcessOrderMessageSendsOnce:
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": "午前中",
                 "needs_confirmation": False,
             }
         )
@@ -370,6 +656,7 @@ class TestProcessOrderMessageSendsOnce:
                 line_user_id="U123",
                 reply_token="tok",
                 source=OrderSource.LINE,
+                session_id="sess-review",
             )
 
             assert result["review_order_id"] == "ORD-REVIEW"
@@ -377,6 +664,7 @@ class TestProcessOrderMessageSendsOnce:
             assert result["session_status"] == "awaiting_reply"
             assert saved_orders[0].status == OrderStatus.NEEDS_REVIEW
             assert saved_orders[0].remarks == "在庫不足です"
+            assert saved_orders[0].session_id == "sess-review"
             assert mock_send.call_count == 1
 
     @pytest.mark.asyncio
@@ -390,6 +678,8 @@ class TestProcessOrderMessageSendsOnce:
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": "午前中",
                 "needs_confirmation": False,
             }
         )
@@ -446,7 +736,16 @@ class TestEndToEndMessageFlow:
             {
                 "customer_id": "C-001",
                 "customer_name": "テスト社",
-                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "items": [
+                    {
+                        "product_id": "P-001",
+                        "product_name": "りんご",
+                        "quantity": 1,
+                        "unit": "個",
+                    }
+                ],
+                "delivery_date": "2026-05-20",
+                "delivery_time_slot": "午前中",
                 "needs_confirmation": False,
             }
         )

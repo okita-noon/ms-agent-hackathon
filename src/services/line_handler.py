@@ -71,8 +71,10 @@ class LineWebhookHandler:
     def verify_signature(self, body: bytes, signature: str) -> bool:
         channel_secret = self._ctx.config.line_channel_secret
         if not channel_secret:
-            logger.warning("LINE channel secret not configured, skipping verification")
-            return True
+            logger.error("LINE channel secret not configured — rejecting webhook (fail-closed)")
+            return False
+        if not signature:
+            return False
         hash_value = hmac.new(channel_secret.encode("utf-8"), body, hashlib.sha256).digest()
         expected = base64.b64encode(hash_value).decode("utf-8")
         return hmac.compare_digest(expected, signature)
@@ -187,6 +189,7 @@ class LineWebhookHandler:
                 source=OrderSource.LINE,
                 conversation_history=conversation_history,
                 pending_order_draft=session.pending_order_draft,
+                session_id=session.id,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
@@ -282,7 +285,7 @@ class LineWebhookHandler:
             order_repo = self._ctx.get_connector("IOrderRepository")
             customer_repo = self._ctx.get_connector("ICustomerRepository")
 
-            order = await order_repo.find_by_id(order_id)
+            order = await order_repo.find_by_id(self._ctx.tenant_id, order_id)
             if not order:
                 logger.warning("Learning skipped: order %s not found", order_id)
                 return

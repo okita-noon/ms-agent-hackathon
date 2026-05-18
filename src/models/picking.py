@@ -4,7 +4,12 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from src.models.order import DeliveryCarrier, DeliveryRoute, OrderStatus, TemperatureZone
+from src.models.order import (
+    DeliveryCarrier,
+    DeliveryRoute,
+    OrderStatus,
+    TemperatureZone,
+)
 
 
 class PickingItem(BaseModel):

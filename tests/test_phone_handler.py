@@ -203,7 +203,10 @@ class TestHandleRecognizeCompleted:
         mock_orchestrator.process_order_message.return_value = {"response": "OK"}
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             await handler.handle_event(_make_recognize_completed_event())
@@ -226,7 +229,10 @@ class TestHandleRecognizeCompleted:
         mock_orchestrator.process_order_message.side_effect = RuntimeError("LLM down")
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
         ):
             result = await handler.handle_event(_make_recognize_completed_event())
@@ -357,7 +363,10 @@ class TestOrchestratorCallback:
         mock_orchestrator.process_order_message.side_effect = mock_process
 
         with (
-            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
             patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
         ):
             await handler.handle_event(_make_recognize_completed_event())

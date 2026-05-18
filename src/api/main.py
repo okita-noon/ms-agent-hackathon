@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -86,10 +95,16 @@ async def _process_line_events(handler: LineWebhookHandler, body_json: dict) -> 
 async def line_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    x_line_signature: str = Header(None),
+    x_line_signature: str | None = Header(None),
 ):
+    if not x_line_signature:
+        raise HTTPException(status_code=401, detail="x-line-signature header is required")
+
     body_bytes = await request.body()
-    body_json = await request.json()
+    try:
+        body_json = json.loads(body_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     tenant_ctx = resolve_tenant_for_line(body_json.get("destination"))
     handler = LineWebhookHandler(
@@ -99,11 +114,13 @@ async def line_webhook(
         azure_openai_deployment_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT),
     )
 
-    if x_line_signature and not handler.verify_signature(body_bytes, x_line_signature):
-        raise HTTPException(status_code=403, detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。")
+    if not handler.verify_signature(body_bytes, x_line_signature):
+        raise HTTPException(
+            status_code=403,
+            detail="署名の検証に失敗しました。LINE Channelの設定を確認してください。",
+        )
 
     background_tasks.add_task(_process_line_events, handler, body_json)
-
     return Response(status_code=200)
 
 
@@ -128,8 +145,29 @@ def _get_phone_handler() -> PhoneCallHandler:
     return _phone_handler
 
 
+def _verify_eventgrid_key(request: Request, header_key: str | None) -> bool:
+    """Verify the shared secret EventGrid presents on each delivery.
+
+    Accepts the key in the ``X-EventGrid-Webhook-Key`` header or in a ``code``
+    query parameter (Functions-style). Fails closed if ``EVENTGRID_WEBHOOK_KEY``
+    is not configured.
+    """
+    expected = os.environ.get("EVENTGRID_WEBHOOK_KEY", "")
+    if not expected:
+        logger.error("EVENTGRID_WEBHOOK_KEY is not configured — rejecting phone webhook")
+        return False
+    presented = header_key or request.query_params.get("code", "")
+    return bool(presented) and presented == expected
+
+
 @app.post("/api/phone-webhook")
-async def phone_webhook(request: Request):
+async def phone_webhook(
+    request: Request,
+    x_eventgrid_webhook_key: str | None = Header(None, alias="X-EventGrid-Webhook-Key"),
+):
+    if not _verify_eventgrid_key(request, x_eventgrid_webhook_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     events = await request.json()
     if not isinstance(events, list):
         events = [events]
@@ -169,17 +207,43 @@ async def list_orders(
         target = date.today()
 
     orders = await repo.list_by_date(tenant_id, target)
-    return {"orders": [o.model_dump(mode="json") for o in orders], "date": target.isoformat()}
+    return {
+        "orders": [o.model_dump(mode="json") for o in orders],
+        "date": target.isoformat(),
+    }
 
 
 @app.get("/api/orders/{order_id}")
 async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
-    order = await repo.find_by_id(order_id)
+    order = await repo.find_by_id(tenant_id, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
     return order.model_dump(mode="json")
+
+
+@app.get("/api/orders/{order_id}/messages")
+async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_id)):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    order_repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await order_repo.find_by_id(tenant_id, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。")
+
+    if not order.session_id:
+        return {"messages": [], "session_id": None}
+
+    history_repo = tenant_ctx.get_connector("IMessageHistoryRepository")
+    messages = await history_repo.list_by_session_id(tenant_id, order.session_id)
+    filtered = [m for m in messages if m.role in ("user", "assistant")]
+    return {
+        "messages": [m.model_dump(mode="json") for m in filtered],
+        "session_id": order.session_id,
+    }
 
 
 @app.get("/api/products")
@@ -241,6 +305,9 @@ async def update_customer(customer_id: str, request: Request, tenant_id: str = D
     repo = tenant_ctx.get_connector("ICustomerRepository")
     customer = await repo.get_by_id(tenant_id, customer_id)
     if not customer:
-        raise HTTPException(status_code=404, detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。")
+        raise HTTPException(
+            status_code=404,
+            detail=f"顧客ID「{customer_id}」が見つかりません。IDをご確認ください。",
+        )
     updated = await repo.update(tenant_id, customer_id, body)
     return updated.model_dump()

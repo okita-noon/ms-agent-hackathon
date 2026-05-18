@@ -8,13 +8,14 @@ import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
+import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function Orders() {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
@@ -87,64 +88,72 @@ export default function Orders() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 stagger-in">
-        <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">受注合計</p>
-          <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
-        </div>
-        {Object.entries(STATUS_COLORS).map(([status, color]) => (
-          <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
-            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">{status}</p>
-            <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
+      {loading && orders.length === 0 ? (
+        <SkeletonStatCards count={8} />
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 stagger-in">
+          <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">受注合計</p>
+            <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
           </div>
-        ))}
-      </div>
+          {Object.entries(STATUS_COLORS).map(([status, color]) => (
+            <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">{status}</p>
+              <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">ステータス別</h3>
-          <div className="h-48 flex items-center justify-center">
-            {statusLabels.length > 0 ? (
-              <Doughnut
-                data={{
-                  labels: statusLabels,
-                  datasets: [{
-                    data: statusLabels.map((s) => statusCounts[s]),
-                    backgroundColor: statusLabels.map((s) => STATUS_COLORS[s]?.chart ?? "#d1d5db"),
-                    borderWidth: 0,
-                    spacing: 2,
-                  }],
-                }}
-                options={chartOpts}
-              />
-            ) : (
-              <p className="text-sm text-gray-300">データなし</p>
-            )}
+      {loading && orders.length === 0 ? (
+        <SkeletonCharts />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">ステータス別</h3>
+            <div className="h-48 flex items-center justify-center">
+              {statusLabels.length > 0 ? (
+                <Doughnut
+                  data={{
+                    labels: statusLabels,
+                    datasets: [{
+                      data: statusLabels.map((s) => statusCounts[s]),
+                      backgroundColor: statusLabels.map((s) => STATUS_COLORS[s]?.chart ?? "#d1d5db"),
+                      borderWidth: 0,
+                      spacing: 2,
+                    }],
+                  }}
+                  options={chartOpts}
+                />
+              ) : (
+                <p className="text-sm text-gray-300">データなし</p>
+              )}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">チャネル別</h3>
+            <div className="h-48 flex items-center justify-center">
+              {sourceLabels.length > 0 ? (
+                <Doughnut
+                  data={{
+                    labels: sourceLabels,
+                    datasets: [{
+                      data: sourceLabels.map((s) => sourceCounts[s]),
+                      backgroundColor: sourceLabels.map((s) => SOURCE_COLORS[s] ?? "#d1d5db"),
+                      borderWidth: 0,
+                      spacing: 2,
+                    }],
+                  }}
+                  options={chartOpts}
+                />
+              ) : (
+                <p className="text-sm text-gray-300">データなし</p>
+              )}
+            </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">チャネル別</h3>
-          <div className="h-48 flex items-center justify-center">
-            {sourceLabels.length > 0 ? (
-              <Doughnut
-                data={{
-                  labels: sourceLabels,
-                  datasets: [{
-                    data: sourceLabels.map((s) => sourceCounts[s]),
-                    backgroundColor: sourceLabels.map((s) => SOURCE_COLORS[s] ?? "#d1d5db"),
-                    borderWidth: 0,
-                    spacing: 2,
-                  }],
-                }}
-                options={chartOpts}
-              />
-            ) : (
-              <p className="text-sm text-gray-300">データなし</p>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -198,7 +207,15 @@ export default function Orders() {
                         {zones.map((z) => <TempBadge key={z} zone={z} />)}
                       </td>
                       <td className="px-5 py-3.5"><StatusBadge status={o.status} /></td>
-                      <td className="px-5 py-3.5 text-gray-400 text-xs leading-relaxed">{o.delivery_carrier || "-"}<br />{o.delivery_route || ""}</td>
+                      <td className="px-5 py-3.5 text-gray-400 text-xs leading-relaxed">
+                        {o.delivery_carrier || "-"}<br />{o.delivery_route || ""}
+                        {o.delivery_time_slot && (
+                          <span className="inline-flex items-center gap-0.5 mt-0.5 text-brand-600 font-medium">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {o.delivery_time_slot}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5 text-gray-400 text-xs max-w-[120px] truncate">{o.remarks || "-"}</td>
                     </tr>
                   );
