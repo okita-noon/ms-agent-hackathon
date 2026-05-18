@@ -2,6 +2,9 @@
 
 > Orchestrator / Intake / Inventory / Communication / Exception (Agent) + Learning Service の詳細設計
 
+ダッシュボード上で担当者の例外対応を支援する **Exception Triage Agent / Resolution Agent** は、
+[ダッシュボードAgent設計](dashboard-agent-design.md) を参照。
+
 ## Agent 一覧と責務
 
 | Agent | 責務 | 使用ツール（Semantic Kernel Plugin） | 判断の例 |
