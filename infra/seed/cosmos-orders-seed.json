@@ -137,5 +137,626 @@
     "yamato_tracking_number": "YM678901234567",
     "status": "完了",
     "remarks": "備考F"
+  },
+  {
+    "id": "UID_007",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-001",
+        "product_name": "りんご",
+        "quantity": 10,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-002",
+        "product_name": "バナナ",
+        "quantity": 5,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "未処理",
+    "remarks": null
+  },
+  {
+    "id": "UID_008",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-003",
+        "product_name": "みかん",
+        "quantity": 30,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "unit_price": 400,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "北関東便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "14:00",
+    "status": "要対応",
+    "remarks": "数量要確認"
+  },
+  {
+    "id": "UID_009",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-21",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Web",
+    "system": "ECサイト",
+    "items": [
+      {
+        "product_id": "P-004",
+        "product_name": "ぶどう",
+        "quantity": 15,
+        "unit": "房",
+        "temperature_zone": "常温",
+        "unit_price": 1000,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "中部便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午後",
+    "status": "製造",
+    "remarks": null
+  },
+  {
+    "id": "UID_010",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Email",
+    "system": "Email",
+    "items": [
+      {
+        "product_id": "P-005",
+        "product_name": "もも",
+        "quantity": 5,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "unit_price": 7200,
+        "is_variable_weight": true
+      }
+    ],
+    "delivery_route": "東北便",
+    "delivery_carrier": "冷蔵ヤマト便",
+    "delivery_time_slot": "16:00",
+    "yamato_tracking_number": "YM202605180010",
+    "status": "配送",
+    "remarks": null
+  },
+  {
+    "id": "UID_011",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Phone",
+    "system": "Phone",
+    "items": [
+      {
+        "product_id": "P-006",
+        "product_name": "いちご",
+        "quantity": 20,
+        "unit": "パック",
+        "temperature_zone": "常温",
+        "unit_price": 633,
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-011",
+        "product_name": "キウイ",
+        "quantity": 10,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "未処理",
+    "remarks": null
+  },
+  {
+    "id": "UID_012",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-18",
+    "delivery_date": "2026-05-19",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "手入力",
+    "system": "手入力",
+    "items": [
+      {
+        "product_id": "P-007",
+        "product_name": "メロン",
+        "quantity": 3,
+        "unit": "玉",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関西便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "午後",
+    "status": "完了",
+    "remarks": "急ぎ対応済み"
+  },
+  {
+    "id": "UID_013",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-21",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-008",
+        "product_name": "スイカ",
+        "quantity": 2,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-014",
+        "product_name": "レモン",
+        "quantity": 10,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "九州便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "要対応",
+    "remarks": "大玉指定"
+  },
+  {
+    "id": "UID_014",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-009",
+        "product_name": "なし",
+        "quantity": 20,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "北関東便",
+    "delivery_carrier": "冷蔵ヤマト便",
+    "delivery_time_slot": "14:00",
+    "yamato_tracking_number": "YM202605180014",
+    "status": "製造",
+    "remarks": null
+  },
+  {
+    "id": "UID_015",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-22",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Web",
+    "system": "ECサイト",
+    "items": [
+      {
+        "product_id": "P-010",
+        "product_name": "マンゴー",
+        "quantity": 8,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-017",
+        "product_name": "ブルーベリー",
+        "quantity": 3,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "冷凍ヤマト便",
+    "delivery_time_slot": "午後",
+    "status": "未処理",
+    "remarks": null
+  },
+  {
+    "id": "UID_016",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-18",
+    "delivery_date": "2026-05-19",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Email",
+    "system": "Email",
+    "items": [
+      {
+        "product_id": "P-012",
+        "product_name": "さくらんぼ",
+        "quantity": 10,
+        "unit": "パック",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "東北便",
+    "delivery_carrier": "冷蔵ヤマト便",
+    "delivery_time_slot": "16:00",
+    "yamato_tracking_number": "YM202605180016",
+    "status": "配送",
+    "remarks": null
+  },
+  {
+    "id": "UID_017",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-18",
+    "delivery_date": "2026-05-19",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-013",
+        "product_name": "いちじく",
+        "quantity": 5,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "北海道便",
+    "delivery_carrier": "冷凍ヤマト便",
+    "delivery_time_slot": "午前",
+    "yamato_tracking_number": "YM202605180017",
+    "status": "完了",
+    "remarks": null
+  },
+  {
+    "id": "UID_018",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Phone",
+    "system": "Phone",
+    "items": [
+      {
+        "product_id": "P-015",
+        "product_name": "アボカド",
+        "quantity": 12,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-016",
+        "product_name": "にんにく",
+        "quantity": 3,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "未処理",
+    "remarks": "まとめ注文"
+  },
+  {
+    "id": "UID_019",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-21",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-001",
+        "product_name": "りんご",
+        "quantity": 20,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "西日本便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "14:00",
+    "status": "要対応",
+    "remarks": "前回と同じ品質で"
+  },
+  {
+    "id": "UID_020",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Web",
+    "system": "ECサイト",
+    "items": [
+      {
+        "product_id": "P-002",
+        "product_name": "バナナ",
+        "quantity": 30,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-003",
+        "product_name": "みかん",
+        "quantity": 15,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "unit_price": 400,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "中部便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午後",
+    "status": "製造",
+    "remarks": null
+  },
+  {
+    "id": "UID_021",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "手入力",
+    "system": "手入力",
+    "items": [
+      {
+        "product_id": "P-004",
+        "product_name": "ぶどう",
+        "quantity": 8,
+        "unit": "房",
+        "temperature_zone": "常温",
+        "unit_price": 1000,
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-006",
+        "product_name": "いちご",
+        "quantity": 15,
+        "unit": "パック",
+        "temperature_zone": "常温",
+        "unit_price": 633,
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "未処理",
+    "remarks": "ギフトセット用"
+  },
+  {
+    "id": "UID_022",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-21",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "LINE",
+    "system": "LINE",
+    "items": [
+      {
+        "product_id": "P-005",
+        "product_name": "もも",
+        "quantity": 10,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "unit_price": 7200,
+        "is_variable_weight": true
+      }
+    ],
+    "delivery_route": "北陸便",
+    "delivery_carrier": "冷蔵ヤマト便",
+    "delivery_time_slot": "16:00",
+    "yamato_tracking_number": "YM202605180022",
+    "status": "配送",
+    "remarks": null
+  },
+  {
+    "id": "UID_023",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-18",
+    "delivery_date": "2026-05-19",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Email",
+    "system": "Email",
+    "items": [
+      {
+        "product_id": "P-007",
+        "product_name": "メロン",
+        "quantity": 5,
+        "unit": "玉",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-010",
+        "product_name": "マンゴー",
+        "quantity": 3,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "四国便",
+    "delivery_carrier": "冷凍ヤマト便",
+    "delivery_time_slot": "午後",
+    "status": "完了",
+    "remarks": "冷凍まとめ便"
+  },
+  {
+    "id": "UID_024",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-20",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "FAX",
+    "system": "FAX",
+    "items": [
+      {
+        "product_id": "P-011",
+        "product_name": "キウイ",
+        "quantity": 25,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-014",
+        "product_name": "レモン",
+        "quantity": 20,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関東便",
+    "delivery_carrier": "自社便",
+    "delivery_time_slot": "午前",
+    "status": "未処理",
+    "remarks": null
+  },
+  {
+    "id": "UID_025",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-22",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Web",
+    "system": "ECサイト",
+    "items": [
+      {
+        "product_id": "P-012",
+        "product_name": "さくらんぼ",
+        "quantity": 8,
+        "unit": "パック",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-017",
+        "product_name": "ブルーベリー",
+        "quantity": 2,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "東北便",
+    "delivery_carrier": "冷凍ヤマト便",
+    "delivery_time_slot": "午後",
+    "status": "要対応",
+    "remarks": "混載便希望"
+  },
+  {
+    "id": "UID_026",
+    "tenant_id": "T-001",
+    "order_date": "2026-05-18",
+    "preparation_date": "2026-05-19",
+    "delivery_date": "2026-05-21",
+    "customer_id": "C-010",
+    "customer_name": "丸山 太郎",
+    "source": "Phone",
+    "system": "Phone",
+    "items": [
+      {
+        "product_id": "P-016",
+        "product_name": "にんにく",
+        "quantity": 5,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-015",
+        "product_name": "アボカド",
+        "quantity": 6,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
+    ],
+    "delivery_route": "関西便",
+    "delivery_carrier": "芦川便",
+    "delivery_time_slot": "14:00",
+    "status": "製造",
+    "remarks": null
   }
 ]
