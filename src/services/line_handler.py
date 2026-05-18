@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import logging
 import time
-import threading
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -32,11 +31,11 @@ class _EventDedup:
     def __init__(self, ttl: int = DEDUP_TTL_SECONDS):
         self._seen: dict[str, float] = {}
         self._ttl = ttl
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def is_duplicate(self, event_id: str) -> bool:
+    async def is_duplicate(self, event_id: str) -> bool:
         now = time.monotonic()
-        with self._lock:
+        async with self._lock:
             self._evict(now)
             if event_id in self._seen:
                 return True
@@ -50,6 +49,16 @@ class _EventDedup:
 
 
 _dedup = _EventDedup()
+
+# Per-user locks to serialize concurrent messages from the same LINE user.
+# Prevents duplicate session creation and lost-update on pending_order_draft.
+_user_process_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_user_lock(user_id: str) -> asyncio.Lock:
+    if user_id not in _user_process_locks:
+        _user_process_locks[user_id] = asyncio.Lock()
+    return _user_process_locks[user_id]
 
 
 class LineWebhookHandler:
@@ -89,7 +98,7 @@ class LineWebhookHandler:
         results = []
         for event in events:
             webhook_event_id = event.get("webhookEventId", "")
-            if webhook_event_id and _dedup.is_duplicate(webhook_event_id):
+            if webhook_event_id and await _dedup.is_duplicate(webhook_event_id):
                 logger.info("Skipping duplicate event %s", webhook_event_id)
                 continue
 
@@ -122,6 +131,25 @@ class LineWebhookHandler:
     ) -> dict:
         logger.info("Processing message from %s: %s", user_id, text[:100])
 
+        async with _get_user_lock(user_id):
+            return await self._process_message_locked(
+                user_id=user_id,
+                text=text,
+                reply_token=reply_token,
+                message_id=message_id,
+                webhook_event_id=webhook_event_id,
+                received_at=received_at,
+            )
+
+    async def _process_message_locked(
+        self,
+        user_id: str,
+        text: str,
+        reply_token: str | None,
+        message_id: str | None = None,
+        webhook_event_id: str | None = None,
+        received_at: datetime | None = None,
+    ) -> dict:
         session_repo = self._ctx.get_connector("ISessionRepository")
         history_repo = self._get_message_history_repo()
 

@@ -16,7 +16,7 @@ class SqlInventoryService:
         self._conn_str = to_odbc_dsn(config.connection or "")
 
     async def _get_connection(self):
-        return await aioodbc.connect(dsn=self._conn_str)
+        return await aioodbc.connect(dsn=self._conn_str, autocommit=False)
 
     async def check(self, tenant_id: str, product_id: str, required_qty: float) -> InventoryStatus:
         query = """
@@ -76,13 +76,18 @@ class SqlInventoryService:
         """
         async with await self._get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(query, (qty, tenant_id, product_id, qty))
-                if cur.rowcount > 0:
-                    await conn.commit()
-                    return ReservationResult(product_id=product_id, reserved_qty=qty, success=True)
-                return ReservationResult(
-                    product_id=product_id,
-                    reserved_qty=0,
-                    success=False,
-                    message="在庫不足",
-                )
+                try:
+                    await cur.execute(query, (qty, tenant_id, product_id, qty))
+                    if cur.rowcount > 0:
+                        await conn.commit()
+                        return ReservationResult(product_id=product_id, reserved_qty=qty, success=True)
+                    await conn.rollback()
+                    return ReservationResult(
+                        product_id=product_id,
+                        reserved_qty=0,
+                        success=False,
+                        message="在庫不足",
+                    )
+                except Exception:
+                    await conn.rollback()
+                    raise

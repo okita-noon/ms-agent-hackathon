@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
+from azure.core import MatchConditions
 from azure.cosmos.aio import CosmosClient, ContainerProxy
+from azure.cosmos.exceptions import CosmosAccessConditionFailedError
 
 from src.models.order import Order, OrderStatus
 from src.models.tenant import ConnectorConfig
@@ -55,7 +57,19 @@ class CosmosOrderRepository:
         return [Order.model_validate(doc) async for doc in items]
 
     async def update_status(self, order_id: str, status: OrderStatus) -> None:
-        doc = await self._container.read_item(order_id, partition_key=order_id)
-        doc["status"] = status.value
-        doc["updated_at"] = datetime.utcnow().isoformat()
-        await self._container.replace_item(order_id, doc)
+        for attempt in range(3):
+            doc = await self._container.read_item(order_id, partition_key=order_id)
+            etag = doc.get("_etag")
+            doc["status"] = status.value
+            doc["updated_at"] = datetime.utcnow().isoformat()
+            try:
+                await self._container.replace_item(
+                    order_id,
+                    doc,
+                    match_condition=MatchConditions.IfNotModified,
+                    etag=etag,
+                )
+                return
+            except CosmosAccessConditionFailedError:
+                if attempt == 2:
+                    raise
