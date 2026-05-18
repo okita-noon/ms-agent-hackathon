@@ -99,11 +99,25 @@
 | `docs/mvp-scope.md` | MVPスコープ・ユーザー体験シナリオ・非機能要件 |
 | `docs/business-domain.md` | 業務ドメイン定義（温度帯・配送体系・不定貫・ピッキング分割） |
 
+## ドキュメント更新ルール（必須）
+
+アプリケーションを変更したら、**同じ PR 内で**関連ドキュメントも必ず更新すること。
+
+| 変更内容 | 更新対象ドキュメント |
+|---|---|
+| API エンドポイント追加・変更 | `AGENTS.md` のAPIエンドポイント表 |
+| データモデル変更（フィールド追加等） | `docs/data-flow.md`, 該当する `docs/*.md` |
+| 新機能の実装完了 | `STATUS.md` の実装済みセクション |
+| Connector Interface / Adapter 追加 | `AGENTS.md` のディレクトリ構成, `docs/connector-design.md` |
+| 環境変数追加 | `AGENTS.md` の Container Apps 環境変数セクション |
+| Cosmos DB コンテナ / SQL テーブル追加 | `AGENTS.md` のスキーマセクション |
+| フロントエンド画面追加・変更 | `STATUS.md` のフロントエンドセクション |
+
 ## コーディング規約
 
 ### 全般
 - Python 3.12+、型ヒント必須（`from __future__ import annotations`）
-- フォーマッタ: Ruff（`ruff format` + `ruff check`）
+- フォーマッタ: Ruff（`ruff format` + `ruff check`、`pyproject.toml` の `line-length = 120` に準拠）
 - テスト: pytest + pytest-asyncio
 - 非同期: async/await を基本とする
 

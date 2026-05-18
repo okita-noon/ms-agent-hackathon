@@ -14,7 +14,7 @@
 - Agent（Plugin）からDB/APIを直接呼ばない。必ず `TenantContext.get_connector("I...名")` 経由
 - 新しいPluginを追加したら `src/agents/orchestrator.py` の `_build_kernel()` に登録する
 - 新しいAdapterを追加したら `src/connectors/adapters/registry.py` に登録する
-- REST APIを追加したら `AGENTS.md` のAPIエンドポイント表を更新する
+- **アプリケーション変更時は同じ PR 内でドキュメントも必ず更新する**（`AGENTS.md` のドキュメント更新ルール表を参照）
 
 ### デプロイ
 - `main` ブランチへ push すると GitHub Actions で自動デプロイされる
