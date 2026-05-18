@@ -44,6 +44,7 @@ nav:
   - 図解フロー: visual-flows.md
   - アーキテクチャ概要: architecture-overview.md
   - マルチエージェント設計: multi-agent-design.md
+  - ダッシュボードAgent設計: dashboard-agent-design.md
   - Connector層・マルチテナント: connector-design.md
   - データフロー: data-flow.md
   - LINE会話履歴参照設計: line-conversation-memory.md
