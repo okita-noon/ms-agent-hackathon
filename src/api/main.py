@@ -182,6 +182,26 @@ async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     return order.model_dump(mode="json")
 
 
+@app.get("/api/orders/{order_id}/messages")
+async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_id)):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    order_repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await order_repo.find_by_id(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail=f"受注ID「{order_id}」が見つかりません。")
+
+    if not order.session_id:
+        return {"messages": [], "session_id": None}
+
+    history_repo = tenant_ctx.get_connector("IMessageHistoryRepository")
+    messages = await history_repo.list_by_session_id(tenant_id, order.session_id)
+    filtered = [m for m in messages if m.role in ("user", "assistant")]
+    return {
+        "messages": [m.model_dump(mode="json") for m in filtered],
+        "session_id": order.session_id,
+    }
+
+
 @app.get("/api/products")
 async def list_products(tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)

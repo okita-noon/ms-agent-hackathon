@@ -47,6 +47,7 @@ export interface Order {
   status: string;
   preparation_date?: string;
   remarks?: string;
+  session_id?: string;
 }
 
 export interface Customer {
@@ -93,6 +94,22 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   return data.inventory || [];
+}
+
+export interface Message {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  channel: string;
+  created_at: string;
+}
+
+export async function fetchOrderMessages(
+  orderId: string
+): Promise<{ messages: Message[]; session_id: string | null }> {
+  const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/messages`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
 }
 
 export async function updateCustomer(
