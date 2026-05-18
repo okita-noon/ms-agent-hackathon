@@ -75,6 +75,9 @@
 |---|---|---|
 | GET | `/` | ダッシュボードへリダイレクト |
 | GET | `/api/health` | ヘルスチェック |
+| POST | `/api/auth/login` | ID/パスワード認証（JWT発行） |
+| POST | `/api/auth/microsoft` | Microsoft SSO認証（JWT発行） |
+| GET | `/api/auth/me` | 認証ユーザー情報取得 |
 | POST | `/api/line-webhook` | LINE Webhook受信（署名検証付き） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
@@ -175,10 +178,17 @@ src/
 │   ├── inventory_plugin.py       # 在庫確認・代替品提案・在庫引当
 │   ├── exception_plugin.py       # 数量異常検知・単位異常検知
 │   └── communication_plugin.py   # LINE reply/push メッセージ送信
+├── auth/                         # 認証モジュール
+│   ├── endpoints.py              # /api/auth/* エンドポイント（login, microsoft, me）
+│   ├── dependencies.py           # FastAPI 依存注入（get_tenant_id）
+│   ├── service.py                # ユーザー検証・JWT発行
+│   ├── microsoft.py              # Microsoft SSO トークン検証
+│   └── models.py                 # AuthUser, LoginRequest 等
 ├── connectors/
-│   ├── interfaces/               # Protocol定義（6インターフェース）
+│   ├── interfaces/               # Protocol定義（7インターフェース）
 │   │   ├── order_repository.py   # IOrderRepository
 │   │   ├── session_repository.py # ISessionRepository
+│   │   ├── message_history_repository.py # IMessageHistoryRepository
 │   │   ├── order_intelligence_store.py  # IOrderIntelligenceStore
 │   │   ├── product_master.py     # IProductMaster
 │   │   ├── customer_repository.py # ICustomerRepository
@@ -186,6 +196,7 @@ src/
 │   ├── adapters/                 # 実装
 │   │   ├── cosmos_order_repository.py     # Cosmos DB → orders
 │   │   ├── cosmos_session_repository.py   # Cosmos DB → sessions（TTL付き）
+│   │   ├── cosmos_message_history_repository.py # Cosmos DB → message-history
 │   │   ├── cosmos_intelligence_store.py   # Cosmos DB → patterns + profiles
 │   │   ├── sql_product_master.py          # Azure SQL → products（LIKE検索）
 │   │   ├── sql_customer_repository.py     # Azure SQL → customers
@@ -195,14 +206,17 @@ src/
 │   └── context.py                # TenantContext（テナント単位の依存注入コンテナ）
 ├── services/
 │   ├── line_handler.py           # LINE Webhook処理（署名検証・セッション管理）
+│   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation）
+│   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
-│   └── tenant_resolver.py        # テナント解決（LINE→テナント紐付け）
+│   └── tenant_resolver.py        # テナント解決（LINE/電話→テナント紐付け）
 ├── models/                       # Pydantic データモデル
 │   ├── order.py                  # Order, OrderItem, OrderStatus, OrderSource, etc.
 │   ├── customer.py               # Customer, CustomerDeliveryPreference
 │   ├── product.py                # Product, UnitType
 │   ├── picking.py                # PickingList, PickingItem
 │   ├── intelligence.py           # OrderPattern, CustomerOrderProfile, ProductStats
+│   ├── message_history.py        # MessageHistory（会話メッセージ履歴）
 │   ├── session.py                # OrderSession
 │   └── tenant.py                 # TenantConfig, ConnectorConfig
 frontend/                         # React/Vite ダッシュボード
@@ -241,6 +255,7 @@ requirements.txt                  # fastapi, semantic-kernel, azure-cosmos, aioo
 | `inventory` | 17 | 在庫（quantity - reserved_qty = 有効在庫） |
 | `delivery_routes` | 12 | 配送ルート定義 |
 | `connector_registry` | 0 | Connector設定（将来用） |
+| `users` | - | ダッシュボードユーザー認証（`infra/sql/002-add-users.sql`） |
 
 ## Cosmos DB コンテナ
 
@@ -250,4 +265,5 @@ requirements.txt                  # fastapi, semantic-kernel, azure-cosmos, aioo
 | `orders` | `order-sessions` | `/id` | 会話セッション（TTL: 7200秒） |
 | `orders` | `picking-lists` | `/id` | ピッキングリスト |
 | `intelligence` | `order-patterns` | `/customer_id` | 発注パターン学習 |
+| `orders` | `message-history` | `/id` | 会話メッセージ履歴（LINE/電話） |
 | `intelligence` | `customer-profiles` | `/customer_id` | 顧客発注プロファイル |
