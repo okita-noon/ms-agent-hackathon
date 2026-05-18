@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchCustomers, updateCustomer, type Customer } from "../lib/api";
 import { getDemoCustomers } from "../lib/demo";
 import CustomerEditModal from "../components/CustomerEditModal";
+import { SkeletonTableRows } from "../components/Skeleton";
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Customer | null>(null);
 
   const load = useCallback(async () => {
@@ -51,7 +52,25 @@ export default function Customers() {
           <span className="text-xs text-gray-300 tabular-nums">{customers.length}件</span>
         </div>
 
-        {customers.length === 0 ? (
+        {loading && customers.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  <th className="px-5 py-3">ID</th>
+                  <th className="px-5 py-3">顧客名</th>
+                  <th className="px-5 py-3">略称</th>
+                  <th className="px-5 py-3">LINE連携</th>
+                  <th className="px-5 py-3">電話</th>
+                  <th className="px-5 py-3">メール</th>
+                  <th className="px-5 py-3">状態</th>
+                  <th className="px-5 py-3">操作</th>
+                </tr>
+              </thead>
+              <SkeletonTableRows cols={8} rows={4} />
+            </table>
+          </div>
+        ) : customers.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">

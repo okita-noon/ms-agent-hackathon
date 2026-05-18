@@ -43,6 +43,7 @@ export interface Order {
   items: OrderItem[];
   delivery_carrier?: string;
   delivery_route?: string;
+  delivery_time_slot?: string;
   yamato_tracking_number?: string;
   status: string;
   preparation_date?: string;

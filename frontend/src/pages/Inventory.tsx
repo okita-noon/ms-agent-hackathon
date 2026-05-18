@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchInventory, type InventoryItem } from "../lib/api";
 import TempBadge from "../components/TempBadge";
+import { SkeletonStatCards, SkeletonTableRows } from "../components/Skeleton";
 
 const DEMO_INVENTORY: InventoryItem[] = [
   { product_id: "P-001", product_name: "りんご", category: null, temperature_zone: "冷蔵", quantity: 50, unit: "箱", is_variable_weight: false, price_per_unit: null },
@@ -22,7 +23,7 @@ function stockLevel(qty: number): { label: string; cls: string } {
 
 export default function Inventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("product_id");
@@ -95,24 +96,28 @@ export default function Inventory() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 stagger-in">
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">全品目</p>
-          <p className="text-2xl font-bold text-gray-900 tabular-nums mt-0.5">{totalProducts}</p>
+      {loading && items.length === 0 ? (
+        <SkeletonStatCards count={4} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 stagger-in">
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">全品目</p>
+            <p className="text-2xl font-bold text-gray-900 tabular-nums mt-0.5">{totalProducts}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">欠品</p>
+            <p className={`text-2xl font-bold tabular-nums mt-0.5 ${outOfStock > 0 ? "text-red-600" : "text-gray-900"}`}>{outOfStock}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">在庫少</p>
+            <p className={`text-2xl font-bold tabular-nums mt-0.5 ${lowStock > 0 ? "text-amber-600" : "text-gray-900"}`}>{lowStock}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">適正以上</p>
+            <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-0.5">{totalProducts - outOfStock - lowStock}</p>
+          </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">欠品</p>
-          <p className={`text-2xl font-bold tabular-nums mt-0.5 ${outOfStock > 0 ? "text-red-600" : "text-gray-900"}`}>{outOfStock}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">在庫少</p>
-          <p className={`text-2xl font-bold tabular-nums mt-0.5 ${lowStock > 0 ? "text-amber-600" : "text-gray-900"}`}>{lowStock}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">適正以上</p>
-          <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-0.5">{totalProducts - outOfStock - lowStock}</p>
-        </div>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -152,7 +157,24 @@ export default function Inventory() {
           <span className="text-xs text-gray-300 tabular-nums">{filtered.length}件</span>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading && items.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  <th className="px-5 py-3">ID</th>
+                  <th className="px-5 py-3">商品名</th>
+                  <th className="px-5 py-3">温度帯</th>
+                  <th className="px-5 py-3 text-right">有効在庫</th>
+                  <th className="px-5 py-3">単位</th>
+                  <th className="px-5 py-3">状態</th>
+                  <th className="px-5 py-3">在庫レベル</th>
+                </tr>
+              </thead>
+              <SkeletonTableRows cols={7} rows={5} />
+            </table>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
