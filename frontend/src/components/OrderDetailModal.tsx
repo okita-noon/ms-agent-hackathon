@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Order, Message } from "../lib/api";
+import type { Message, Order } from "../lib/api";
 import { fetchOrderMessages } from "../lib/api";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
@@ -56,8 +56,6 @@ function MessageThread({ orderId }: { orderId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(false);
     fetchOrderMessages(orderId)
       .then((data) => {
         if (!cancelled) setMessages(data.messages);
@@ -68,7 +66,9 @@ function MessageThread({ orderId }: { orderId: string }) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [orderId]);
 
   if (loading) {
@@ -196,9 +196,8 @@ export default function OrderDetailModal({ order, onClose }: Props) {
             </div>
           </div>
 
-          {/* 注文会話履歴 */}
           {order.source !== "手入力" && orderId && (
-            <MessageThread orderId={orderId} />
+            <MessageThread key={orderId} orderId={orderId} />
           )}
 
           {order.remarks && (

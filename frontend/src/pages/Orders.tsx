@@ -4,10 +4,11 @@ import { Doughnut } from "react-chartjs-2";
 import { fetchOrders, type Order } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
+import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
-import { SkeletonStatCards, SkeletonCharts, SkeletonTableRows } from "../components/Skeleton";
+import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -161,22 +162,11 @@ export default function Orders() {
           <span className="text-xs text-gray-300 tabular-nums">受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
         </div>
         {loading && orders.length === 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">受注日</th>
-                  <th className="px-5 py-3">顧客名</th>
-                  <th className="px-5 py-3">チャネル</th>
-                  <th className="px-5 py-3">商品</th>
-                  <th className="px-5 py-3">ステータス</th>
-                  <th className="px-5 py-3">配送</th>
-                  <th className="px-5 py-3">備考</th>
-                </tr>
-              </thead>
-              <SkeletonTableRows cols={7} rows={5} />
-            </table>
-          </div>
+          <LoadingState
+            compact
+            title="受注を集計しています"
+            message="今日の注文とステータスを読み込んでいます"
+          />
         ) : orders.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">

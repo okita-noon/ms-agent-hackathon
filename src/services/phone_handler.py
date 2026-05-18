@@ -388,7 +388,7 @@ class PhoneCallHandler:
             order_repo = tenant_ctx.get_connector("IOrderRepository")
             customer_repo = tenant_ctx.get_connector("ICustomerRepository")
 
-            order = await order_repo.find_by_id(order_id)
+            order = await order_repo.find_by_id(tenant_ctx.tenant_id, order_id)
             if not order:
                 return
 

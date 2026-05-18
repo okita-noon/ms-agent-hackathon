@@ -98,11 +98,16 @@ python tests/simulate_phone_call.py --messages "トマト150kg"
 
 特定のイベントだけテストしたい場合に使う。
 
+> `/api/phone-webhook` は **`EVENTGRID_WEBHOOK_KEY`** での認証が必須（fail-closed）。
+> ヘッダ `X-EventGrid-Webhook-Key` か、クエリ `?code=...` のどちらかで渡す。
+> 未設定の場合は 401 が返るため、ローカル `.env` にも同じ値を設定すること。
+
 ```bash
 BASE=http://localhost:8080
+KEY=$EVENTGRID_WEBHOOK_KEY   # .env と同じ値
 
 # IncomingCall
-curl -s -X POST "$BASE/api/phone-webhook" \
+curl -s -X POST "$BASE/api/phone-webhook?code=$KEY" \
   -H "Content-Type: application/json" \
   -d '[{
     "type": "Microsoft.Communication.IncomingCall",
@@ -115,7 +120,7 @@ curl -s -X POST "$BASE/api/phone-webhook" \
   }]'
 
 # RecognizeCompleted（音声認識結果）
-curl -s -X POST "$BASE/api/phone-webhook" \
+curl -s -X POST "$BASE/api/phone-webhook?code=$KEY" \
   -H "Content-Type: application/json" \
   -d '[{
     "type": "Microsoft.Communication.RecognizeCompleted",
@@ -125,8 +130,8 @@ curl -s -X POST "$BASE/api/phone-webhook" \
     }
   }]'
 
-# EventGrid バリデーション（ACS設定時に必要）
-curl -s -X POST "$BASE/api/phone-webhook" \
+# EventGrid バリデーション（ACS設定時に必要）— こちらもキーが必要
+curl -s -X POST "$BASE/api/phone-webhook?code=$KEY" \
   -H "Content-Type: application/json" \
   -d '[{
     "type": "Microsoft.EventGrid.SubscriptionValidationEvent",
@@ -162,7 +167,8 @@ ACS_CALLBACK_BASE_URL=https://xxxx.ngrok-free.app
 Azure Portal で以下を設定:
 1. ACS リソース → Events → Event Subscription 作成
 2. Endpoint Type: Webhook
-3. Endpoint URL: `https://xxxx.ngrok-free.app/api/phone-webhook`
+3. Endpoint URL: `https://xxxx.ngrok-free.app/api/phone-webhook?code=<EVENTGRID_WEBHOOK_KEY>`
+   ※ `?code=` を**必ず**付ける。Container Apps の env と同じ値。
 4. Event Types: `Microsoft.Communication.IncomingCall`
 
 設定後、ACS 電話番号に電話をかけるとフルフローが動作する。
@@ -171,7 +177,13 @@ Azure Portal で以下を設定:
 
 Event Grid の Webhook URL を Container Apps のURLに設定:
 ```
-https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io/api/phone-webhook
+https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io/api/phone-webhook?code=<EVENTGRID_WEBHOOK_KEY>
+```
+
+`EVENTGRID_WEBHOOK_KEY` の値は Container Apps の env から確認:
+```bash
+az containerapp show --name ca-api-orderai-dev --resource-group rg-orderai-dev \
+  --query "properties.template.containers[0].env[?name=='EVENTGRID_WEBHOOK_KEY'].value" -o tsv
 ```
 
 ---

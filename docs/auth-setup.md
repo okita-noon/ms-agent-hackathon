@@ -51,21 +51,28 @@ az containerapp update \
   --name ca-api-orderai-dev \
   --resource-group rg-orderai-dev \
   --set-env-vars \
-    "JWT_SECRET_KEY=<ランダムな文字列(32文字以上)>" \
-    "SSO_DEFAULT_TENANT=T-001"
+    "JWT_SECRET_KEY=<python3 -c 'import secrets; print(secrets.token_urlsafe(48))' で生成>" \
+    "AZURE_AD_ALLOWED_TENANTS=<Entra テナントID>"
 ```
 
 ### JWT_SECRET_KEY の生成方法
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
-| `JWT_SECRET_KEY` | Yes | JWT署名用シークレット。本番では必ずランダム値を設定 |
+| `JWT_SECRET_KEY` | Yes | JWT署名用シークレット。未設定・既知のダミー値だと起動時に `RuntimeError` |
+| `JWT_ISSUER` | No | JWT `iss` クレーム（デフォルト `orderai-api`）。トークン検証時に厳密一致 |
+| `JWT_AUDIENCE` | No | JWT `aud` クレーム（デフォルト `orderai-dashboard`）。トークン検証時に厳密一致 |
 | `JWT_EXPIRE_HOURS` | No | トークン有効期限(デフォルト: 24時間) |
-| `SSO_DEFAULT_TENANT` | No | SSO新規ユーザーのデフォルトテナント(デフォルト: T-001) |
+| `AZURE_AD_ALLOWED_TENANTS` | SSO使用時 Yes | Microsoft Entra `tid` のカンマ区切り allowlist。未設定なら全 SSO 拒否（fail-closed） |
+| `AZURE_AD_ALLOWED_DOMAINS` | No | email/UPN ドメインの追加 allowlist（小文字、カンマ区切り） |
+| `REGISTRATION_ENABLED` | No | `true` でセルフ登録解放（デフォルト無効＝`/api/auth/register` は 404） |
+| `REGISTRATION_INVITE_TOKEN` | 登録有効時 Yes | `X-Invite-Token` ヘッダで照合する招待トークン |
+
+> **セキュリティ上の重要事項**: `JWT_SECRET_KEY` のデフォルト値は撤去されました。設定漏れがあると起動時に明示的なエラーが出ます。
 
 ---
 
@@ -115,10 +122,13 @@ az containerapp update \
   --resource-group rg-orderai-dev \
   --set-env-vars \
     "ENTRA_CLIENT_ID=<アプリケーション(クライアント)ID>" \
-    "ENTRA_TENANT_ID=<ディレクトリ(テナント)ID>" \
+    "AZURE_AD_ALLOWED_TENANTS=<ディレクトリ(テナント)ID>" \
     "FRONTEND_ORIGINS=https://storderaidev.z11.web.core.windows.net" \
     "FRONTEND_URL=https://storderaidev.z11.web.core.windows.net/dashboard/"
 ```
+
+> `AZURE_AD_ALLOWED_TENANTS` は SSO 受け入れテナントの allowlist。複数組織を許可するならカンマ区切り。
+> **未設定だと SSO ログインが全部拒否される（fail-closed）**ので注意。
 
 **フロントエンド（GitHub Repository Variables / ビルド時）:**
 
@@ -160,11 +170,22 @@ VALUES (
 );
 ```
 
-### 方法3: API で登録
+### 方法3: API で登録（招待制）
+
+セルフ登録はデフォルトで**無効化**（`/api/auth/register` は 404）。
+有効化する場合は以下の env を設定し、招待トークンをユーザーに共有してから叩いてもらう:
+
+```bash
+az containerapp update --name ca-api-orderai-dev --resource-group rg-orderai-dev \
+  --set-env-vars \
+    "REGISTRATION_ENABLED=true" \
+    "REGISTRATION_INVITE_TOKEN=<ランダムな招待トークン>"
+```
 
 ```bash
 curl -X POST https://<BASE_URL>/api/auth/register \
   -H "Content-Type: application/json" \
+  -H "X-Invite-Token: <REGISTRATION_INVITE_TOKEN と同じ値>" \
   -d '{
     "email": "newuser@example.com",
     "password": "パスワード",
@@ -175,13 +196,13 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 
 ### Microsoft SSO ユーザー
 
-Microsoft アカウントでの初回ログイン時に自動登録される。
-デフォルトで `SSO_DEFAULT_TENANT`（T-001）に紐付く。
+**自動登録は無効**。SSO で初めてサインインするユーザーは、事前に `users` テーブルに
+レコードを挿入（方法1 or 方法2）しておく必要がある。`auth_provider='microsoft'` と
+`entra_oid=<対象ユーザーの Entra OID>` を指定する。未登録のままサインインすると
+403 が返る。
 
-テナントを変更するには SQL で:
-```sql
-UPDATE users SET tenant_id = 'T-002' WHERE email = 'user@example.com';
-```
+> セキュリティ上の理由で、過去にあった「初回サインインで `SSO_DEFAULT_TENANT` (T-001) に
+> 自動所属」挙動は撤去された。テナントは事前にレコードで明示すること。
 
 ---
 
@@ -207,7 +228,8 @@ UPDATE users SET tenant_id = 'T-002' WHERE email = 'user@example.com';
 ### トークン
 
 - JWT (HS256), 有効期限 24 時間
-- ペイロード: `sub` (user_id), `tenant_id`, `email`, `display_name`, `exp`
+- ペイロード: `iss`, `aud`, `iat`, `exp`, `sub` (user_id), `tenant_id`, `email`, `display_name`
+- 検証時に `iss` (`JWT_ISSUER`) と `aud` (`JWT_AUDIENCE`) も照合される
 - 全ビジネス API は JWT から `tenant_id` を取得（query parameter 不要）
 
 ---
@@ -217,11 +239,12 @@ UPDATE users SET tenant_id = 'T-002' WHERE email = 'user@example.com';
 | メソッド | パス | 認証 | 説明 |
 |---|---|---|---|
 | POST | `/api/auth/login` | 不要 | ID/PW ログイン |
-| POST | `/api/auth/register` | 不要 | ユーザー登録 |
-| POST | `/api/auth/microsoft` | 不要 | Microsoft SSO |
+| POST | `/api/auth/register` | 招待トークン | `REGISTRATION_ENABLED=true` かつ `X-Invite-Token` ヘッダ必須。デフォルト 404 |
+| POST | `/api/auth/microsoft` | 不要 | Microsoft SSO（事前登録ユーザーのみ） |
 | GET | `/api/auth/me` | 必要 | 現在のユーザー情報 |
-| GET | `/api/orders` | 必要 | 受注一覧 |
+| GET | `/api/orders` | 必要 | 受注一覧。tenant_id は JWT から取得 |
+| GET | `/api/orders/{id}` | 必要 | 受注詳細。tenant_id ミスマッチは 404（IDOR ガード） |
 | GET | `/api/customers` | 必要 | 顧客一覧 |
 | ... | その他ビジネスAPI | 必要 | JWT から tenant_id 取得 |
-| POST | `/api/line-webhook` | 不要 | LINE 署名検証 |
-| POST | `/api/phone-webhook` | 不要 | ACS EventGrid |
+| POST | `/api/line-webhook` | LINE 署名 | `x-line-signature` ヘッダ必須（無いと 401）、HMAC 検証失敗で 403 |
+| POST | `/api/phone-webhook` | EventGrid 共有鍵 | `?code=<EVENTGRID_WEBHOOK_KEY>` または `X-EventGrid-Webhook-Key` ヘッダ必須 |

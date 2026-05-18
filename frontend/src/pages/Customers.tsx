@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchCustomers, updateCustomer, type Customer } from "../lib/api";
 import { getDemoCustomers } from "../lib/demo";
 import CustomerEditModal from "../components/CustomerEditModal";
-import { SkeletonTableRows } from "../components/Skeleton";
+import LoadingState from "../components/LoadingState";
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -53,23 +53,16 @@ export default function Customers() {
         </div>
 
         {loading && customers.length === 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">ID</th>
-                  <th className="px-5 py-3">顧客名</th>
-                  <th className="px-5 py-3">略称</th>
-                  <th className="px-5 py-3">LINE連携</th>
-                  <th className="px-5 py-3">電話</th>
-                  <th className="px-5 py-3">メール</th>
-                  <th className="px-5 py-3">状態</th>
-                  <th className="px-5 py-3">操作</th>
-                </tr>
-              </thead>
-              <SkeletonTableRows cols={8} rows={4} />
-            </table>
-          </div>
+          <LoadingState
+            compact
+            title="顧客マスタを確認しています"
+            message="LINE連携と連絡先情報を読み込んでいます"
+            icon={
+              <svg className="w-8 h-8 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            }
+          />
         ) : customers.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">

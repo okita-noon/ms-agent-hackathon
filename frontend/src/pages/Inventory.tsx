@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchInventory, type InventoryItem } from "../lib/api";
+import LoadingState from "../components/LoadingState";
 import TempBadge from "../components/TempBadge";
-import { SkeletonStatCards, SkeletonTableRows } from "../components/Skeleton";
+import { SkeletonStatCards } from "../components/Skeleton";
 
 const DEMO_INVENTORY: InventoryItem[] = [
   { product_id: "P-001", product_name: "りんご", category: null, temperature_zone: "冷蔵", quantity: 50, unit: "箱", is_variable_weight: false, price_per_unit: null },
@@ -158,22 +159,16 @@ export default function Inventory() {
         </div>
 
         {loading && items.length === 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">ID</th>
-                  <th className="px-5 py-3">商品名</th>
-                  <th className="px-5 py-3">温度帯</th>
-                  <th className="px-5 py-3 text-right">有効在庫</th>
-                  <th className="px-5 py-3">単位</th>
-                  <th className="px-5 py-3">状態</th>
-                  <th className="px-5 py-3">在庫レベル</th>
-                </tr>
-              </thead>
-              <SkeletonTableRows cols={7} rows={5} />
-            </table>
-          </div>
+          <LoadingState
+            compact
+            title="在庫を棚卸し中です"
+            message="品目、温度帯、在庫レベルを読み込んでいます"
+            icon={
+              <svg className="w-8 h-8 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            }
+          />
         ) : filtered.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">

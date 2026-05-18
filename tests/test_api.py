@@ -75,3 +75,57 @@ class TestLineWebhook:
                 headers={"x-line-signature": "bad-sig"},
             )
             assert resp.status_code == 403
+
+    def test_rejects_missing_signature_header(self, client):
+        """The signature header is mandatory; missing it must yield 401."""
+        resp = client.post("/api/line-webhook", json={"events": []})
+        assert resp.status_code == 401
+
+
+class TestPhoneWebhook:
+    def test_rejects_when_key_not_configured(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": ""}):
+            resp = client.post("/api/phone-webhook", json=[])
+            assert resp.status_code == 401
+
+    def test_rejects_wrong_key(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}):
+            resp = client.post(
+                "/api/phone-webhook",
+                json=[],
+                headers={"X-EventGrid-Webhook-Key": "wrong"},
+            )
+            assert resp.status_code == 401
+
+    def test_accepts_correct_key_header(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}):
+            resp = client.post(
+                "/api/phone-webhook",
+                json=[],
+                headers={"X-EventGrid-Webhook-Key": "expected"},
+            )
+            assert resp.status_code == 200
+
+    def test_accepts_correct_key_query_param(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}):
+            resp = client.post("/api/phone-webhook?code=expected", json=[])
+            assert resp.status_code == 200
+
+    def test_subscription_validation_requires_key(self, client):
+        """Even the EventGrid subscription validation handshake must auth."""
+        validation_event = [
+            {
+                "type": "Microsoft.EventGrid.SubscriptionValidationEvent",
+                "data": {"validationCode": "abc"},
+            }
+        ]
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}):
+            resp = client.post("/api/phone-webhook", json=validation_event)
+            assert resp.status_code == 401
+            resp = client.post(
+                "/api/phone-webhook",
+                json=validation_event,
+                headers={"X-EventGrid-Webhook-Key": "expected"},
+            )
+            assert resp.status_code == 200
+            assert resp.json() == {"validationResponse": "abc"}
