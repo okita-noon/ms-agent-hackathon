@@ -285,7 +285,7 @@ class LineWebhookHandler:
             order_repo = self._ctx.get_connector("IOrderRepository")
             customer_repo = self._ctx.get_connector("ICustomerRepository")
 
-            order = await order_repo.find_by_id(order_id)
+            order = await order_repo.find_by_id(self._ctx.tenant_id, order_id)
             if not order:
                 logger.warning("Learning skipped: order %s not found", order_id)
                 return

@@ -217,7 +217,7 @@ async def list_orders(
 async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
-    order = await repo.find_by_id(order_id)
+    order = await repo.find_by_id(tenant_id, order_id)
     if not order:
         raise HTTPException(
             status_code=404,
