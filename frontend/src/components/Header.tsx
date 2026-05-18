@@ -37,31 +37,31 @@ export default function Header() {
   }, [menuOpen]);
 
   return (
-    <header className="bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 text-white sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.3)]">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <img src={`${import.meta.env.BASE_URL}logo.png`} alt="foogent" className="h-8" />
-            <span className="hidden sm:block text-[11px] text-brand-300 tracking-widest uppercase font-medium">
+            <span className="hidden sm:block text-[11px] text-brand-700 tracking-widest uppercase font-medium">
               AI Order Management
             </span>
           </div>
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-2">
               <span className="pulse-dot w-2 h-2 bg-green-400 rounded-full inline-block" />
-              <span className="text-xs text-green-300 font-medium">稼働中</span>
+              <span className="text-xs text-green-600 font-medium">稼働中</span>
             </div>
-            <div className="text-xs text-brand-300 tabular-nums">{time}</div>
+            <div className="text-xs text-gray-500 tabular-nums">{time}</div>
 
             {/* Profile dropdown */}
             {user && (
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setMenuOpen((v) => !v)}
-                  className="flex items-center gap-2 rounded-full hover:ring-2 hover:ring-brand-400/40 transition-all"
+                  className="flex items-center gap-2 rounded-full hover:ring-2 hover:ring-gray-200 transition-all"
                   aria-label="ユーザーメニュー"
                 >
-                  <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white ring-2 ring-brand-400/30">
+                  <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white">
                     {user.display_name?.charAt(0)?.toUpperCase() || "U"}
                   </div>
                 </button>
