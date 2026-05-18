@@ -35,12 +35,5 @@
 
 ### フロントエンド UI 変更時のルール（必須）
 UI を変更したら **毎回** 以下を行うこと:
-1. `frontend/e2e/` に Playwright スクリーンショットテストを追加・更新する
-2. `npx playwright test --update-snapshots` でスクリーンショットを生成
-3. `npx playwright test` でテストが通ることを確認
-4. 撮影したスクリーンショット画像をユーザーに提示してレビューしてもらう
-5. スクリーンショット画像（`e2e/__screenshots__/`）もコミットに含める
-
-- Playwright 設定: `frontend/playwright.config.ts`
-- テストファイル: `frontend/e2e/*.spec.ts`
-- 認証が必要な画面は `/api/auth/me` を `page.route()` でモックしてテストする
+1. ローカルで dev server を起動してスクリーンショットを撮影する
+2. 撮影したスクリーンショット画像をユーザーに提示してレビューしてもらう
