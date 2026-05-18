@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.agents.orchestrator import (
+    FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS,
     OrderOrchestrator,
     _build_draft_from_intake,
+    _enforce_response_policy,
     _format_memory_context,
     _inventory_requires_operator_review,
     _is_affirmative_reply,
@@ -120,6 +122,40 @@ class TestInventoryReview:
 
     def test_alternatives_require_review(self):
         assert _inventory_requires_operator_review({"alternatives": [{"product_id": "P-ALT"}]})
+
+
+class TestResponsePolicy:
+    def test_allows_confirmation_phrase_for_accepted_order(self):
+        response = "ご注文承りました。りんご1個で確定しました。"
+
+        assert _enforce_response_policy(response, needs_confirmation=False, inventory_needs_review=False) == response
+
+    def test_replaces_confirmation_phrase_when_user_confirmation_needed(self):
+        response = _enforce_response_policy(
+            "ご注文承りました。りんご150kgで確定しました。",
+            needs_confirmation=True,
+            inventory_needs_review=False,
+        )
+
+        normalized = response.replace(" ", "")
+        assert "確認が必要" in response
+        assert all(pattern not in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS)
+
+    def test_replaces_confirmation_phrase_when_inventory_requires_review(self):
+        response = _enforce_response_policy(
+            "在庫不足ですが、ご注文承りました。",
+            needs_confirmation=True,
+            inventory_needs_review=True,
+        )
+
+        normalized = response.replace(" ", "")
+        assert "担当者が確認" in response
+        assert all(pattern not in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS)
+
+    def test_keeps_safe_review_response(self):
+        response = "在庫状況を確認中です。担当者が確認して折り返します。"
+
+        assert _enforce_response_policy(response, needs_confirmation=True, inventory_needs_review=True) == response
 
 
 class TestMemoryContext:
@@ -370,6 +406,50 @@ class TestProcessOrderMessageSendsOnce:
             assert saved_orders[0].status == OrderStatus.NEEDS_REVIEW
             assert saved_orders[0].remarks == "在庫不足です"
             assert mock_send.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_inventory_shortage_sanitizes_unsafe_agent_reply(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-REVIEW")
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            if call_count == 3:
+                return '```json\n{"all_reserved": false, "message": "在庫引当できません"}\n```'
+            return "ご注文承りました。りんご10箱で確定しました。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+        ):
+            result = await orch.process_order_message(
+                message="りんご10箱",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+            normalized = result["response"].replace(" ", "")
+            assert result["review_order_id"] == "ORD-REVIEW"
+            assert all(pattern not in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS)
+            assert "担当者が確認" in result["response"]
 
 
 class TestEndToEndMessageFlow:

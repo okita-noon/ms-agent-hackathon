@@ -151,7 +151,11 @@ class OrderOrchestrator:
         }
 
         if pending_order_draft and _is_affirmative_reply(message):
-            saved_order = await self.create_order_from_draft(pending_order_draft, source=source, session_id=session_id)
+            saved_order = await self.create_order_from_draft(
+                pending_order_draft,
+                source=source,
+                session_id=session_id,
+            )
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -271,6 +275,7 @@ class OrderOrchestrator:
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
+                        session_id=session_id,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=_build_inventory_review_remarks(inventory_result),
                     )
@@ -357,7 +362,11 @@ class OrderOrchestrator:
 
         final_prompt = channel_instruction + "\n\n".join(context_parts)
         response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
-        return response_text
+        return _enforce_response_policy(
+            response_text,
+            needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
+            inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+        )
 
     async def _send_line_message(
         self,
@@ -535,6 +544,38 @@ def _build_processing_note(needs_confirmation: bool, inventory_needs_review: boo
             "顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。"
         )
     return None
+
+
+FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS = (
+    "受注承りました",
+    "ご注文承りました",
+    "注文承りました",
+    "承りました",
+    "受注しました",
+    "注文を受け付けました",
+    "受注を受け付けました",
+    "確定しました",
+    "受注確定",
+    "注文確定",
+)
+
+
+def _enforce_response_policy(
+    response_text: str,
+    *,
+    needs_confirmation: bool,
+    inventory_needs_review: bool,
+) -> str:
+    if not (needs_confirmation or inventory_needs_review):
+        return response_text
+
+    normalized = re.sub(r"\s+", "", response_text)
+    if not any(pattern in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS):
+        return response_text
+
+    if inventory_needs_review:
+        return "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
+    return "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
 
 
 def _parse_order_items(message: str) -> list[dict]:
