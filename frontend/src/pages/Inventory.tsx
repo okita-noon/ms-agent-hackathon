@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchInventory, type InventoryItem } from "../lib/api";
+import LoadingState from "../components/LoadingState";
 import TempBadge from "../components/TempBadge";
 
 const DEMO_INVENTORY: InventoryItem[] = [
@@ -152,7 +153,18 @@ export default function Inventory() {
           <span className="text-xs text-gray-300 tabular-nums">{filtered.length}件</span>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading && items.length === 0 ? (
+          <LoadingState
+            compact
+            title="在庫を棚卸し中です"
+            message="品目、温度帯、在庫レベルを読み込んでいます"
+            icon={
+              <svg className="w-8 h-8 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            }
+          />
+        ) : filtered.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
