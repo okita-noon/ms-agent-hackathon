@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchInventory, type InventoryItem } from "../lib/api";
 import LoadingState from "../components/LoadingState";
 import TempBadge from "../components/TempBadge";
+import { SkeletonStatCards } from "../components/Skeleton";
 
 const DEMO_INVENTORY: InventoryItem[] = [
   { product_id: "P-001", product_name: "りんご", category: null, temperature_zone: "冷蔵", quantity: 50, unit: "箱", is_variable_weight: false, price_per_unit: null },
@@ -23,7 +24,7 @@ function stockLevel(qty: number): { label: string; cls: string } {
 
 export default function Inventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("product_id");
@@ -96,24 +97,28 @@ export default function Inventory() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 stagger-in">
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">全品目</p>
-          <p className="text-2xl font-bold text-gray-900 tabular-nums mt-0.5">{totalProducts}</p>
+      {loading && items.length === 0 ? (
+        <SkeletonStatCards count={4} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 stagger-in">
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">全品目</p>
+            <p className="text-2xl font-bold text-gray-900 tabular-nums mt-0.5">{totalProducts}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">欠品</p>
+            <p className={`text-2xl font-bold tabular-nums mt-0.5 ${outOfStock > 0 ? "text-red-600" : "text-gray-900"}`}>{outOfStock}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">在庫少</p>
+            <p className={`text-2xl font-bold tabular-nums mt-0.5 ${lowStock > 0 ? "text-amber-600" : "text-gray-900"}`}>{lowStock}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] text-gray-400 font-medium">適正以上</p>
+            <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-0.5">{totalProducts - outOfStock - lowStock}</p>
+          </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">欠品</p>
-          <p className={`text-2xl font-bold tabular-nums mt-0.5 ${outOfStock > 0 ? "text-red-600" : "text-gray-900"}`}>{outOfStock}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">在庫少</p>
-          <p className={`text-2xl font-bold tabular-nums mt-0.5 ${lowStock > 0 ? "text-amber-600" : "text-gray-900"}`}>{lowStock}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-          <p className="text-[11px] text-gray-400 font-medium">適正以上</p>
-          <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-0.5">{totalProducts - outOfStock - lowStock}</p>
-        </div>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">

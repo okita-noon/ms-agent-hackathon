@@ -6,7 +6,7 @@ import LoadingState from "../components/LoadingState";
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Customer | null>(null);
 
   const load = useCallback(async () => {
