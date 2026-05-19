@@ -51,6 +51,22 @@ export interface Order {
   session_id?: string;
 }
 
+export interface OrderFilters {
+  status?: string;
+  source?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface OrdersResponse {
+  orders: Order[];
+  date: string;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface Customer {
   id: string;
   tenant_id: string;
@@ -63,13 +79,28 @@ export interface Customer {
   active: boolean;
 }
 
-export async function fetchOrders(date: string): Promise<Order[]> {
-  const resp = await authFetch(
-    `${API_BASE}/api/orders?delivery_date=${date}`
-  );
+export async function fetchOrders(
+  date: string,
+  filters: OrderFilters = {}
+): Promise<OrdersResponse> {
+  const params = new URLSearchParams({ delivery_date: date });
+  if (filters.status) params.set("status", filters.status);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+
+  const resp = await authFetch(`${API_BASE}/api/orders?${params.toString()}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
-  return data.orders || [];
+  const orders = data.orders || [];
+  return {
+    orders,
+    date: data.date || date,
+    total: data.total ?? orders.length,
+    limit: data.limit ?? filters.limit ?? orders.length,
+    offset: data.offset ?? filters.offset ?? 0,
+  };
 }
 
 export async function fetchCustomers(): Promise<Customer[]> {

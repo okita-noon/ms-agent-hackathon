@@ -13,6 +13,7 @@ from fastapi import (
     FastAPI,
     Header,
     HTTPException,
+    Query,
     Request,
     Response,
 )
@@ -237,6 +238,11 @@ async def phone_demo_message(
 async def list_orders(
     tenant_id: str = Depends(get_tenant_id),
     delivery_date: str | None = None,
+    status: str | None = None,
+    source: str | None = None,
+    q: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
@@ -246,10 +252,26 @@ async def list_orders(
     else:
         target = date.today()
 
-    orders = await repo.list_by_date(tenant_id, target)
+    orders, total = await repo.list_orders(
+        tenant_id,
+        target,
+        status=status,
+        source=source,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
     return {
         "orders": [o.model_dump(mode="json") for o in orders],
         "date": target.isoformat(),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "status": status,
+            "source": source,
+            "q": q,
+        },
     }
 
 
