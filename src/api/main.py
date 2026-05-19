@@ -5,6 +5,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
+from typing import Any
 
 from fastapi import (
     BackgroundTasks,
@@ -18,19 +19,19 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT
 from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
-from src.services.line_handler import LineWebhookHandler
-from src.services.phone_handler import PhoneCallHandler
 from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DEFAULT_FRONTEND_URL = "https://storderaidev.z11.web.core.windows.net/dashboard/"
+DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+LineWebhookHandler: Any | None = None
+PhoneCallHandler: Any | None = None
 
 
 @asynccontextmanager
@@ -41,16 +42,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="foogent API", lifespan=lifespan)
-
-frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
-if frontend_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=frontend_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 frontend_origins = [origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
 if frontend_origins:
@@ -84,7 +75,7 @@ async def health():
     return {"status": "ok", "service": "foogent-api"}
 
 
-async def _process_line_events(handler: LineWebhookHandler, body_json: dict) -> None:
+async def _process_line_events(handler: Any, body_json: dict) -> None:
     """Process LINE events in the background after returning 200 to LINE."""
     try:
         results = await handler.handle_webhook(body_json)
@@ -109,6 +100,12 @@ async def line_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     tenant_ctx = resolve_tenant_for_line(body_json.get("destination"))
+    global LineWebhookHandler  # noqa: PLW0603
+    if LineWebhookHandler is None:
+        from src.services.line_handler import LineWebhookHandler as _LineWebhookHandler
+
+        LineWebhookHandler = _LineWebhookHandler
+
     handler = LineWebhookHandler(
         tenant_ctx=tenant_ctx,
         azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
@@ -128,12 +125,17 @@ async def line_webhook(
 
 # ── Phone (ACS Call Automation) webhook ───────────────────────────────────────
 
-_phone_handler: PhoneCallHandler | None = None
+_phone_handler: Any | None = None
 
 
-def _get_phone_handler() -> PhoneCallHandler:
-    global _phone_handler  # noqa: PLW0603
+def _get_phone_handler() -> Any:
+    global PhoneCallHandler, _phone_handler  # noqa: PLW0603
     if _phone_handler is None:
+        if PhoneCallHandler is None:
+            from src.services.phone_handler import PhoneCallHandler as _PhoneCallHandler
+
+            PhoneCallHandler = _PhoneCallHandler
+
         _phone_handler = PhoneCallHandler(
             callback_base_url=os.environ.get("ACS_CALLBACK_BASE_URL", ""),
             azure_openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
