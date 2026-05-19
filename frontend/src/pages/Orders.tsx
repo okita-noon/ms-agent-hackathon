@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
+import { ALL_STATUS_FILTER, countAcceptedOrders, filterOrdersByStatus } from "../lib/orderFilters";
 import LoadingState from "../components/LoadingState";
 import StatusBadge, { StatusIcon } from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
@@ -41,6 +42,7 @@ export default function Orders() {
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentPanelVisible, setAgentPanelVisible] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>(ALL_STATUS_FILTER);
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
   const agentPanelOpen = triageAvailable && agentPanelVisible;
@@ -95,15 +97,20 @@ export default function Orders() {
     void Promise.resolve().then(loadAgentExceptions);
   }, [loadAgentExceptions]);
 
+  const filteredOrders = filterOrdersByStatus(orders, statusFilter);
   const statusCounts: Record<string, number> = {};
   const sourceCounts: Record<string, number> = {};
   for (const s of Object.keys(STATUS_COLORS)) statusCounts[s] = 0;
   orders.forEach((o) => {
     statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+  });
+  filteredOrders.forEach((o) => {
     sourceCounts[o.source] = (sourceCounts[o.source] || 0) + 1;
   });
-  const acceptedOrderCount = orders.filter((o) => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
+  const acceptedOrderCount = countAcceptedOrders(orders, ACCEPTED_ORDER_STATUSES);
   const reviewOrderCount = orders.length - acceptedOrderCount;
+  const filteredAcceptedOrderCount = countAcceptedOrders(filteredOrders, ACCEPTED_ORDER_STATUSES);
+  const filteredReviewOrderCount = filteredOrders.length - filteredAcceptedOrderCount;
 
   const chartOpts = {
     responsive: true,
@@ -117,7 +124,13 @@ export default function Orders() {
     },
   };
 
-  const statusLabels = Object.keys(statusCounts).filter((s) => statusCounts[s] > 0);
+  const filteredStatusCounts = Object.fromEntries(
+    Object.keys(statusCounts).map((status) => [
+      status,
+      statusFilter === ALL_STATUS_FILTER || statusFilter === status ? statusCounts[status] : 0,
+    ])
+  ) as Record<string, number>;
+  const statusLabels = Object.keys(filteredStatusCounts).filter((s) => filteredStatusCounts[s] > 0);
   const sourceLabels = Object.keys(sourceCounts);
 
   return (
@@ -192,17 +205,34 @@ export default function Orders() {
           }`}
         >
           <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">受注合計</p>
-            <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
+            <button
+              type="button"
+              onClick={() => setStatusFilter(ALL_STATUS_FILTER)}
+              aria-pressed={statusFilter === ALL_STATUS_FILTER}
+              className={`w-full rounded-lg text-left transition-colors ${
+                statusFilter === ALL_STATUS_FILTER ? "ring-2 ring-brand-400 ring-offset-4" : ""
+              }`}
+            >
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">受注合計</p>
+              <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
+            </button>
           </div>
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
-              <p className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider mb-2 whitespace-nowrap ${color.text}`}>
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              aria-pressed={statusFilter === status}
+              className={`card-shine bg-white rounded-xl border p-4 text-left transition-colors ${color.border} ${
+                statusFilter === status ? "ring-2 ring-brand-400 ring-offset-1" : "hover:border-gray-300"
+              }`}
+            >
+              <span className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider mb-2 whitespace-nowrap ${color.text}`}>
                 <StatusIcon status={status} />
                 <span className="text-gray-400">{status}</span>
-              </p>
+              </span>
               <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -220,7 +250,7 @@ export default function Orders() {
                   data={{
                     labels: statusLabels,
                     datasets: [{
-                      data: statusLabels.map((s) => statusCounts[s]),
+                      data: statusLabels.map((s) => filteredStatusCounts[s]),
                       backgroundColor: statusLabels.map((s) => STATUS_COLORS[s]?.chart ?? "#d1d5db"),
                       borderWidth: 0,
                       spacing: 2,
@@ -261,7 +291,20 @@ export default function Orders() {
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
-          <span className="text-xs text-gray-300 tabular-nums">受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
+          <div className="flex items-center gap-3">
+            {statusFilter !== ALL_STATUS_FILTER && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter(ALL_STATUS_FILTER)}
+                className="text-xs font-medium text-brand-600 hover:text-brand-700"
+              >
+                フィルター解除
+              </button>
+            )}
+            <span className="text-xs text-gray-300 tabular-nums">
+              {statusFilter === ALL_STATUS_FILTER ? "全ステータス" : statusFilter} / 受注 {filteredAcceptedOrderCount}件 / 要対応 {filteredReviewOrderCount}件
+            </span>
+          </div>
         </div>
         {loading && orders.length === 0 ? (
           <LoadingState
@@ -269,14 +312,16 @@ export default function Orders() {
             title="受注を集計しています"
             message="今日の注文とステータスを読み込んでいます"
           />
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <p className="text-sm text-gray-400">この日の受注データはありません</p>
+            <p className="text-sm text-gray-400">
+              {orders.length === 0 ? "この日の受注データはありません" : "このステータスの受注データはありません"}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -293,7 +338,7 @@ export default function Orders() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {orders.map((o) => {
+                {filteredOrders.map((o) => {
                   const items = o.items || [];
                   const summary = items.map((i) => `${i.product_name} ${i.quantity ?? ""}${i.unit ?? ""}`).join(", ");
                   const zones = [...new Set(items.map((i) => i.temperature_zone))];
