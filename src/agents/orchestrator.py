@@ -174,6 +174,16 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
+        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source)
+        if inventory_inquiry_result:
+            response_text = inventory_inquiry_result["response"]
+            result.update(inventory_inquiry_result)
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent()
         if source == OrderSource.PHONE:
@@ -425,6 +435,44 @@ class OrderOrchestrator:
         order.id = order_id
         return order
 
+    async def _try_handle_inventory_inquiry(self, message: str, source: OrderSource) -> dict | None:
+        if not _is_inventory_inquiry(message):
+            return None
+
+        product_master = self._ctx.get_connector("IProductMaster")
+        inventory = self._ctx.get_connector("IInventoryService")
+        inquiry_items = await _extract_inventory_inquiry_items(self._ctx.tenant_id, product_master, message)
+
+        if not inquiry_items:
+            response = _format_inventory_inquiry_response([], source=source, needs_product_clarification=True)
+            return {
+                "intent": "inventory_inquiry",
+                "response": response,
+                "inventory": [],
+            }
+
+        checked_items = []
+        for item in inquiry_items:
+            product = item["product"]
+            required_qty = item.get("required_qty") or 0
+            status = await inventory.check(self._ctx.tenant_id, product.id, required_qty)
+            checked_items.append(
+                {
+                    "product_id": product.id,
+                    "product_name": product.display_name or product.name,
+                    "required_qty": required_qty,
+                    "available_qty": status.available_qty,
+                    "unit": status.unit,
+                    "is_sufficient": status.is_sufficient,
+                }
+            )
+
+        return {
+            "intent": "inventory_inquiry",
+            "response": _format_inventory_inquiry_response(checked_items, source=source),
+            "inventory": checked_items,
+        }
+
     async def _try_create_order_from_message(
         self,
         message: str,
@@ -544,6 +592,137 @@ def _build_processing_note(needs_confirmation: bool, inventory_needs_review: boo
             "顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。"
         )
     return None
+
+
+INVENTORY_INQUIRY_KEYWORDS = (
+    "在庫",
+    "ざいこ",
+    "残って",
+    "残り",
+    "ありますか",
+    "ある?",
+    "ある？",
+    "ございますか",
+)
+
+ORDER_REQUEST_KEYWORDS = (
+    "お願い",
+    "ください",
+    "下さい",
+    "注文",
+    "発注",
+    "追加",
+    "納品",
+    "届け",
+)
+
+
+def _is_inventory_inquiry(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message.lower())
+    has_inventory_keyword = any(keyword in normalized for keyword in INVENTORY_INQUIRY_KEYWORDS)
+    has_order_keyword = any(keyword in normalized for keyword in ORDER_REQUEST_KEYWORDS)
+    return has_inventory_keyword and not has_order_keyword
+
+
+async def _extract_inventory_inquiry_items(tenant_id: str, product_master: object, message: str) -> list[dict]:
+    products = await product_master.list_all(tenant_id)
+    parsed_items = _parse_order_items(message)
+    extracted: list[dict] = []
+    seen_product_ids: set[str] = set()
+
+    for parsed in parsed_items:
+        product = await product_master.fuzzy_match(tenant_id, parsed["raw_name"])
+        if not product or product.id in seen_product_ids:
+            continue
+        seen_product_ids.add(product.id)
+        extracted.append(
+            {
+                "product": product,
+                "required_qty": parsed["quantity"],
+            }
+        )
+
+    normalized_message = re.sub(r"\s+", "", message.lower())
+    for product in products:
+        names = [product.name, product.display_name or ""]
+        names.extend(product.aliases or [])
+        if product.id in seen_product_ids:
+            continue
+        if any(name and re.sub(r"\s+", "", name.lower()) in normalized_message for name in names):
+            seen_product_ids.add(product.id)
+            extracted.append({"product": product, "required_qty": 0})
+
+    if extracted:
+        return extracted
+
+    cleaned = _clean_inventory_inquiry_product_text(message)
+    if cleaned:
+        product = await product_master.fuzzy_match(tenant_id, cleaned)
+        if product:
+            return [{"product": product, "required_qty": 0}]
+
+    return []
+
+
+def _clean_inventory_inquiry_product_text(message: str) -> str:
+    cleaned = message
+    for word in (
+        "在庫",
+        "ざいこ",
+        "ありますか",
+        "ある?",
+        "ある？",
+        "ある",
+        "ございますか",
+        "確認",
+        "教えて",
+        "ください",
+        "下さい",
+        "の",
+        "は",
+        "を",
+        "って",
+        "?",
+        "？",
+        "。",
+        "、",
+    ):
+        cleaned = cleaned.replace(word, "")
+    return cleaned.strip(" 　\t\r\n")
+
+
+def _format_inventory_inquiry_response(
+    items: list[dict],
+    *,
+    source: OrderSource,
+    needs_product_clarification: bool = False,
+) -> str:
+    if needs_product_clarification:
+        if source == OrderSource.PHONE:
+            return "確認したい商品名をもう一度お願いいたします。"
+        return "確認したい商品名をもう一度教えてください。"
+
+    lines = []
+    for item in items:
+        product_name = item["product_name"]
+        available_qty = item["available_qty"]
+        unit = item["unit"]
+        required_qty = item["required_qty"]
+        if required_qty:
+            if item["is_sufficient"]:
+                lines.append(f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。")
+            else:
+                shortage = max(required_qty - available_qty, 0)
+                lines.append(
+                    f"{product_name}は在庫が{available_qty:g}{unit}です。"
+                    f"{required_qty:g}{unit}には{shortage:g}{unit}不足しています。"
+                )
+        else:
+            lines.append(f"{product_name}は現在{available_qty:g}{unit}在庫があります。")
+
+    if source == OrderSource.PHONE:
+        return " ".join(lines)
+    return "\n".join(lines)
 
 
 FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS = (

@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-18（Dashboard Agent 機能追加）
+> 最終更新: 2026-05-19（電話デモ受注API追加）
 
 ## 実装済み
 
@@ -22,6 +22,8 @@
 - [x] Agent 定義 + Orchestrator（gpt-5.4-mini 連携）
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
 - [x] 電話 Webhook ハンドラ（ACS Call Automation・音声認識・TTS応答）
+- [x] 電話番号取得前のデモ受注API（`POST /api/phone-demo/message`、音声認識済みテキストをPhoneチャネル処理へ注入）
+- [x] 電話/LINEの在庫問い合わせ応答（受注・引当を行わず `IInventoryService.check` で回答）
 - [x] チャネル×ユーザー単位の非同期ロック（並行処理の安全性）
 - [x] Learning Service（パターン記録・プロファイル更新）
 - [x] テナント解決サービス（LINE/電話→テナント紐付け）

@@ -134,6 +134,50 @@ class TestPhoneWebhook:
             assert resp.json() == {"validationResponse": "abc"}
 
 
+class TestPhoneDemoMessage:
+    def test_rejects_when_key_not_configured(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": ""}):
+            resp = client.post("/api/phone-demo/message", json={"message": "りんご10箱"})
+            assert resp.status_code == 401
+
+    def test_processes_demo_message_with_correct_key(self, client):
+        mock_handler = MagicMock()
+        mock_handler.process_demo_message = AsyncMock(
+            return_value={
+                "demo_mode": True,
+                "call_connection_id": "demo-12345678",
+                "status": "processed",
+                "order_id": "ORD-DEMO",
+                "response": "りんご10箱、承りました。",
+            }
+        )
+        mock_handler.disconnect_demo_call = AsyncMock(return_value={"status": "disconnected"})
+
+        with (
+            patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}),
+            patch("src.api.main._get_phone_handler", return_value=mock_handler),
+        ):
+            resp = client.post(
+                "/api/phone-demo/message?code=expected",
+                json={
+                    "message": "りんご10箱",
+                    "caller_number": "+81312345678",
+                    "called_number": "+81501234567",
+                    "disconnect": True,
+                },
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["order_id"] == "ORD-DEMO"
+        mock_handler.process_demo_message.assert_awaited_once_with(
+            message="りんご10箱",
+            caller_number="+81312345678",
+            called_number="+81501234567",
+            call_connection_id=None,
+        )
+        mock_handler.disconnect_demo_call.assert_awaited_once_with("demo-12345678")
+
+
 class TestOrderMessages:
     @pytest.mark.asyncio
     async def test_get_order_messages_uses_tenant_scoped_order_lookup(self):

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import uuid
 
@@ -75,9 +76,10 @@ def make_call_disconnected_event(call_connection_id: str) -> dict:
     }
 
 
-def send_event(client: httpx.Client, base_url: str, event: dict) -> dict | None:
+def send_event(client: httpx.Client, base_url: str, event: dict, webhook_key: str) -> dict | None:
     url = f"{base_url}/api/phone-webhook"
-    resp = client.post(url, json=[event], timeout=30)
+    headers = {"X-EventGrid-Webhook-Key": webhook_key} if webhook_key else {}
+    resp = client.post(url, json=[event], headers=headers, timeout=30)
     print(f"  → {resp.status_code}")
     if resp.status_code != 200:
         print(f"  ERROR: {resp.text}")
@@ -94,6 +96,7 @@ def run_simulation(
     called: str,
     messages: list[str],
     delay: float,
+    webhook_key: str,
 ) -> None:
     server_call_id = f"server-call-{uuid.uuid4().hex[:8]}"
     call_connection_id = f"conn-sim-{uuid.uuid4().hex[:8]}"
@@ -114,6 +117,7 @@ def run_simulation(
             client,
             base_url,
             make_incoming_call_event(caller, called, server_call_id),
+            webhook_key,
         )
         if result:
             print(f"     Result: {json.dumps(result, ensure_ascii=False)}")
@@ -121,12 +125,12 @@ def run_simulation(
 
         # 2. CallConnected
         print("[2] CallConnected")
-        send_event(client, base_url, make_call_connected_event(call_connection_id))
+        send_event(client, base_url, make_call_connected_event(call_connection_id), webhook_key)
         time.sleep(delay)
 
         # 3. PlayCompleted (after greeting TTS)
         print("[3] PlayCompleted (greeting done)")
-        send_event(client, base_url, make_play_completed_event(call_connection_id))
+        send_event(client, base_url, make_play_completed_event(call_connection_id), webhook_key)
         time.sleep(delay)
 
         # 4. For each message: RecognizeCompleted → PlayCompleted
@@ -137,6 +141,7 @@ def run_simulation(
                 client,
                 base_url,
                 make_recognize_completed_event(call_connection_id, msg),
+                webhook_key,
             )
             if result:
                 print(f"     Result: {json.dumps(result, ensure_ascii=False)}")
@@ -147,6 +152,7 @@ def run_simulation(
                 client,
                 base_url,
                 make_play_completed_event(call_connection_id),
+                webhook_key,
             )
             if result:
                 print(f"     Result: {json.dumps(result, ensure_ascii=False)}")
@@ -158,6 +164,7 @@ def run_simulation(
             client,
             base_url,
             make_call_disconnected_event(call_connection_id),
+            webhook_key,
         )
         if result:
             print(f"     Result: {json.dumps(result, ensure_ascii=False)}")
@@ -188,6 +195,11 @@ def main() -> None:
         default=1.0,
         help="Delay in seconds between events (default: 1.0)",
     )
+    parser.add_argument(
+        "--webhook-key",
+        default=os.environ.get("EVENTGRID_WEBHOOK_KEY", ""),
+        help="EVENTGRID_WEBHOOK_KEY value (defaults to env var)",
+    )
     args = parser.parse_args()
 
     run_simulation(
@@ -196,6 +208,7 @@ def main() -> None:
         called=args.called,
         messages=args.messages,
         delay=args.delay,
+        webhook_key=args.webhook_key,
     )
 
 

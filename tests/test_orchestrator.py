@@ -13,8 +13,10 @@ from src.agents.orchestrator import (
     _format_memory_context,
     _inventory_requires_operator_review,
     _is_affirmative_reply,
+    _is_inventory_inquiry,
     _parse_order_items,
 )
+from src.connectors.interfaces.inventory_service import InventoryStatus
 from src.models.message_history import MessageHistory
 from src.models.order import OrderSource, OrderStatus
 
@@ -122,6 +124,50 @@ class TestInventoryReview:
 
     def test_alternatives_require_review(self):
         assert _inventory_requires_operator_review({"alternatives": [{"product_id": "P-ALT"}]})
+
+
+class TestInventoryInquiry:
+    def test_detects_inventory_inquiry(self):
+        assert _is_inventory_inquiry("りんごの在庫ありますか") is True
+        assert _is_inventory_inquiry("りんご10箱お願いします") is False
+        assert _is_inventory_inquiry("在庫あればりんご10箱ください") is False
+
+    @pytest.mark.asyncio
+    async def test_phone_inventory_inquiry_checks_without_order_or_reservation(self, mock_tenant_ctx, sample_product):
+        orch = _make_orchestrator(mock_tenant_ctx)
+
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.list_all.return_value = [sample_product]
+        product_master.fuzzy_match.return_value = sample_product
+
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id=sample_product.id,
+            product_name=sample_product.name,
+            available_qty=12,
+            unit="箱",
+            is_sufficient=True,
+        )
+
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+        ):
+            result = await orch.process_order_message(
+                message="りんご10箱の在庫ありますか",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+            )
+
+        assert result["intent"] == "inventory_inquiry"
+        assert "12箱" in result["response"]
+        assert "10箱" in result["response"]
+        inventory.check.assert_awaited_once_with("T-TEST", sample_product.id, 10.0)
+        inventory.reserve.assert_not_called()
+        order_repo.save.assert_not_called()
+        mock_invoke.assert_not_called()
 
 
 class TestResponsePolicy:

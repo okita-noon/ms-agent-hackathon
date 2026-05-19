@@ -182,6 +182,7 @@ class TestHandleRecognizeCompleted:
 
         assert result["status"] == "processed"
         assert result["order_id"] == "ORD-001"
+        assert result["response"] == "りんご10箱、承りました。"
         assert state.turn_count == 1
         assert state.order_confirmed is True
 
@@ -373,3 +374,42 @@ class TestOrchestratorCallback:
 
         assert captured_callback is not None
         mock_play.assert_called()
+
+
+class TestDemoPhoneMessage:
+    @pytest.mark.asyncio
+    async def test_processes_demo_message_without_audio_calls(self, mock_tenant_ctx):
+        handler = _make_handler()
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_order_message.return_value = {
+            "response": "りんご10箱、承りました。",
+            "order_id": "ORD-DEMO",
+        }
+
+        with (
+            patch(
+                "src.services.phone_handler.resolve_tenant_for_phone",
+                return_value=mock_tenant_ctx,
+            ),
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
+            patch.object(handler, "_get_acs_client") as mock_client,
+        ):
+            result = await handler.process_demo_message(
+                message="りんご10箱",
+                caller_number="+81312345678",
+                called_number="+81501234567",
+            )
+
+        assert result["demo_mode"] is True
+        assert result["order_id"] == "ORD-DEMO"
+        assert result["response"] == "りんご10箱、承りました。"
+        assert handler._calls[result["call_connection_id"]].audio_enabled is False
+        mock_client.assert_not_called()

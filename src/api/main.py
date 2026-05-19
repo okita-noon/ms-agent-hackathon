@@ -18,6 +18,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
@@ -128,6 +129,14 @@ async def line_webhook(
 _phone_handler: Any | None = None
 
 
+class PhoneDemoMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    caller_number: str = "+81312345678"
+    called_number: str = "+81501234567"
+    call_connection_id: str | None = None
+    disconnect: bool = False
+
+
 def _get_phone_handler() -> Any:
     global PhoneCallHandler, _phone_handler  # noqa: PLW0603
     if _phone_handler is None:
@@ -192,6 +201,33 @@ async def phone_webhook(
             logger.exception("Error handling phone event: %s", event_type)
 
     return Response(status_code=200)
+
+
+@app.post("/api/phone-demo/message")
+async def phone_demo_message(
+    payload: PhoneDemoMessageRequest,
+    request: Request,
+    x_eventgrid_webhook_key: str | None = Header(None, alias="X-EventGrid-Webhook-Key"),
+):
+    """Inject a recognized phone utterance without requiring an ACS phone number.
+
+    Secured with the same shared key as the ACS EventGrid webhook so demo calls
+    cannot be created anonymously on deployed environments.
+    """
+    if not _verify_eventgrid_key(request, x_eventgrid_webhook_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    handler = _get_phone_handler()
+    result = await handler.process_demo_message(
+        message=payload.message,
+        caller_number=payload.caller_number,
+        called_number=payload.called_number,
+        call_connection_id=payload.call_connection_id,
+    )
+    if payload.disconnect:
+        disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
+        result["disconnect"] = disconnect_result
+    return result
 
 
 # ── Protected business endpoints ──────────────────────────────────────────────

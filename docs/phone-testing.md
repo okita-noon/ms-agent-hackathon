@@ -34,7 +34,54 @@ pytest tests/test_phone_handler.py -v
 
 ---
 
-## 方法2: シミュレーションスクリプト（統合テスト）
+## 方法2: デモ用テキスト注入API（電話番号なし・推奨）
+
+ACS電話番号をまだ取得していない段階では、音声認識済みテキストを直接注入して電話受注フローを検証する。
+ACSの着信応答・TTS再生だけを省略し、電話チャネルのセッション管理、Orchestrator、受注保存、Learning Service は本番と同じ経路を通る。
+
+> `/api/phone-demo/message` は `/api/phone-webhook` と同じ **`EVENTGRID_WEBHOOK_KEY`** での認証が必須。
+
+```bash
+BASE=http://localhost:8080
+KEY=$EVENTGRID_WEBHOOK_KEY
+
+curl -s -X POST "$BASE/api/phone-demo/message?code=$KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "caller_number": "+81312345678",
+    "called_number": "+81501234567",
+    "message": "りんご10箱、バナナ20kgお願いします",
+    "disconnect": true
+  }'
+```
+
+レスポンス例:
+
+```json
+{
+  "call_connection_id": "demo-12345678",
+  "status": "processed",
+  "order_id": "ORD-...",
+  "response": "ご注文を承りました...",
+  "session_status": null,
+  "demo_mode": true
+}
+```
+
+複数ターンの会話を試す場合は、1回目のレスポンスに含まれる `call_connection_id` を次リクエストに渡す。
+
+```bash
+curl -s -X POST "$BASE/api/phone-demo/message?code=$KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "call_connection_id": "demo-12345678",
+    "caller_number": "+81312345678",
+    "called_number": "+81501234567",
+    "message": "それにトマト5kgも追加で"
+  }'
+```
+
+## 方法3: シミュレーションスクリプト（ACSイベント統合テスト）
 
 ローカルサーバーに模擬 CloudEvents を POST して、実際のAPIフローを検証する。
 ACS SDK の呼び出し（`answer_call`, `play_media` 等）はサーバー側でエラーになるが、
@@ -94,7 +141,7 @@ python tests/simulate_phone_call.py --messages "トマト150kg"
 
 ---
 
-## 方法3: curl による個別イベント送信
+## 方法4: curl による個別イベント送信
 
 特定のイベントだけテストしたい場合に使う。
 
@@ -141,7 +188,7 @@ curl -s -X POST "$BASE/api/phone-webhook?code=$KEY" \
 
 ---
 
-## 方法4: 実電話テスト（E2E）
+## 方法5: 実電話テスト（E2E）
 
 ACS 電話番号の取得後に実施。
 
