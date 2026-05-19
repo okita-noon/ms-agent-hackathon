@@ -20,6 +20,18 @@ import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+function formatDate(value?: string): string {
+  if (!value) return "-";
+  return value.slice(0, 10);
+}
+
+function formatTime(value?: string): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function Orders() {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -28,8 +40,10 @@ export default function Orders() {
   const [agentFeatures, setAgentFeatures] = useState<AgentFeatures | null>(null);
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
   const [agentLoading, setAgentLoading] = useState(false);
+  const [agentPanelVisible, setAgentPanelVisible] = useState(true);
 
-  const triageEnabled = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
+  const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
+  const agentPanelOpen = triageAvailable && agentPanelVisible;
   const executeEnabled = Boolean(agentFeatures?.resolution_execute);
 
   const load = useCallback(async () => {
@@ -62,7 +76,7 @@ export default function Orders() {
   }, []);
 
   const loadAgentExceptions = useCallback(async () => {
-    if (!triageEnabled) {
+    if (!agentPanelOpen) {
       setAgentExceptions([]);
       return;
     }
@@ -75,7 +89,7 @@ export default function Orders() {
     } finally {
       setAgentLoading(false);
     }
-  }, [triageEnabled, date]);
+  }, [agentPanelOpen, date]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
@@ -116,7 +130,33 @@ export default function Orders() {
             {orders.length > 0 ? `受注 ${acceptedOrderCount}件 / 要対応 ${reviewOrderCount}件` : "データを読み込み中..."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {triageAvailable && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={agentPanelVisible}
+              onClick={() => setAgentPanelVisible((visible) => !visible)}
+              className={`btn-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                agentPanelVisible
+                  ? "border-brand-200 bg-brand-50 text-brand-700"
+                  : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              <span
+                className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
+                  agentPanelVisible ? "bg-brand-600" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
+                    agentPanelVisible ? "translate-x-3" : "translate-x-0"
+                  }`}
+                />
+              </span>
+              Dashboard Agent
+            </button>
+          )}
           <label className="text-xs font-medium text-gray-500">配送日</label>
           <input
             type="date"
@@ -127,7 +167,7 @@ export default function Orders() {
           <button
             onClick={() => {
               load();
-              loadAgentExceptions();
+              if (agentPanelOpen) loadAgentExceptions();
             }}
             disabled={loading}
             className="btn-press bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 shadow-sm shadow-brand-600/20"
@@ -140,20 +180,24 @@ export default function Orders() {
         </div>
       </div>
 
-      <div className={triageEnabled ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start" : ""}>
+      <div className={agentPanelOpen ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start" : ""}>
         <div className="min-w-0">
       {/* Stats cards */}
       {loading && orders.length === 0 ? (
         <SkeletonStatCards count={8} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 stagger-in">
+        <div
+          className={`grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 stagger-in ${
+            agentPanelOpen ? "2xl:grid-cols-8" : "xl:grid-cols-8"
+          }`}
+        >
           <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">受注合計</p>
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">受注合計</p>
             <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
           </div>
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
             <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
-              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">{status}</p>
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">{status}</p>
               <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
             </div>
           ))}
@@ -236,7 +280,7 @@ export default function Orders() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">受注日</th>
+                  <th className="px-5 py-3">受注日 / 最終処理</th>
                   <th className="px-5 py-3">顧客名</th>
                   <th className="px-5 py-3">チャネル</th>
                   <th className="px-5 py-3">商品</th>
@@ -252,7 +296,12 @@ export default function Orders() {
                   const zones = [...new Set(items.map((i) => i.temperature_zone))];
                   return (
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 tabular-nums">{o.order_date || "-"}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
+                        <div className="text-gray-600">{formatDate(o.order_date)}</div>
+                        <div className="mt-0.5 text-[11px] font-medium text-gray-400">
+                          最終 {formatTime(o.updated_at)}
+                        </div>
+                      </td>
                       <td className="px-5 py-3.5 font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</td>
                       <td className="px-5 py-3.5">
                         <span className={`text-xs font-semibold ${o.source === "LINE" ? "text-green-600" : "text-brand-600"}`}>{o.source}</span>
@@ -282,7 +331,7 @@ export default function Orders() {
       </div>
 
         </div>
-        {triageEnabled && (
+        {agentPanelOpen && (
           <div className="xl:sticky xl:top-5">
             <DashboardAgentPanel
               exceptions={agentExceptions}

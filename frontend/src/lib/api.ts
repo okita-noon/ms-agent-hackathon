@@ -49,6 +49,7 @@ export interface Order {
   preparation_date?: string;
   remarks?: string;
   session_id?: string;
+  updated_at?: string;
 }
 
 export interface Customer {
