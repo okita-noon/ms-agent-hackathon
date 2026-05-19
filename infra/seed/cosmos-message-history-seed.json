@@ -1,0 +1,362 @@
+[
+  {
+    "id": "msg-003-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-003",
+    "channel": "line",
+    "channel_user_id": "U_customer_c003",
+    "role": "user",
+    "text": "みかん20個をお願いします。",
+    "created_at": "2025-07-15T10:00:00Z"
+  },
+  {
+    "id": "msg-003-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-003",
+    "channel": "line",
+    "channel_user_id": "U_customer_c003",
+    "role": "assistant",
+    "text": "みかん20個（冷凍）ですね。配送日はいつがよろしいでしょうか？",
+    "created_at": "2025-07-15T10:00:15Z"
+  },
+  {
+    "id": "msg-003-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-003",
+    "channel": "line",
+    "channel_user_id": "U_customer_c003",
+    "role": "user",
+    "text": "17日の16時でお願いします。中部便で。",
+    "created_at": "2025-07-15T10:00:45Z"
+  },
+  {
+    "id": "msg-003-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-003",
+    "channel": "line",
+    "channel_user_id": "U_customer_c003",
+    "role": "assistant",
+    "text": "承知しました。7/17 16:00の中部便（自社便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2025-07-15T10:01:00Z"
+  },
+  {
+    "id": "msg-006-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-006",
+    "channel": "line",
+    "channel_user_id": "U_customer_c006",
+    "role": "user",
+    "text": "いちご15パックお願いできますか？",
+    "created_at": "2025-07-15T14:00:00Z"
+  },
+  {
+    "id": "msg-006-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-006",
+    "channel": "line",
+    "channel_user_id": "U_customer_c006",
+    "role": "assistant",
+    "text": "いちご15パック（常温）ですね。配送のご希望はありますか？",
+    "created_at": "2025-07-15T14:00:12Z"
+  },
+  {
+    "id": "msg-006-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-006",
+    "channel": "line",
+    "channel_user_id": "U_customer_c006",
+    "role": "user",
+    "text": "東北便の15時でお願いします。",
+    "created_at": "2025-07-15T14:00:35Z"
+  },
+  {
+    "id": "msg-006-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-006",
+    "channel": "line",
+    "channel_user_id": "U_customer_c006",
+    "role": "assistant",
+    "text": "かしこまりました。東北便（自社便）15:00で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2025-07-15T14:00:50Z"
+  },
+  {
+    "id": "msg-007-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-007",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "りんご10箱とバナナ5kgをお願いします。",
+    "created_at": "2026-05-18T09:00:00Z"
+  },
+  {
+    "id": "msg-007-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-007",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "承知しました。りんご10箱（冷蔵）とバナナ5kg（常温）ですね。配送日はいつがよろしいでしょうか？",
+    "created_at": "2026-05-18T09:00:15Z"
+  },
+  {
+    "id": "msg-007-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-007",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "20日の午前中にお願いします。関東便で。",
+    "created_at": "2026-05-18T09:00:45Z"
+  },
+  {
+    "id": "msg-007-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-007",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "かしこまりました。5/20午前の関東便（自社便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T09:01:00Z"
+  },
+  {
+    "id": "msg-011-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-011",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "いちご20パックとキウイ10個を注文したいんですけど。",
+    "created_at": "2026-05-18T10:30:00Z"
+  },
+  {
+    "id": "msg-011-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-011",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "いちご20パック（常温）とキウイ10個（常温）ですね。配送日と時間帯をお知らせください。",
+    "created_at": "2026-05-18T10:30:20Z"
+  },
+  {
+    "id": "msg-011-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-011",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "20日の午前でお願いします。関東便で。",
+    "created_at": "2026-05-18T10:30:50Z"
+  },
+  {
+    "id": "msg-011-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-011",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "承知しました。5/20午前の関東便（自社便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T10:31:05Z"
+  },
+  {
+    "id": "msg-013-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-013",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "スイカ2個とレモン10個をお願いします。大玉でお願いしたいです。",
+    "created_at": "2026-05-18T11:00:00Z"
+  },
+  {
+    "id": "msg-013-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-013",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "スイカ2個（常温・大玉指定）とレモン10個（常温）ですね。配送日はいつがよろしいでしょうか？",
+    "created_at": "2026-05-18T11:00:18Z"
+  },
+  {
+    "id": "msg-013-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-013",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "21日の午前中に九州便でお願いします。",
+    "created_at": "2026-05-18T11:00:50Z"
+  },
+  {
+    "id": "msg-013-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-013",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "承知しました。大玉指定として備考に記録しております。5/21午前の九州便で手配いたします。",
+    "created_at": "2026-05-18T11:01:05Z"
+  },
+  {
+    "id": "msg-017-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-017",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "いちじく5箱をお願いします。",
+    "created_at": "2026-05-18T13:00:00Z"
+  },
+  {
+    "id": "msg-017-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-017",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "いちじく5箱（冷凍）ですね。配送のご希望はありますか？",
+    "created_at": "2026-05-18T13:00:12Z"
+  },
+  {
+    "id": "msg-017-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-017",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "明日の午前で。北海道便でお願いします。",
+    "created_at": "2026-05-18T13:00:35Z"
+  },
+  {
+    "id": "msg-017-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-017",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "かしこまりました。5/19午前の北海道便（冷凍ヤマト便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T13:00:50Z"
+  },
+  {
+    "id": "msg-018-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-018",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "アボカド12個とにんにく3kgをまとめて注文したいです。",
+    "created_at": "2026-05-18T14:00:00Z"
+  },
+  {
+    "id": "msg-018-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-018",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "アボカド12個（冷蔵）とにんにく3kg（常温）ですね。配送日はいつがよろしいでしょうか？",
+    "created_at": "2026-05-18T14:00:20Z"
+  },
+  {
+    "id": "msg-018-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-018",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "20日の午前中にお願いします。関東便で。",
+    "created_at": "2026-05-18T14:00:50Z"
+  },
+  {
+    "id": "msg-018-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-018",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "承知しました。まとめ注文として5/20午前の関東便（自社便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T14:01:05Z"
+  },
+  {
+    "id": "msg-022-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-022",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "もも10箱をお願いします。",
+    "created_at": "2026-05-18T15:00:00Z"
+  },
+  {
+    "id": "msg-022-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-022",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "もも10箱（冷蔵・不定貫）ですね。不定貫商品のため、実際の重量はピッキング時に確定いたします。配送のご希望はありますか？",
+    "created_at": "2026-05-18T15:00:15Z"
+  },
+  {
+    "id": "msg-022-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-022",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "user",
+    "text": "21日の16時頃で。北陸便でお願いします。",
+    "created_at": "2026-05-18T15:00:40Z"
+  },
+  {
+    "id": "msg-022-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-022",
+    "channel": "line",
+    "channel_user_id": "U_maruyama_001",
+    "role": "assistant",
+    "text": "かしこまりました。5/21 16:00の北陸便（冷蔵ヤマト便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T15:00:55Z"
+  },
+  {
+    "id": "msg-026-01",
+    "tenant_id": "T-001",
+    "session_id": "sess-026",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "にんにく5kgとアボカド6個をお願いします。",
+    "created_at": "2026-05-18T16:00:00Z"
+  },
+  {
+    "id": "msg-026-02",
+    "tenant_id": "T-001",
+    "session_id": "sess-026",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "にんにく5kg（常温）とアボカド6個（冷蔵）ですね。配送日はいつがよろしいでしょうか？",
+    "created_at": "2026-05-18T16:00:20Z"
+  },
+  {
+    "id": "msg-026-03",
+    "tenant_id": "T-001",
+    "session_id": "sess-026",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "user",
+    "text": "21日の14時で。関西便でお願いします。",
+    "created_at": "2026-05-18T16:00:45Z"
+  },
+  {
+    "id": "msg-026-04",
+    "tenant_id": "T-001",
+    "session_id": "sess-026",
+    "channel": "phone",
+    "channel_user_id": "phone_maruyama",
+    "role": "assistant",
+    "text": "承知しました。5/21 14:00の関西便（芦川便）で手配いたします。ご注文ありがとうございます。",
+    "created_at": "2026-05-18T16:01:00Z"
+  }
+]
