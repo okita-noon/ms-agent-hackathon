@@ -183,6 +183,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50/80 rounded-xl">
             <Field label="受注日" value={order.order_date || ""} />
+            <Field label="最終処理" value={order.updated_at ? formatTime(order.updated_at) : ""} />
             <Field label="手配日" value={order.preparation_date || ""} />
             <Field label="配送日" value={order.delivery_date || ""} />
             <Field label="配送時間帯" value={order.delivery_time_slot || "指定なし"} />
