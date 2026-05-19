@@ -83,7 +83,31 @@ function MessageThread({ orderId }: { orderId: string }) {
     );
   }
 
-  if (error || messages.length === 0) return null;
+  if (error) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">注文会話履歴</h5>
+        </div>
+        <div className="border border-gray-100 rounded-xl bg-gray-50/40 p-4 text-center text-sm text-gray-400">
+          会話履歴の読み込みに失敗しました
+        </div>
+      </div>
+    );
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">注文会話履歴</h5>
+        </div>
+        <div className="border border-dashed border-gray-200 rounded-xl bg-gray-50/20 p-4 text-center text-sm text-gray-400">
+          この注文の会話履歴はありません
+        </div>
+      </div>
+    );
+  }
 
   const channel = messages[0]?.channel || "";
 

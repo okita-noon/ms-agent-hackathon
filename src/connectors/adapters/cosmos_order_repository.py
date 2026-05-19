@@ -33,7 +33,7 @@ class CosmosOrderRepository:
 
     async def find_by_id(self, tenant_id: str, order_id: str) -> Order | None:
         try:
-            doc = await self._container.read_item(order_id, partition_key=order_id)
+            doc = await self._container.read_item(order_id, partition_key=tenant_id)
         except Exception:
             return None
         if doc.get("tenant_id") != tenant_id:
@@ -64,9 +64,9 @@ class CosmosOrderRepository:
         items = self._container.query_items(query, parameters=params)
         return [Order.model_validate(doc) async for doc in items]
 
-    async def update_status(self, order_id: str, status: OrderStatus) -> None:
+    async def update_status(self, tenant_id: str, order_id: str, status: OrderStatus) -> None:
         for attempt in range(3):
-            doc = await self._container.read_item(order_id, partition_key=order_id)
+            doc = await self._container.read_item(order_id, partition_key=tenant_id)
             etag = doc.get("_etag")
             doc["status"] = status.value
             doc["updated_at"] = datetime.utcnow().isoformat()

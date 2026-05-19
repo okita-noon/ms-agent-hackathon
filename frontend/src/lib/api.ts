@@ -108,9 +108,23 @@ export interface Message {
 export async function fetchOrderMessages(
   orderId: string
 ): Promise<{ messages: Message[]; session_id: string | null }> {
-  const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/messages`);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  try {
+    const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/messages`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (data.messages.length === 0) {
+      const { getDemoMessages } = await import("./demo");
+      const demoMsgs = getDemoMessages(orderId);
+      if (demoMsgs.length > 0) {
+        return { messages: demoMsgs, session_id: `demo-${orderId}` };
+      }
+    }
+    return data;
+  } catch {
+    const { getDemoMessages } = await import("./demo");
+    const demoMsgs = getDemoMessages(orderId);
+    return { messages: demoMsgs, session_id: demoMsgs.length > 0 ? `demo-${orderId}` : null };
+  }
 }
 
 export interface AgentFeatures {
