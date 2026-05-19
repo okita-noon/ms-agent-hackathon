@@ -241,10 +241,21 @@ export default function DashboardAgentPanel({
                       </div>
                     )}
 
+                    <button
+                      type="button"
+                      disabled
+                      title="Communication Agent への送信は未実装です"
+                      className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-400 cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                      送信（未実装）
+                    </button>
                     <p className="text-[10px] text-gray-400">
                       {executeEnabled
-                        ? "承認すると Communication Agent から送信されます"
-                        : "送信は無効化されています。担当者が手動で対応してください"}
+                        ? "送信機能は次期実装予定です。現状は文面ドラフトのみ生成します"
+                        : "担当者が文面をコピーして手動で送信してください"}
                     </p>
                   </div>
                 )}
