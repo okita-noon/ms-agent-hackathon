@@ -416,3 +416,56 @@ class LearningService:
         """同じ商品セットに解決されているか判定"""
         return sorted(i.product_id for i in a) == sorted(i.product_id for i in b)
 ```
+
+## ダッシュボード連携（Dashboard Agent）
+
+LINE / 電話で動く Agent 群はリアルタイム会話を捌くが、業務担当者が朝〜夕方に
+「今日この後の配送分で、人手が必要なものは？」と確認するための窓口がダッシュボード
+側にも必要。`src/services/dashboard_agent.py` の `DashboardAgentService` は
+**Exception Agent と Resolution Agent をダッシュボード文脈で再利用** するための
+薄いラッパー。
+
+### 役割分担
+
+| 区分 | 入口 | 主に呼ぶ Connector | 出力 |
+|---|---|---|---|
+| Exception Triage | `GET /api/agent/exceptions?delivery_date=...` | `IOrderRepository`, `IOrderIntelligenceStore`, `IInventoryService` | `ExceptionCase[]`（severity / type / evidence / metadata） |
+| Resolution プレビュー | `POST /api/agent/resolutions/preview` | `IInventoryService.find_alternatives`（在庫不足時のみ） | `ResolutionPreview`（recommended_actions / customer_message / confidence） |
+| Feature flag | `GET /api/agent/features` | — | env 由来の機能フラグ |
+
+LLM 推論は呼ばず、CustomerOrderProfile（Z-score）と在庫の客観値で決定論的に
+組み立てる。文面と推奨アクションは担当者承認後に Communication Agent へ委譲する
+前提（`DASHBOARD_RESOLUTION_EXECUTE_ENABLED=true` で自動送信を許可）。
+
+### Exception Case の分類
+
+| `type` | 検知ロジック | severity の基本値 |
+|---|---|---|
+| `needs_review` | `Order.status == 要対応` | high |
+| `awaiting_reply` | `Order.status == 返信待ち` | medium |
+| `quantity_anomaly` | `ProductStats.std_dev` を使った Z-score (>3) で逸脱を検知。プロファイル不足時は 100 単位以上をフォールバック判定 | Z≥6 で high、それ未満は medium |
+| `unit_anomaly` | `ProductStats.typical_unit` と `OrderItem.unit` の不一致 | medium |
+| `inventory_shortage` | `IInventoryService.check` が `is_sufficient=False` を返す商品 | high |
+
+### Resolution プレビューの構造
+
+`ResolutionPreview` は LINE/電話チャネルで送る前提の `customer_message`、
+担当者の作業を順序立てる `recommended_actions[]`、Agent の確からしさを示す
+`confidence`、`requires_approval` を持つ。在庫不足の場合は
+`IInventoryService.find_alternatives` を引き、`customer_message` に代替候補を
+列挙する。
+
+### Feature Flag
+
+| env | 既定 | 用途 |
+|---|---|---|
+| `DASHBOARD_AGENT_ENABLED` | `false` | 機能のマスタースイッチ（false の場合 UI も非表示） |
+| `DASHBOARD_EXCEPTION_TRIAGE_ENABLED` | `true` | `/exceptions` の有効化 |
+| `DASHBOARD_RESOLUTION_AGENT_ENABLED` | `true` | `/resolutions/preview` の有効化 |
+| `DASHBOARD_RESOLUTION_EXECUTE_ENABLED` | `false` | プレビュー承認時の自動送信を許可するか |
+| `DASHBOARD_AGENT_DEMO_MODE` | `false` | デモ用挙動切り替えフラグ |
+
+フロントの `frontend/src/components/DashboardAgentPanel.tsx` がサイドパネルとして
+受注一覧画面に同居し、`/api/agent/features` でフラグを確認 →
+`/api/agent/exceptions` で Exception を読み、各 Case ごとに
+`/api/agent/resolutions/preview` を呼び出すフローで動作する。

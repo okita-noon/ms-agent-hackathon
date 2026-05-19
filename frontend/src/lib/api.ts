@@ -113,6 +113,89 @@ export async function fetchOrderMessages(
   return resp.json();
 }
 
+export interface AgentFeatures {
+  dashboard_agent: boolean;
+  exception_triage: boolean;
+  resolution_agent: boolean;
+  resolution_execute: boolean;
+  demo_mode: boolean;
+}
+
+export type AgentExceptionType =
+  | "quantity_anomaly"
+  | "unit_anomaly"
+  | "inventory_shortage"
+  | "needs_review"
+  | "awaiting_reply";
+
+export type AgentExceptionSeverity = "high" | "medium" | "low";
+
+export interface AgentEvidence {
+  label: string;
+  value: string;
+}
+
+export interface AgentExceptionCase {
+  id: string;
+  order_id: string;
+  customer_id: string;
+  customer_name: string;
+  type: AgentExceptionType;
+  severity: AgentExceptionSeverity;
+  title: string;
+  summary: string;
+  suggested_action: string;
+  evidence: AgentEvidence[];
+  metadata: Record<string, unknown>;
+}
+
+export interface AgentResolutionPreview {
+  exception_id: string;
+  title: string;
+  summary: string;
+  confidence: number;
+  recommended_actions: string[];
+  customer_message: string;
+  requires_approval: boolean;
+}
+
+export interface AgentExceptionsResponse {
+  enabled: boolean;
+  delivery_date: string;
+  cases: AgentExceptionCase[];
+}
+
+export interface AgentResolutionResponse {
+  enabled: boolean;
+  execute_enabled: boolean;
+  preview: AgentResolutionPreview | null;
+}
+
+export async function fetchAgentFeatures(): Promise<AgentFeatures> {
+  const resp = await authFetch(`${API_BASE}/api/agent/features`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return (await resp.json()) as AgentFeatures;
+}
+
+export async function fetchAgentExceptions(date: string): Promise<AgentExceptionsResponse> {
+  const resp = await authFetch(
+    `${API_BASE}/api/agent/exceptions?delivery_date=${encodeURIComponent(date)}`
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return (await resp.json()) as AgentExceptionsResponse;
+}
+
+export async function previewAgentResolution(
+  exceptionCase: AgentExceptionCase
+): Promise<AgentResolutionResponse> {
+  const resp = await authFetch(`${API_BASE}/api/agent/resolutions/preview`, {
+    method: "POST",
+    body: JSON.stringify({ exception_case: exceptionCase }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return (await resp.json()) as AgentResolutionResponse;
+}
+
 export async function updateCustomer(
   customerId: string,
   fields: Partial<Customer>
