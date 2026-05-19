@@ -79,7 +79,8 @@
     "delivery_time_slot": "16:00",
     "yamato_tracking_number": "YM345678901234",
     "status": "未処理",
-    "remarks": "備考C"
+    "remarks": "備考C",
+    "session_id": "sess-003"
   },
   {
     "id": "UID_005",
@@ -136,7 +137,8 @@
     "delivery_time_slot": "15:00",
     "yamato_tracking_number": "YM678901234567",
     "status": "完了",
-    "remarks": "備考F"
+    "remarks": "備考F",
+    "session_id": "sess-006"
   },
   {
     "id": "UID_007",
@@ -170,7 +172,8 @@
     "delivery_carrier": "自社便",
     "delivery_time_slot": "午前",
     "status": "未処理",
-    "remarks": null
+    "remarks": null,
+    "session_id": "sess-007"
   },
   {
     "id": "UID_008",
@@ -287,7 +290,8 @@
     "delivery_carrier": "自社便",
     "delivery_time_slot": "午前",
     "status": "未処理",
-    "remarks": null
+    "remarks": null,
+    "session_id": "sess-011"
   },
   {
     "id": "UID_012",
@@ -347,7 +351,8 @@
     "delivery_carrier": "自社便",
     "delivery_time_slot": "午前",
     "status": "要対応",
-    "remarks": "大玉指定"
+    "remarks": "大玉指定",
+    "session_id": "sess-013"
   },
   {
     "id": "UID_014",
@@ -462,7 +467,8 @@
     "delivery_time_slot": "午前",
     "yamato_tracking_number": "YM202605180017",
     "status": "完了",
-    "remarks": null
+    "remarks": null,
+    "session_id": "sess-017"
   },
   {
     "id": "UID_018",
@@ -496,7 +502,8 @@
     "delivery_carrier": "自社便",
     "delivery_time_slot": "午前",
     "status": "未処理",
-    "remarks": "まとめ注文"
+    "remarks": "まとめ注文",
+    "session_id": "sess-018"
   },
   {
     "id": "UID_019",
@@ -621,7 +628,8 @@
     "delivery_time_slot": "16:00",
     "yamato_tracking_number": "YM202605180022",
     "status": "配送",
-    "remarks": null
+    "remarks": null,
+    "session_id": "sess-022"
   },
   {
     "id": "UID_023",
@@ -757,6 +765,7 @@
     "delivery_carrier": "芦川便",
     "delivery_time_slot": "14:00",
     "status": "製造",
-    "remarks": null
+    "remarks": null,
+    "session_id": "sess-026"
   }
 ]
