@@ -55,6 +55,62 @@ class CosmosOrderRepository:
         items = self._container.query_items(query, parameters=params)
         return [Order.model_validate(doc) async for doc in items]
 
+    async def list_orders(
+        self,
+        tenant_id: str,
+        target_date: date,
+        *,
+        status: str | None = None,
+        source: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Order], int]:
+        where = ["c.tenant_id = @tid", "c.delivery_date = @d"]
+        params = [
+            {"name": "@tid", "value": tenant_id},
+            {"name": "@d", "value": target_date.isoformat()},
+        ]
+
+        if status:
+            where.append("c.status = @status")
+            params.append({"name": "@status", "value": status})
+        if source:
+            where.append("c.source = @source")
+            params.append({"name": "@source", "value": source})
+
+        normalized_q = q.strip().lower() if q else ""
+        if normalized_q:
+            where.append(
+                "("
+                "CONTAINS(LOWER(c.customer_name), @q) "
+                "OR CONTAINS(LOWER(c.customer_id), @q) "
+                "OR EXISTS(SELECT VALUE i FROM i IN c.items WHERE CONTAINS(LOWER(i.product_name), @q))"
+                ")"
+            )
+            params.append({"name": "@q", "value": normalized_q})
+
+        where_clause = " AND ".join(where)
+        count_query = f"SELECT VALUE COUNT(1) FROM c WHERE {where_clause}"
+        count_items = self._container.query_items(count_query, parameters=params)
+        total = 0
+        async for count in count_items:
+            total = int(count)
+            break
+
+        page_params = [
+            *params,
+            {"name": "@offset", "value": offset},
+            {"name": "@limit", "value": limit},
+        ]
+        page_query = (
+            f"SELECT * FROM c WHERE {where_clause} "
+            "ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
+        )
+        items = self._container.query_items(page_query, parameters=page_params)
+        orders = [Order.model_validate(doc) async for doc in items]
+        return orders, total
+
     async def list_by_customer(self, customer_id: str, limit: int = 50) -> list[Order]:
         query = "SELECT TOP @limit * FROM c WHERE c.customer_id = @cid ORDER BY c.order_date DESC"
         params = [

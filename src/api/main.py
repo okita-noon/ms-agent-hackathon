@@ -13,11 +13,13 @@ from fastapi import (
     FastAPI,
     Header,
     HTTPException,
+    Query,
     Request,
     Response,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
@@ -128,6 +130,14 @@ async def line_webhook(
 _phone_handler: Any | None = None
 
 
+class PhoneDemoMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    caller_number: str = "+81312345678"
+    called_number: str = "+81501234567"
+    call_connection_id: str | None = None
+    disconnect: bool = False
+
+
 def _get_phone_handler() -> Any:
     global PhoneCallHandler, _phone_handler  # noqa: PLW0603
     if _phone_handler is None:
@@ -194,6 +204,33 @@ async def phone_webhook(
     return Response(status_code=200)
 
 
+@app.post("/api/phone-demo/message")
+async def phone_demo_message(
+    payload: PhoneDemoMessageRequest,
+    request: Request,
+    x_eventgrid_webhook_key: str | None = Header(None, alias="X-EventGrid-Webhook-Key"),
+):
+    """Inject a recognized phone utterance without requiring an ACS phone number.
+
+    Secured with the same shared key as the ACS EventGrid webhook so demo calls
+    cannot be created anonymously on deployed environments.
+    """
+    if not _verify_eventgrid_key(request, x_eventgrid_webhook_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    handler = _get_phone_handler()
+    result = await handler.process_demo_message(
+        message=payload.message,
+        caller_number=payload.caller_number,
+        called_number=payload.called_number,
+        call_connection_id=payload.call_connection_id,
+    )
+    if payload.disconnect:
+        disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
+        result["disconnect"] = disconnect_result
+    return result
+
+
 # ── Protected business endpoints ──────────────────────────────────────────────
 
 
@@ -201,6 +238,11 @@ async def phone_webhook(
 async def list_orders(
     tenant_id: str = Depends(get_tenant_id),
     delivery_date: str | None = None,
+    status: str | None = None,
+    source: str | None = None,
+    q: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
@@ -210,10 +252,26 @@ async def list_orders(
     else:
         target = date.today()
 
-    orders = await repo.list_by_date(tenant_id, target)
+    orders, total = await repo.list_orders(
+        tenant_id,
+        target,
+        status=status,
+        source=source,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
     return {
         "orders": [o.model_dump(mode="json") for o in orders],
         "date": target.isoformat(),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "status": status,
+            "source": source,
+            "q": q,
+        },
     }
 
 

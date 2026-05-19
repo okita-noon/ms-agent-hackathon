@@ -134,6 +134,97 @@ class TestPhoneWebhook:
             assert resp.json() == {"validationResponse": "abc"}
 
 
+class TestPhoneDemoMessage:
+    def test_rejects_when_key_not_configured(self, client):
+        with patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": ""}):
+            resp = client.post("/api/phone-demo/message", json={"message": "りんご10箱"})
+            assert resp.status_code == 401
+
+    def test_processes_demo_message_with_correct_key(self, client):
+        mock_handler = MagicMock()
+        mock_handler.process_demo_message = AsyncMock(
+            return_value={
+                "demo_mode": True,
+                "call_connection_id": "demo-12345678",
+                "status": "processed",
+                "order_id": "ORD-DEMO",
+                "response": "りんご10箱、承りました。",
+            }
+        )
+        mock_handler.disconnect_demo_call = AsyncMock(return_value={"status": "disconnected"})
+
+        with (
+            patch.dict("os.environ", {"EVENTGRID_WEBHOOK_KEY": "expected"}),
+            patch("src.api.main._get_phone_handler", return_value=mock_handler),
+        ):
+            resp = client.post(
+                "/api/phone-demo/message?code=expected",
+                json={
+                    "message": "りんご10箱",
+                    "caller_number": "+81312345678",
+                    "called_number": "+81501234567",
+                    "disconnect": True,
+                },
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["order_id"] == "ORD-DEMO"
+        mock_handler.process_demo_message.assert_awaited_once_with(
+            message="りんご10箱",
+            caller_number="+81312345678",
+            called_number="+81501234567",
+            call_connection_id=None,
+        )
+        mock_handler.disconnect_demo_call.assert_awaited_once_with("demo-12345678")
+
+
+class TestListOrders:
+    @pytest.mark.asyncio
+    async def test_list_orders_passes_server_side_filters_to_repository(self):
+        from src.api.main import list_orders
+
+        order = Order(
+            uid="ORD-001",
+            tenant_id="T-001",
+            order_date=date(2026, 5, 20),
+            delivery_date=date(2026, 5, 20),
+            customer_id="C-001",
+            customer_name="テスト社",
+            source=OrderSource.LINE,
+            status="要対応",
+        )
+        order_repo = MagicMock()
+        order_repo.list_orders = AsyncMock(return_value=([order], 123))
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.return_value = order_repo
+
+        with patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx):
+            result = await list_orders(
+                tenant_id="T-001",
+                delivery_date="2026-05-20",
+                status="要対応",
+                source="LINE",
+                q="メロン",
+                limit=25,
+                offset=50,
+            )
+
+        order_repo.list_orders.assert_awaited_once_with(
+            "T-001",
+            date(2026, 5, 20),
+            status="要対応",
+            source="LINE",
+            q="メロン",
+            limit=25,
+            offset=50,
+        )
+        assert result["total"] == 123
+        assert result["limit"] == 25
+        assert result["offset"] == 50
+        assert result["filters"] == {"status": "要対応", "source": "LINE", "q": "メロン"}
+        assert result["orders"][0]["id"] == "ORD-001"
+
+
 class TestOrderMessages:
     @pytest.mark.asyncio
     async def test_get_order_messages_uses_tenant_scoped_order_lookup(self):

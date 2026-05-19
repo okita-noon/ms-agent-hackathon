@@ -43,6 +43,7 @@
 | `GET /api/orders/{id}` | JWT の `tenant_id` と doc の `tenant_id` 一致時のみ返却（IDOR ガード） |
 | `/api/line-webhook` | `x-line-signature` ヘッダで HMAC-SHA256 を検証（必須） |
 | `/api/phone-webhook` | `EVENTGRID_WEBHOOK_KEY` を `?code=` クエリか `X-EventGrid-Webhook-Key` ヘッダで検証（必須） |
+| `/api/phone-demo/message` | `EVENTGRID_WEBHOOK_KEY` を `?code=` クエリか `X-EventGrid-Webhook-Key` ヘッダで検証（必須） |
 
 JWT は `iss` / `aud` も検証する（`JWT_ISSUER` / `JWT_AUDIENCE`）。
 `JWT_SECRET_KEY` は未設定だと起動時に `RuntimeError`（フェイルクローズ）。

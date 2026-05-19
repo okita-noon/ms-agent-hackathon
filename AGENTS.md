@@ -104,6 +104,7 @@
 | GET | `/api/auth/me` | 認証ユーザー情報取得 |
 | POST | `/api/line-webhook` | LINE Webhook受信（署名検証付き） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
+| POST | `/api/phone-demo/message` | 電話番号取得前のデモ用。音声認識済みテキストを電話チャネルとして受注処理（EventGrid共有鍵必須） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |
 | GET | `/api/products?tenant_id=T-001` | 商品マスタ一覧 |

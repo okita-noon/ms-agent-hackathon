@@ -20,6 +20,8 @@ import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+const PAGE_SIZE = 50;
+
 function formatDate(value?: string): string {
   if (!value) return "-";
   return value.slice(0, 10);
@@ -35,6 +37,11 @@ function formatTime(value?: string): string {
 export default function Orders() {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
   const [agentFeatures, setAgentFeatures] = useState<AgentFeatures | null>(null);
@@ -49,13 +56,33 @@ export default function Orders() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setOrders(await fetchOrders(date));
+      const resp = await fetchOrders(date, {
+        status: statusFilter || undefined,
+        source: sourceFilter || undefined,
+        q: query || undefined,
+        limit: PAGE_SIZE,
+        offset,
+      });
+      setOrders(resp.orders);
+      setTotalOrders(resp.total);
     } catch {
-      setOrders(getDemoOrders());
+      const demoOrders = getDemoOrders().filter((order) => {
+        const normalizedQuery = query.trim().toLowerCase();
+        const matchesStatus = !statusFilter || order.status === statusFilter;
+        const matchesSource = !sourceFilter || order.source === sourceFilter;
+        const matchesQuery =
+          !normalizedQuery ||
+          order.customer_name.toLowerCase().includes(normalizedQuery) ||
+          order.customer_id.toLowerCase().includes(normalizedQuery) ||
+          order.items.some((item) => item.product_name.toLowerCase().includes(normalizedQuery));
+        return matchesStatus && matchesSource && matchesQuery;
+      });
+      setOrders(demoOrders.slice(offset, offset + PAGE_SIZE));
+      setTotalOrders(demoOrders.length);
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, statusFilter, sourceFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -104,6 +131,18 @@ export default function Orders() {
   });
   const acceptedOrderCount = orders.filter((o) => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
   const reviewOrderCount = orders.length - acceptedOrderCount;
+  const hasFilters = Boolean(statusFilter || sourceFilter || query.trim());
+  const pageStart = totalOrders === 0 ? 0 : offset + 1;
+  const pageEnd = Math.min(offset + orders.length, totalOrders);
+  const canPrev = offset > 0;
+  const canNext = offset + PAGE_SIZE < totalOrders;
+
+  function resetFilters() {
+    setStatusFilter("");
+    setSourceFilter("");
+    setQuery("");
+    setOffset(0);
+  }
 
   const chartOpts = {
     responsive: true,
@@ -127,7 +166,9 @@ export default function Orders() {
         <div>
           <h2 className="text-lg font-bold text-gray-900 tracking-tight">受注ダッシュボード</h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {orders.length > 0 ? `受注 ${acceptedOrderCount}件 / 要対応 ${reviewOrderCount}件` : "データを読み込み中..."}
+            {loading && orders.length === 0
+              ? "データを読み込み中..."
+              : `表示 ${pageStart}-${pageEnd}件 / 全${totalOrders}件`}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -161,7 +202,10 @@ export default function Orders() {
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => {
+              setDate(e.target.value);
+              setOffset(0);
+            }}
             className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
           />
           <button
@@ -196,10 +240,20 @@ export default function Orders() {
             <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
           </div>
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
+            <button
+              key={status}
+              type="button"
+              onClick={() => {
+                setStatusFilter((current) => current === status ? "" : status);
+                setOffset(0);
+              }}
+              className={`card-shine bg-white rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 ${
+                statusFilter === status ? "ring-2 ring-brand-400 " : ""
+              } ${color.border}`}
+            >
               <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">{status}</p>
               <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -256,9 +310,60 @@ export default function Orders() {
 
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
-          <span className="text-xs text-gray-300 tabular-nums">受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
+        <div className="px-5 py-4 border-b border-gray-100 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
+            <span className="text-xs text-gray-300 tabular-nums">
+              表示 {pageStart}-{pageEnd}件 / 全{totalOrders}件
+              <span className="ml-2">ページ内 受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_160px_160px_auto] gap-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOffset(0);
+              }}
+              placeholder="顧客名・商品名で検索"
+              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setOffset(0);
+              }}
+              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
+            >
+              <option value="">全ステータス</option>
+              {Object.keys(STATUS_COLORS).map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+            <select
+              value={sourceFilter}
+              onChange={(e) => {
+                setSourceFilter(e.target.value);
+                setOffset(0);
+              }}
+              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
+            >
+              <option value="">全チャネル</option>
+              {Object.keys(SOURCE_COLORS).map((source) => (
+                <option key={source} value={source}>{source}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasFilters}
+              className="btn-press px-4 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors disabled:opacity-40"
+            >
+              解除
+            </button>
+          </div>
         </div>
         {loading && orders.length === 0 ? (
           <LoadingState
@@ -273,7 +378,9 @@ export default function Orders() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <p className="text-sm text-gray-400">この日の受注データはありません</p>
+            <p className="text-sm text-gray-400">
+              {hasFilters ? "条件に一致する受注データはありません" : "この日の受注データはありません"}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -326,6 +433,31 @@ export default function Orders() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalOrders > PAGE_SIZE && (
+          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs text-gray-400 tabular-nums">
+              {pageStart}-{pageEnd} / {totalOrders}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                disabled={!canPrev}
+                className="btn-press px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 disabled:opacity-40"
+              >
+                前へ
+              </button>
+              <button
+                type="button"
+                onClick={() => setOffset(offset + PAGE_SIZE)}
+                disabled={!canNext}
+                className="btn-press px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 disabled:opacity-40"
+              >
+                次へ
+              </button>
+            </div>
           </div>
         )}
       </div>

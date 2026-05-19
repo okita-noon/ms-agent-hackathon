@@ -40,6 +40,7 @@ class CallState:
     order_confirmed: bool = False
     last_order_id: str | None = None
     transcript_parts: list[str] = field(default_factory=list)
+    audio_enabled: bool = True
 
 
 class PhoneCallHandler:
@@ -86,6 +87,53 @@ class PhoneCallHandler:
         else:
             logger.debug("Unhandled phone event type: %s", event_type)
             return None
+
+    async def process_demo_message(
+        self,
+        message: str,
+        caller_number: str,
+        called_number: str,
+        call_connection_id: str | None = None,
+    ) -> dict:
+        """Process a text turn as if it were a phone speech recognition result.
+
+        This keeps the phone channel usable before an ACS phone number is
+        acquired: tests and demos can inject the recognized text directly while
+        exercising the same session and orchestrator path as real calls.
+        """
+        call_id = call_connection_id or f"demo-{caller_number[-8:] or 'anonymous'}"
+        state = self._calls.get(call_id)
+        if not state:
+            state = CallState(
+                call_connection_id=call_id,
+                server_call_id=f"server-{call_id}",
+                caller_number=caller_number,
+                called_number=called_number,
+                tenant_ctx=resolve_tenant_for_phone(called_number),
+                audio_enabled=False,
+            )
+            self._calls[call_id] = state
+
+        result = await self._handle_recognize_completed(
+            {
+                "type": "Microsoft.Communication.RecognizeCompleted",
+                "data": {
+                    "callConnectionId": call_id,
+                    "speechResult": {"speech": message},
+                },
+            }
+        )
+        result["demo_mode"] = True
+        result["call_connection_id"] = call_id
+        return result
+
+    async def disconnect_demo_call(self, call_connection_id: str) -> dict | None:
+        return await self._handle_call_disconnected(
+            {
+                "type": "Microsoft.Communication.CallDisconnected",
+                "data": {"callConnectionId": call_connection_id},
+            }
+        )
 
     async def _handle_incoming_call(self, event: dict) -> dict:
         data = event.get("data", {})
@@ -226,6 +274,8 @@ class PhoneCallHandler:
             "call_connection_id": call_connection_id,
             "status": "processed",
             "order_id": order_id,
+            "response": response_text,
+            "session_status": result.get("session_status"),
         }
 
     async def _handle_recognize_failed(self, event: dict) -> dict | None:
@@ -314,6 +364,8 @@ class PhoneCallHandler:
         }
 
     async def _start_recognize(self, state: CallState) -> None:
+        if not state.audio_enabled:
+            return
         acs_conn = state.tenant_ctx.config.acs_connection_string
         if not acs_conn:
             return
@@ -329,6 +381,9 @@ class PhoneCallHandler:
         )
 
     async def _play_tts(self, state: CallState, text: str) -> None:
+        if not state.audio_enabled:
+            logger.info("Demo phone call %s response: %s", state.call_connection_id, text)
+            return
         acs_conn = state.tenant_ctx.config.acs_connection_string
         if not acs_conn:
             return
@@ -343,6 +398,8 @@ class PhoneCallHandler:
         logger.info("Playing TTS (%d chars) on call %s", len(text), state.call_connection_id)
 
     async def _hangup(self, state: CallState) -> None:
+        if not state.audio_enabled:
+            return
         acs_conn = state.tenant_ctx.config.acs_connection_string
         if not acs_conn:
             return
