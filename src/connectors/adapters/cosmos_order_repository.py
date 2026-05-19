@@ -41,10 +41,16 @@ class CosmosOrderRepository:
         return Order.model_validate(doc)
 
     async def list_by_date(self, tenant_id: str, target_date: date) -> list[Order]:
-        query = "SELECT * FROM c WHERE c.tenant_id = @tid AND c.delivery_date = @d ORDER BY c.customer_name"
+        query = (
+            "SELECT * FROM c "
+            "WHERE c.tenant_id = @tid "
+            "AND (c.delivery_date = @d OR (c.status = @needs_review AND c.order_date = @d)) "
+            "ORDER BY c.customer_name"
+        )
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},
+            {"name": "@needs_review", "value": OrderStatus.NEEDS_REVIEW.value},
         ]
         items = self._container.query_items(query, parameters=params)
         return [Order.model_validate(doc) async for doc in items]
