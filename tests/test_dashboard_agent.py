@@ -106,9 +106,7 @@ class TestDashboardAgentClassification:
         store.get_customer_profile.return_value = _profile_with_tomato()
         ctx._connectors["IInventoryService"] = _inventory_ok()
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         types = [c.type for c in cases]
         assert "quantity_anomaly" in types
@@ -138,16 +136,12 @@ class TestDashboardAgentClassification:
         store.get_customer_profile.return_value = _profile_with_tomato()
         ctx._connectors["IInventoryService"] = _inventory_ok()
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         assert not any(c.type == "quantity_anomaly" for c in cases)
 
     @pytest.mark.asyncio
-    async def test_unit_anomaly_detected_when_profile_uses_different_unit(
-        self, mock_tenant_ctx
-    ):
+    async def test_unit_anomaly_detected_when_profile_uses_different_unit(self, mock_tenant_ctx):
         ctx = mock_tenant_ctx
         repo = ctx.get_connector("IOrderRepository")
         repo.list_by_date.return_value = [
@@ -167,18 +161,14 @@ class TestDashboardAgentClassification:
         store.get_customer_profile.return_value = _profile_with_tomato()
         ctx._connectors["IInventoryService"] = _inventory_ok()
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         unit_case = next(c for c in cases if c.type == "unit_anomaly")
         assert "通常単位" in [e.label for e in unit_case.evidence]
         assert unit_case.metadata["typical_unit"] == "kg"
 
     @pytest.mark.asyncio
-    async def test_inventory_shortage_uses_check_and_shortage_evidence(
-        self, mock_tenant_ctx
-    ):
+    async def test_inventory_shortage_uses_check_and_shortage_evidence(self, mock_tenant_ctx):
         ctx = mock_tenant_ctx
         repo = ctx.get_connector("IOrderRepository")
         repo.list_by_date.return_value = [
@@ -206,9 +196,7 @@ class TestDashboardAgentClassification:
         )
         ctx._connectors["IInventoryService"] = inventory
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         shortage = next(c for c in cases if c.type == "inventory_shortage")
         assert shortage.severity == "high"
@@ -228,9 +216,7 @@ class TestDashboardAgentClassification:
         ctx.get_connector("IOrderIntelligenceStore").get_customer_profile.return_value = None
         ctx._connectors["IInventoryService"] = _inventory_ok()
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         types_by_order = {(c.order_id, c.type) for c in cases}
         assert ("ORD-A", "needs_review") in types_by_order
@@ -241,16 +227,12 @@ class TestDashboardAgentClassification:
         ctx = mock_tenant_ctx
         ctx.get_connector("IOrderRepository").list_by_date.return_value = []
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         assert cases == []
 
     @pytest.mark.asyncio
-    async def test_fallback_quantity_threshold_when_profile_missing(
-        self, mock_tenant_ctx
-    ):
+    async def test_fallback_quantity_threshold_when_profile_missing(self, mock_tenant_ctx):
         ctx = mock_tenant_ctx
         repo = ctx.get_connector("IOrderRepository")
         repo.list_by_date.return_value = [
@@ -269,9 +251,7 @@ class TestDashboardAgentClassification:
         ctx.get_connector("IOrderIntelligenceStore").get_customer_profile.return_value = None
         ctx._connectors["IInventoryService"] = _inventory_ok()
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         assert any(c.type == "quantity_anomaly" for c in cases)
 
@@ -312,9 +292,7 @@ class TestDashboardAgentClassification:
         )
         ctx._connectors["IInventoryService"] = inventory
 
-        cases = await DashboardAgentService(ctx).list_exception_cases(
-            "T-TEST", date(2026, 5, 20)
-        )
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         triggered_order_ids = {c.order_id for c in cases}
         assert "ORD-DONE" not in triggered_order_ids
@@ -360,9 +338,7 @@ class TestDashboardAgentResolutionPreview:
         assert preview.requires_approval is True
 
     @pytest.mark.asyncio
-    async def test_quantity_anomaly_preview_without_proposal_avoids_placeholder(
-        self, service
-    ):
+    async def test_quantity_anomaly_preview_without_proposal_avoids_placeholder(self, service):
         # プロファイル無し・桁誤り補正もできない（123 は 10 の倍数ではない）パターン
         case = ExceptionCase(
             id="exc-fb",
@@ -395,9 +371,7 @@ class TestDashboardAgentResolutionPreview:
         assert not any("→" in action for action in preview.recommended_actions)
 
     @pytest.mark.asyncio
-    async def test_inventory_shortage_pulls_alternatives_from_connector(
-        self, mock_tenant_ctx
-    ):
+    async def test_inventory_shortage_pulls_alternatives_from_connector(self, mock_tenant_ctx):
         inventory = AsyncMock()
         inventory.find_alternatives.return_value = [
             Alternative(

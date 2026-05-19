@@ -38,9 +38,7 @@ TRUTHY = {"1", "true", "yes", "on", "enabled"}
 SEVERITY_RANK: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
 MIN_PROFILE_ORDERS = 3
 FALLBACK_QTY_THRESHOLD = 100.0
-TERMINAL_STATUSES: frozenset[OrderStatus] = frozenset(
-    {OrderStatus.COMPLETED, OrderStatus.CANCELLED}
-)
+TERMINAL_STATUSES: frozenset[OrderStatus] = frozenset({OrderStatus.COMPLETED, OrderStatus.CANCELLED})
 
 
 def _env_flag(name: str, *, default: bool = False) -> bool:
@@ -104,9 +102,7 @@ class DashboardAgentService:
             demo_mode=_env_flag("DASHBOARD_AGENT_DEMO_MODE"),
         )
 
-    async def list_exception_cases(
-        self, tenant_id: str, delivery_date: date
-    ) -> list[ExceptionCase]:
+    async def list_exception_cases(self, tenant_id: str, delivery_date: date) -> list[ExceptionCase]:
         repo = self._ctx.get_connector("IOrderRepository")
         orders: list[Order] = await repo.list_by_date(tenant_id, delivery_date)
         if not orders:
@@ -150,9 +146,7 @@ class DashboardAgentService:
         if product_id and required is not None:
             inventory = self._ctx.get_connector("IInventoryService")
             try:
-                alts = await inventory.find_alternatives(
-                    self._ctx.tenant_id, product_id, required
-                )
+                alts = await inventory.find_alternatives(self._ctx.tenant_id, product_id, required)
             except Exception:  # noqa: BLE001 -- 検索失敗時は空のプレビューに留める
                 alts = []
             alternatives_meta = [
@@ -231,10 +225,7 @@ def _classify_items(order: Order, profile: CustomerOrderProfile | None) -> list[
                     case_type="unit_anomaly",
                     severity="medium",
                     title=f"{item.product_name}の単位が通常と異なります",
-                    summary=(
-                        f"通常は「{stats.typical_unit}」単位ですが、"
-                        f"今回は「{item.unit}」で受注しました。"
-                    ),
+                    summary=(f"通常は「{stats.typical_unit}」単位ですが、今回は「{item.unit}」で受注しました。"),
                     suggested_action="顧客が意図した単位かどうかを確認してください。",
                     evidence=[
                         Evidence(label="通常単位", value=stats.typical_unit),
@@ -252,9 +243,7 @@ def _classify_items(order: Order, profile: CustomerOrderProfile | None) -> list[
     return cases
 
 
-async def _classify_inventory(
-    order: Order, tenant_id: str, inventory: Any
-) -> list[ExceptionCase]:
+async def _classify_inventory(order: Order, tenant_id: str, inventory: Any) -> list[ExceptionCase]:
     cases: list[ExceptionCase] = []
     for index, item in enumerate(order.items):
         required = item.quantity
@@ -323,8 +312,7 @@ def _quantity_anomaly(item: OrderItem, stats: ProductStats | None) -> dict[str, 
             return {
                 "severity": "medium",
                 "summary": (
-                    f"通常 {stats.avg_qty:g}{stats.typical_unit} 固定のところ "
-                    f"{qty:g}{item.unit} で受注しています。"
+                    f"通常 {stats.avg_qty:g}{stats.typical_unit} 固定のところ {qty:g}{item.unit} で受注しています。"
                 ),
                 "evidence": [
                     Evidence(label="今回数量", value=f"{qty:g}{item.unit}"),
@@ -353,9 +341,7 @@ def _stats_for(profile: CustomerOrderProfile | None, product_id: str) -> Product
     return profile.product_stats.get(product_id)
 
 
-async def _safe_get_profile(
-    store: Any, tenant_id: str, customer_id: str
-) -> CustomerOrderProfile | None:
+async def _safe_get_profile(store: Any, tenant_id: str, customer_id: str) -> CustomerOrderProfile | None:
     try:
         return await store.get_customer_profile(tenant_id, customer_id)
     except Exception:  # noqa: BLE001 -- プロファイル取得失敗時は無いものとして処理
@@ -423,16 +409,12 @@ def _preview_quantity_anomaly(case: ExceptionCase) -> ResolutionPreview:
         f"{product}を{ordered_label}で承りました。",
     ]
     if has_proposal:
-        message_lines.append(
-            f"念のため確認させてください。今回の数量は{proposed_label}のお間違いではないでしょうか？"
-        )
+        message_lines.append(f"念のため確認させてください。今回の数量は{proposed_label}のお間違いではないでしょうか？")
     else:
         message_lines.append("念のため、ご注文数量にお間違いがないかご確認ください。")
 
     if has_proposal:
-        summary = (
-            f"{product}は通常 {proposed_label} 前後のところ {ordered_label} の受注を検知しました。"
-        )
+        summary = f"{product}は通常 {proposed_label} 前後のところ {ordered_label} の受注を検知しました。"
     elif typical is not None:
         summary = f"{product}の {ordered_label} の受注を再確認します。"
     else:
@@ -461,10 +443,7 @@ def _preview_unit_anomaly(case: ExceptionCase) -> ResolutionPreview:
     return ResolutionPreview(
         exception_id=case.id,
         title="単位の確認文案",
-        summary=(
-            f"{product}は通常「{typical_unit}」単位ですが、"
-            f"今回は「{ordered_unit}」で受注しました。"
-        ),
+        summary=(f"{product}は通常「{typical_unit}」単位ですが、今回は「{ordered_unit}」で受注しました。"),
         confidence=0.6,
         recommended_actions=[
             f"単位を「{ordered_unit}」→「{typical_unit}」に置換するかを顧客へ確認",
@@ -479,9 +458,7 @@ def _preview_unit_anomaly(case: ExceptionCase) -> ResolutionPreview:
     )
 
 
-def _preview_inventory_shortage_body(
-    case: ExceptionCase, alternatives: list[dict[str, Any]]
-) -> ResolutionPreview:
+def _preview_inventory_shortage_body(case: ExceptionCase, alternatives: list[dict[str, Any]]) -> ResolutionPreview:
     meta = case.metadata
     product = str(meta.get("product_name") or "該当商品")
     required = _coerce_float(meta.get("required_qty"))
@@ -499,8 +476,7 @@ def _preview_inventory_shortage_body(
     actions.append("顧客返信に応じて Communication Agent で正式回答を送信")
 
     message_lines = [
-        f"{product}を{_format_qty(required, unit)}で承りましたが、"
-        f"現在の在庫は{_format_qty(available, unit)}です。",
+        f"{product}を{_format_qty(required, unit)}で承りましたが、現在の在庫は{_format_qty(available, unit)}です。",
     ]
     if alternative_names:
         message_lines.append("代替品として下記をご提案できます：")
@@ -532,10 +508,7 @@ def _preview_awaiting_reply(case: ExceptionCase) -> ResolutionPreview:
             "Communication Agent から push メッセージでリマインドを送信",
             "返信が無い場合は担当者から電話確認",
         ],
-        customer_message=(
-            "先ほどお送りした確認事項について、"
-            "お手すきの際にご返信いただけますと幸いです。"
-        ),
+        customer_message=("先ほどお送りした確認事項について、お手すきの際にご返信いただけますと幸いです。"),
         requires_approval=True,
     )
 
@@ -550,10 +523,7 @@ def _preview_needs_review(case: ExceptionCase) -> ResolutionPreview:
             "会話履歴と注文内容を確認し、必要な情報を整理",
             "顧客に追加確認が必要ならドラフトを送信",
         ],
-        customer_message=(
-            "ご注文内容について追加で確認させていただきたい点がございます。"
-            "担当者が確認します。"
-        ),
+        customer_message=("ご注文内容について追加で確認させていただきたい点がございます。担当者が確認します。"),
         requires_approval=True,
     )
 
