@@ -12,7 +12,7 @@ import {
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
 import LoadingState from "../components/LoadingState";
-import StatusBadge from "../components/StatusBadge";
+import StatusBadge, { StatusIcon } from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
 import OrderDetailModal from "../components/OrderDetailModal";
 import DashboardAgentPanel from "../components/DashboardAgentPanel";
@@ -197,7 +197,10 @@ export default function Orders() {
           </div>
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
             <div key={status} className={`card-shine bg-white rounded-xl border p-4 ${color.border}`}>
-              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">{status}</p>
+              <p className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider mb-2 whitespace-nowrap ${color.text}`}>
+                <StatusIcon status={status} />
+                <span className="text-gray-400">{status}</span>
+              </p>
               <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
             </div>
           ))}
@@ -310,7 +313,7 @@ export default function Orders() {
                         <span className="mr-1">{summary}</span>
                         {zones.map((z) => <TempBadge key={z} zone={z} />)}
                       </td>
-                      <td className="px-5 py-3.5"><StatusBadge status={o.status} /></td>
+                      <td className="status-cell px-5 py-3.5"><StatusBadge status={o.status} responsive /></td>
                       <td className="px-5 py-3.5 text-gray-400 text-xs leading-relaxed">
                         {o.delivery_carrier || "-"}<br />{o.delivery_route || ""}
                         {o.delivery_time_slot && (

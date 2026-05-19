@@ -84,6 +84,22 @@ tr.row-hover:hover {
   background-color: #f1f5f9;
 }
 
+.status-cell {
+  container-type: inline-size;
+}
+
+@container (max-width: 4.75rem) {
+  .status-badge[data-responsive="true"] {
+    width: 2rem;
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .status-badge[data-responsive="true"] .status-badge-label {
+    display: none;
+  }
+}
+
 /* Tab active indicator slide */
 .tab-indicator {
   transition: left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
