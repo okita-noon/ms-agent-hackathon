@@ -60,6 +60,7 @@ yarn-error.log*
 .claude/worktrees/
 .claude/settings.local.json
 **/.claude/settings.local.json
+CLAUDE.kio.md
 *.swp
 *.swo
 *~

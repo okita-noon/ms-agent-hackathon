@@ -193,16 +193,28 @@ class OrderOrchestrator:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
 
-        intake_prompt = (
-            f"以下の注文メッセージを処理してください。\n"
-            f"チャネル: {source.value}\n"
-            f"{user_label}\n"
-            f"{_format_memory_context(conversation_history, pending_order_draft)}"
-            f"メッセージ: {message}\n\n"
-            f"まず {lookup_instruction}"
-            f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
-            f"現在のメッセージが省略表現の場合は、会話履歴と確認待ち注文ドラフトを参照してください。"
-        )
+        memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+        if pending_order_draft:
+            intake_prompt = (
+                f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"顧客の回答: {message}\n\n"
+                f"まず {lookup_instruction}"
+                f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
+            )
+        else:
+            intake_prompt = (
+                f"以下の注文メッセージを処理してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"メッセージ: {message}\n\n"
+                f"まず {lookup_instruction}"
+                f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
+                f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
+            )
         intake_text = await self._invoke_agent(intake_agent, intake_prompt)
         logger.info("Intake result: %s", intake_text[:500])
 
@@ -358,15 +370,21 @@ class OrderOrchestrator:
         if processing_note:
             context_parts.append(f"[処理ステータス]\n{processing_note}")
 
+        context_instruction = (
+            "会話履歴がある場合は、前回の返信内容と矛盾しない自然な返信にしてください。\n"
+            "確認質問への回答を受けた場合は、回答内容を踏まえた返信にしてください。\n"
+        )
         if source == OrderSource.PHONE:
             channel_instruction = (
                 "以下の各Agentの処理結果を踏まえて、顧客への音声通話返信メッセージを生成してください。\n"
                 "電話で読み上げるため、簡潔で自然な話し言葉にしてください。\n"
+                f"{context_instruction}"
                 "返信メッセージのみを出力してください（JSON不要）。\n\n"
             )
         else:
             channel_instruction = (
                 "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
+                f"{context_instruction}"
                 "返信メッセージのみを出力してください（JSON不要）。\n\n"
             )
 
