@@ -18,3 +18,12 @@ export const SOURCE_COLORS: Record<string, string> = {
   Web: "#f59e42",
   "手入力": "#64748b",
 };
+
+export const SOURCE_BADGE_CONFIG: Record<string, { bg: string; text: string; border: string; icon: string }> = {
+  "LINE":   { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200",  icon: "line" },
+  "Phone":  { bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   icon: "phone" },
+  "Email":  { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200",  icon: "mail" },
+  "FAX":    { bg: "bg-stone-50",  text: "text-stone-600",  border: "border-stone-200",   icon: "document" },
+  "Web":    { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",   icon: "globe" },
+  "手入力": { bg: "bg-slate-50",  text: "text-slate-700",  border: "border-slate-200",   icon: "clipboard" },
+};

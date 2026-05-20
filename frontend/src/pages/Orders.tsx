@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import {
@@ -14,6 +14,9 @@ import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/co
 import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
+import ChannelBadge from "../components/ChannelBadge";
+import OrderFilterBar from "../components/OrderFilterBar";
+import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import DashboardAgentPanel from "../components/DashboardAgentPanel";
 import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
@@ -42,6 +45,8 @@ export default function Orders() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
+  const [tempZoneFilter, setTempZoneFilter] = useState("");
+  const [sortKey, setSortKey] = useState("order_date_desc");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
   const [agentFeatures, setAgentFeatures] = useState<AgentFeatures | null>(null);
@@ -122,6 +127,24 @@ export default function Orders() {
     void Promise.resolve().then(loadAgentExceptions);
   }, [loadAgentExceptions]);
 
+  // Client-side temp zone filter + sort (server doesn't support these)
+  const displayOrders = useMemo(() => {
+    let result = [...orders];
+    if (tempZoneFilter) {
+      result = result.filter((o) => o.items.some((i) => i.temperature_zone === tempZoneFilter));
+    }
+    result.sort((a, b) => {
+      switch (sortKey) {
+        case "order_date_desc": return (b.order_date || "").localeCompare(a.order_date || "");
+        case "order_date_asc": return (a.order_date || "").localeCompare(b.order_date || "");
+        case "customer_name": return a.customer_name.localeCompare(b.customer_name);
+        case "status": return a.status.localeCompare(b.status);
+        default: return 0;
+      }
+    });
+    return result;
+  }, [orders, tempZoneFilter, sortKey]);
+
   const statusCounts: Record<string, number> = {};
   const sourceCounts: Record<string, number> = {};
   for (const s of Object.keys(STATUS_COLORS)) statusCounts[s] = 0;
@@ -131,18 +154,25 @@ export default function Orders() {
   });
   const acceptedOrderCount = orders.filter((o) => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
   const reviewOrderCount = orders.length - acceptedOrderCount;
-  const hasFilters = Boolean(statusFilter || sourceFilter || query.trim());
+  const hasFilters = Boolean(statusFilter || sourceFilter || query.trim() || tempZoneFilter);
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
-  const canPrev = offset > 0;
-  const canNext = offset + PAGE_SIZE < totalOrders;
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
 
   function resetFilters() {
     setStatusFilter("");
     setSourceFilter("");
     setQuery("");
+    setTempZoneFilter("");
+    setSortKey("order_date_desc");
     setOffset(0);
   }
+
+  // Adapter: OrderFilterBar uses "すべて" convention, server uses ""
+  const filterStatusUI = statusFilter || "すべて";
+  const filterChannelUI = sourceFilter || "すべて";
+  const filterTempZoneUI = tempZoneFilter || "すべて";
 
   const chartOpts = {
     responsive: true,
@@ -309,69 +339,47 @@ export default function Orders() {
       )}
 
       {/* Order table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">注文一覧</h3>
-            <span className="text-xs text-gray-300 tabular-nums">
-              表示 {pageStart}-{pageEnd}件 / 全{totalOrders}件
-              <span className="ml-2">ページ内 受注 {acceptedOrderCount}件 / 要対応 {reviewOrderCount}件</span>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Section header */}
+        <div className="px-5 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">注文一覧</h2>
+            <p className="text-sm text-gray-400 mt-0.5">すべての注文の確認・管理ができます</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-bold text-brand-700">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              受注 <span className="tabular-nums">{acceptedOrderCount}</span>件
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              要対応 <span className="tabular-nums">{reviewOrderCount}</span>件
             </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_160px_160px_auto] gap-3">
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setOffset(0);
-              }}
-              placeholder="顧客名・商品名で検索"
-              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setOffset(0);
-              }}
-              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
-            >
-              <option value="">全ステータス</option>
-              {Object.keys(STATUS_COLORS).map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-            <select
-              value={sourceFilter}
-              onChange={(e) => {
-                setSourceFilter(e.target.value);
-                setOffset(0);
-              }}
-              className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
-            >
-              <option value="">全チャネル</option>
-              {Object.keys(SOURCE_COLORS).map((source) => (
-                <option key={source} value={source}>{source}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={resetFilters}
-              disabled={!hasFilters}
-              className="btn-press px-4 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors disabled:opacity-40"
-            >
-              解除
-            </button>
-          </div>
         </div>
+
+        {/* Filter bar */}
+        <OrderFilterBar
+          searchQuery={query}
+          onSearchChange={(v) => { setQuery(v); setOffset(0); }}
+          filterStatus={filterStatusUI}
+          onStatusChange={(v) => { setStatusFilter(v === "すべて" ? "" : v); setOffset(0); }}
+          filterChannel={filterChannelUI}
+          onChannelChange={(v) => { setSourceFilter(v === "すべて" ? "" : v); setOffset(0); }}
+          filterTempZone={filterTempZoneUI}
+          onTempZoneChange={(v) => { setTempZoneFilter(v === "すべて" ? "" : v); }}
+          sortKey={sortKey}
+          onSortChange={setSortKey}
+          onReset={resetFilters}
+        />
+
         {loading && orders.length === 0 ? (
           <LoadingState
             compact
             title="受注を集計しています"
             message="今日の注文とステータスを読み込んでいます"
           />
-        ) : orders.length === 0 ? (
+        ) : displayOrders.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -387,47 +395,83 @@ export default function Orders() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">受注日 / 最終処理</th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => setSortKey(sortKey === "order_date_desc" ? "order_date_asc" : "order_date_desc")}
+                    >
+                      受注日時
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {sortKey === "order_date_asc"
+                          ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />}
+                      </svg>
+                    </button>
+                  </th>
                   <th className="px-5 py-3">顧客名</th>
                   <th className="px-5 py-3">チャネル</th>
-                  <th className="px-5 py-3">商品</th>
+                  <th className="px-5 py-3">商品（温度帯）</th>
                   <th className="px-5 py-3">ステータス</th>
-                  <th className="px-5 py-3">配送</th>
+                  <th className="px-5 py-3">配送情報（予定）</th>
                   <th className="px-5 py-3">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {orders.map((o) => {
+                {displayOrders.map((o) => {
                   const items = o.items || [];
-                  const summary = items.map((i) => `${i.product_name} ${i.quantity ?? ""}${i.unit ?? ""}`).join(", ");
                   const zones = [...new Set(items.map((i) => i.temperature_zone))];
                   return (
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
-                        <div className="text-gray-600">{formatDate(o.order_date)}</div>
-                        <div className="mt-0.5 text-[11px] font-medium text-gray-400">
-                          最終 {formatTime(o.updated_at)}
+                        <div className="text-gray-700 font-medium">{formatDate(o.order_date)}</div>
+                        <div className="mt-0.5 text-[11px] text-gray-400">{formatTime(o.order_date)}</div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 shrink-0 rounded-full bg-gray-100 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </div>
+                          <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-xs font-semibold ${o.source === "LINE" ? "text-green-600" : "text-brand-600"}`}>{o.source}</span>
+                        <ChannelBadge source={o.source} />
                       </td>
-                      <td className="px-5 py-3.5 text-gray-600 max-w-xs truncate">
-                        <span className="mr-1">{summary}</span>
-                        {zones.map((z) => <TempBadge key={z} zone={z} />)}
+                      <td className="px-5 py-3.5 max-w-xs">
+                        <div>
+                          {items.map((item, idx) => (
+                            <span key={idx}>
+                              {idx > 0 && "、"}
+                              <span className="font-semibold text-gray-900">{item.product_name}</span>
+                              <span className="text-gray-500 ml-0.5">{item.quantity}{item.unit}</span>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          {zones.map((z) => <TempBadge key={z} zone={z} />)}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5"><StatusBadge status={o.status} /></td>
-                      <td className="px-5 py-3.5 text-gray-400 text-xs leading-relaxed">
-                        {o.delivery_carrier || "-"}<br />{o.delivery_route || ""}
+                      <td className="px-5 py-3.5 text-xs leading-relaxed">
+                        <div className="text-gray-600">{o.delivery_carrier || "-"} / {o.delivery_route || ""}</div>
                         {o.delivery_time_slot && (
-                          <span className="inline-flex items-center gap-0.5 mt-0.5 text-brand-600 font-medium">
+                          <div className="flex items-center gap-1 mt-0.5 text-brand-600 font-medium">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             {o.delivery_time_slot}
-                          </span>
+                          </div>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 text-gray-400 text-xs max-w-[120px] truncate">{o.remarks || "-"}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-gray-400 text-xs truncate max-w-[120px]">{o.remarks || "-"}</span>
+                          <svg className="w-4 h-4 shrink-0 text-gray-300 group-hover:text-gray-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -435,30 +479,16 @@ export default function Orders() {
             </table>
           </div>
         )}
-        {totalOrders > PAGE_SIZE && (
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs text-gray-400 tabular-nums">
-              {pageStart}-{pageEnd} / {totalOrders}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                disabled={!canPrev}
-                className="btn-press px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 disabled:opacity-40"
-              >
-                前へ
-              </button>
-              <button
-                type="button"
-                onClick={() => setOffset(offset + PAGE_SIZE)}
-                disabled={!canNext}
-                className="btn-press px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 disabled:opacity-40"
-              >
-                次へ
-              </button>
-            </div>
-          </div>
+
+        {/* Pagination */}
+        {totalOrders > 0 && (
+          <Pagination
+            total={totalOrders}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPageChange={(p) => setOffset((p - 1) * PAGE_SIZE)}
+            onPageSizeChange={() => {}}
+          />
         )}
       </div>
 
