@@ -75,9 +75,17 @@ class CommunicationPlugin:
             logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
             return {"success": False, "error": resp.text}
 
+    async def _get_graph_token(self) -> str:
+        cfg = self._ctx.config
+        if not cfg.graph_tenant_id or not cfg.graph_client_id or not cfg.graph_client_secret:
+            raise RuntimeError("Graph API credentials not configured")
+        from src.services.email_handler import _token_cache
+
+        return await _token_cache.get_token(cfg.graph_tenant_id, cfg.graph_client_id, cfg.graph_client_secret)
+
     @kernel_function(
         name="send_email",
-        description="メールを顧客へ送信する。Phase 1 ではモック実装としてログ出力のみ行う。",
+        description="Graph API経由でメールを顧客へ送信する",
     )
     async def send_email(
         self,
@@ -86,17 +94,40 @@ class CommunicationPlugin:
         body: Annotated[str, "メール本文"],
         reply_to_message_id: Annotated[str | None, "返信元メッセージID"] = None,
     ) -> dict:
-        logger.info(
-            "Mock email send: to=%s subject=%s reply_to=%s body=%s",
-            to_address,
-            subject,
-            reply_to_message_id,
-            body[:500],
-        )
-        return {
-            "success": True,
-            "mock": True,
-            "to_address": to_address,
-            "subject": subject,
-            "reply_to_message_id": reply_to_message_id,
-        }
+        cfg = self._ctx.config
+        if not cfg.graph_mailbox_user_id or not cfg.graph_client_id:
+            logger.warning("Graph API未設定: モック送信 to=%s subject=%s", to_address, subject)
+            return {"success": True, "mock": True, "to_address": to_address, "subject": subject}
+
+        try:
+            token = await self._get_graph_token()
+            mailbox = cfg.graph_mailbox_user_id
+
+            if reply_to_message_id:
+                url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/messages/{reply_to_message_id}/reply"
+                payload = {"comment": body}
+            else:
+                url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail"
+                payload = {
+                    "message": {
+                        "subject": subject,
+                        "body": {"contentType": "Text", "content": body},
+                        "toRecipients": [{"emailAddress": {"address": to_address}}],
+                    },
+                    "saveToSentItems": True,
+                }
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+                if resp.status_code in (200, 202):
+                    logger.info("Email sent: to=%s subject=%s", to_address, subject)
+                    return {"success": True, "to_address": to_address, "subject": subject}
+                logger.error("Graph sendMail failed: %s %s", resp.status_code, resp.text)
+                return {"success": False, "error": resp.text}
+        except Exception:
+            logger.exception("Email send error: to=%s", to_address)
+            return {"success": False, "error": "送信中にエラーが発生しました"}

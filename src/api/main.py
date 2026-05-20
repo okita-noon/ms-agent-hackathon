@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import (
@@ -36,11 +37,99 @@ LineWebhookHandler: Any | None = None
 PhoneCallHandler: Any | None = None
 
 
+GRAPH_SUBSCRIPTION_EXPIRY_HOURS = 48
+GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS = 3600
+
+
+async def _create_graph_subscription() -> str | None:
+    """Graph APIのSubscriptionを作成し、メール受信通知を有効にする"""
+    mailbox = os.environ.get("GRAPH_MAILBOX_USER_ID")
+    client_id = os.environ.get("GRAPH_CLIENT_ID")
+    client_secret = os.environ.get("GRAPH_CLIENT_SECRET")
+    graph_tenant_id = os.environ.get("GRAPH_TENANT_ID")
+    callback_url = os.environ.get("GRAPH_WEBHOOK_URL")
+
+    if not all([mailbox, client_id, client_secret, graph_tenant_id, callback_url]):
+        logger.info("Graph Subscription: 環境変数不足のためスキップ")
+        return None
+
+    try:
+        import httpx
+
+        from src.services.email_handler import _token_cache
+
+        token = await _token_cache.get_token(graph_tenant_id, client_id, client_secret)
+        expiry = datetime.now(timezone.utc) + timedelta(hours=GRAPH_SUBSCRIPTION_EXPIRY_HOURS)
+
+        payload = {
+            "changeType": "created",
+            "notificationUrl": callback_url,
+            "resource": f"/users/{mailbox}/messages",
+            "expirationDateTime": expiry.strftime("%Y-%m-%dT%H:%M:%S.0000000Z"),
+            "clientState": os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook"),
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://graph.microsoft.com/v1.0/subscriptions",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json=payload,
+            )
+            if resp.status_code in (200, 201):
+                sub_id = resp.json().get("id")
+                logger.info("Graph Subscription 作成完了: id=%s expiry=%s", sub_id, expiry.isoformat())
+                return sub_id
+            logger.error("Graph Subscription 作成失敗: %s %s", resp.status_code, resp.text)
+            return None
+    except Exception:
+        logger.exception("Graph Subscription 作成エラー")
+        return None
+
+
+async def _renew_graph_subscription(subscription_id: str) -> None:
+    """Subscriptionの自動更新ループ"""
+    while True:
+        renew_interval = GRAPH_SUBSCRIPTION_EXPIRY_HOURS * 3600 - GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS
+        await asyncio.sleep(renew_interval)
+        try:
+            import httpx
+
+            from src.services.email_handler import _token_cache
+
+            client_id = os.environ.get("GRAPH_CLIENT_ID", "")
+            client_secret = os.environ.get("GRAPH_CLIENT_SECRET", "")
+            graph_tenant_id = os.environ.get("GRAPH_TENANT_ID", "")
+            token = await _token_cache.get_token(graph_tenant_id, client_id, client_secret)
+
+            expiry = datetime.now(timezone.utc) + timedelta(hours=GRAPH_SUBSCRIPTION_EXPIRY_HOURS)
+            async with httpx.AsyncClient() as client:
+                resp = await client.patch(
+                    f"https://graph.microsoft.com/v1.0/subscriptions/{subscription_id}",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    json={"expirationDateTime": expiry.strftime("%Y-%m-%dT%H:%M:%S.0000000Z")},
+                )
+                if resp.status_code == 200:
+                    logger.info("Graph Subscription 更新完了: id=%s expiry=%s", subscription_id, expiry.isoformat())
+                else:
+                    logger.error("Graph Subscription 更新失敗: %s %s", resp.status_code, resp.text)
+        except Exception:
+            logger.exception("Graph Subscription 更新エラー")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     register_all_adapters()
     logger.info("Adapter registry initialized")
+
+    renew_task = None
+    sub_id = await _create_graph_subscription()
+    if sub_id:
+        renew_task = asyncio.create_task(_renew_graph_subscription(sub_id))
+
     yield
+
+    if renew_task:
+        renew_task.cancel()
 
 
 app = FastAPI(title="foogent API", lifespan=lifespan)
@@ -153,7 +242,13 @@ async def email_webhook(
         return Response(content=validationToken, media_type="text/plain")
 
     body = await request.json()
+
+    expected_state = os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook")
     notifications = body.get("value", [])
+    notifications = [n for n in notifications if n.get("clientState") == expected_state]
+    if not notifications:
+        logger.warning("Email webhook: clientState不一致または通知なし")
+        return Response(status_code=202)
     default_recipient = os.environ.get("GRAPH_MAILBOX_ADDRESS", "order@example.com")
     azure_openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
     azure_openai_key = os.environ.get("AZURE_OPENAI_KEY", "")

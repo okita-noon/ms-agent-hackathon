@@ -1,3 +1,8 @@
+"""
+Created: 2026-05-17
+Updated: 2026-05-20 22:51
+"""
+
 from __future__ import annotations
 
 import logging
@@ -7,6 +12,8 @@ import time
 from datetime import datetime, timedelta
 from html.parser import HTMLParser
 
+import httpx
+
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundAttachment, InboundMessage
@@ -15,6 +22,8 @@ from src.plugins.communication_plugin import CommunicationPlugin
 
 logger = logging.getLogger(__name__)
 
+GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
+GRAPH_TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 EMAIL_SESSION_TIMEOUT_HOURS = 24
 EMAIL_DEDUP_TTL_SECONDS = 3600
 
@@ -56,6 +65,44 @@ class _EmailDedup:
 _dedup = _EmailDedup()
 
 
+class _GraphTokenCache:
+    """テナント単位でアクセストークンをキャッシュする"""
+
+    def __init__(self) -> None:
+        self._tokens: dict[str, tuple[str, float]] = {}
+        self._lock = threading.Lock()
+
+    async def get_token(self, graph_tenant_id: str, client_id: str, client_secret: str) -> str:
+        now = time.time()
+        with self._lock:
+            cached = self._tokens.get(graph_tenant_id)
+            if cached and cached[1] > now:
+                return cached[0]
+
+        url = GRAPH_TOKEN_URL.format(tenant_id=graph_tenant_id)
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                url,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "scope": "https://graph.microsoft.com/.default",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        token = data["access_token"]
+        expires_in = data.get("expires_in", 3600)
+        with self._lock:
+            self._tokens[graph_tenant_id] = (token, now + expires_in - 60)
+        return token
+
+
+_token_cache = _GraphTokenCache()
+
+
 class EmailIngestionService:
     def __init__(
         self,
@@ -70,17 +117,51 @@ class EmailIngestionService:
             azure_openai_key=azure_openai_key,
         )
 
+    async def _get_graph_token(self) -> str:
+        cfg = self._ctx.config
+        if not cfg.graph_tenant_id or not cfg.graph_client_id or not cfg.graph_client_secret:
+            raise RuntimeError("Graph API credentials not configured for tenant %s" % cfg.tenant_id)
+        return await _token_cache.get_token(cfg.graph_tenant_id, cfg.graph_client_id, cfg.graph_client_secret)
+
     async def fetch_message(self, message_id: str) -> dict:
-        logger.info("Mock fetch for email message %s", message_id)
+        token = await self._get_graph_token()
+        mailbox = self._ctx.config.graph_mailbox_user_id
+        url = f"{GRAPH_API_BASE}/users/{mailbox}/messages/{message_id}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                params={"$select": "id,subject,body,from,conversationId,receivedDateTime,hasAttachments"},
+            )
+            resp.raise_for_status()
+            msg = resp.json()
+
+        body_content = msg.get("body", {}).get("content", "")
+        sender = msg.get("from", {}).get("emailAddress", {})
+        attachments: list[dict] = []
+        if msg.get("hasAttachments"):
+            att_url = f"{url}/attachments"
+            async with httpx.AsyncClient() as client:
+                att_resp = await client.get(att_url, headers={"Authorization": f"Bearer {token}"})
+                if att_resp.status_code == 200:
+                    for att in att_resp.json().get("value", []):
+                        attachments.append(
+                            {
+                                "filename": att.get("name", ""),
+                                "content_type": att.get("contentType", "application/octet-stream"),
+                                "size_bytes": att.get("size", 0),
+                            }
+                        )
+
         return {
-            "id": message_id,
-            "subject": "ご注文のご連絡",
-            "body": "<p>いつもお世話になっております。</p><p>りんご10箱をお願いします。</p>",
-            "from": {"name": "Email Customer", "address": "customer@example.com"},
-            "conversationId": f"conv-{message_id}",
-            "receivedDateTime": datetime.utcnow().isoformat(),
+            "id": msg.get("id", message_id),
+            "subject": msg.get("subject", ""),
+            "body": body_content,
+            "from": {"name": sender.get("name", ""), "address": sender.get("address", "")},
+            "conversationId": msg.get("conversationId"),
+            "receivedDateTime": msg.get("receivedDateTime"),
             "replyToMessageId": None,
-            "attachments": [],
+            "attachments": attachments,
         }
 
     async def normalize_body(self, html_body: str) -> str:
