@@ -158,7 +158,6 @@ export default function Orders() {
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
   const page = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
 
   function resetFilters() {
     setStatusFilter("");
