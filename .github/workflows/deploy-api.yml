@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: ca61bef3ed27acr
-  ACR_LOGIN_SERVER: ca61bef3ed27acr.azurecr.io
+  ACR_NAME: acrorderaidev2
+  ACR_LOGIN_SERVER: acrorderaidev2.azurecr.io
   IMAGE_NAME: orderai-api
-  RESOURCE_GROUP: rg-orderai-dev
-  CONTAINER_APP_NAME: ca-api-orderai-dev
+  RESOURCE_GROUP: rg-orderai-dev2
+  CONTAINER_APP_NAME: ca-api-orderai-dev2
 
 jobs:
   build-and-deploy:
