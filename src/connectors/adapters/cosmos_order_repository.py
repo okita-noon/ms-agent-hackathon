@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from azure.core import MatchConditions
 from azure.cosmos.aio import CosmosClient, ContainerProxy
@@ -25,7 +25,7 @@ class CosmosOrderRepository:
     async def save(self, order: Order) -> str:
         if not order.id:
             order.id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-        order.updated_at = datetime.utcnow()
+        order.updated_at = datetime.now(timezone.utc)
         doc = order.model_dump(mode="json", by_alias=True)
         doc["id"] = order.id
         await self._container.upsert_item(doc)

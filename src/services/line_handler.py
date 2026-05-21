@@ -149,17 +149,17 @@ class LineWebhookHandler:
         session = await session_repo.find_active_session(self._ctx.tenant_id, "line", user_id)
 
         if session and session.status == "awaiting_reply":
-            session.last_message_at = datetime.utcnow()
+            session.last_message_at = datetime.now(timezone.utc)
             await session_repo.update_session(session)
             logger.info("Continuing session %s for user %s", session.id, user_id)
         elif not session:
             session = OrderSession(
-                id=f"sess-{user_id[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                id=f"sess-{user_id[-8:]}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                 tenant_id=self._ctx.tenant_id,
                 channel="line",
                 channel_user_id=user_id,
                 status="active",
-                expires_at=datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS),
             )
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
@@ -177,7 +177,7 @@ class LineWebhookHandler:
                 text=text,
                 message_id=message_id,
                 webhook_event_id=webhook_event_id,
-                created_at=received_at or datetime.utcnow(),
+                created_at=received_at or datetime.now(timezone.utc),
             ),
         )
 
@@ -234,7 +234,7 @@ class LineWebhookHandler:
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
-            session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
         elif result.get("order_id"):
             session.status = "completed"
@@ -357,7 +357,7 @@ class LineWebhookHandler:
 def _line_timestamp_to_datetime(timestamp: int | None) -> datetime | None:
     if timestamp is None:
         return None
-    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
 
 
 def _build_message_history_id(
@@ -366,5 +366,5 @@ def _build_message_history_id(
     webhook_event_id: str | None,
     message_id: str | None,
 ) -> str:
-    source_id = webhook_event_id or message_id or datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    source_id = webhook_event_id or message_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     return f"hist-{session_id}-{role}-{source_id}"
