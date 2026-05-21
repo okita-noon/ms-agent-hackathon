@@ -1,6 +1,6 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-20 22:51
+Updated: 2026-05-21 23:42
 """
 
 from __future__ import annotations
@@ -228,6 +228,13 @@ class EmailIngestionService:
 
         logger.info("Processing email notification for %s via %s", message_id, recipient_address)
         raw_message = await self.fetch_message(message_id)
+
+        # 自己送信メールをスキップ（無限ループ防止）
+        sender_address = (raw_message.get("from", {}) or {}).get("address", "").lower()
+        if sender_address and sender_address == recipient_address.lower():
+            logger.info("Skipping self-sent message from %s", sender_address)
+            return
+
         inbound = await self.to_inbound_message(raw_message, self._ctx.tenant_id)
 
         customer_repo = self._ctx.get_connector("ICustomerRepository")
