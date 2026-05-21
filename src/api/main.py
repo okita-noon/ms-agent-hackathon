@@ -234,7 +234,7 @@ async def line_webhook(
     return Response(status_code=200)
 
 
-@app.post("/api/email-webhook")
+@app.api_route("/api/email-webhook", methods=["GET", "POST"])
 async def email_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
