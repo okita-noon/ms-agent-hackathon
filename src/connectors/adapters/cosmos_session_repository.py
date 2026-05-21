@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from azure.cosmos.aio import CosmosClient, ContainerProxy
 
@@ -57,7 +57,7 @@ class CosmosSessionRepository:
         return session
 
     async def update_session(self, session: OrderSession) -> None:
-        session.last_message_at = datetime.utcnow()
+        session.last_message_at = datetime.now(timezone.utc)
         doc = session.model_dump(mode="json")
         await self._container.upsert_item(doc)
 
