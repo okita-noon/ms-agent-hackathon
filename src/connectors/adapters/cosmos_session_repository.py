@@ -35,6 +35,22 @@ class CosmosSessionRepository:
             return OrderSession.model_validate(doc)
         return None
 
+    async def find_by_conversation_id(self, tenant_id: str, conversation_id: str) -> OrderSession | None:
+        query = (
+            "SELECT * FROM c WHERE c.tenant_id = @tid "
+            "AND c.conversation_id = @cid "
+            "AND c.status IN ('active', 'awaiting_reply') "
+            "ORDER BY c.created_at DESC OFFSET 0 LIMIT 1"
+        )
+        params = [
+            {"name": "@tid", "value": tenant_id},
+            {"name": "@cid", "value": conversation_id},
+        ]
+        items = self._container.query_items(query, parameters=params)
+        async for doc in items:
+            return OrderSession.model_validate(doc)
+        return None
+
     async def create_session(self, session: OrderSession) -> OrderSession:
         doc = session.model_dump(mode="json")
         await self._container.create_item(doc)

@@ -103,6 +103,7 @@
 | POST | `/api/auth/microsoft` | Microsoft SSO認証（JWT発行） |
 | GET | `/api/auth/me` | 認証ユーザー情報取得 |
 | POST | `/api/line-webhook` | LINE Webhook受信（署名検証付き） |
+| POST | `/api/email-webhook` | Microsoft Graph Change Notifications受信（メールチャネル） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | POST | `/api/phone-demo/message` | 電話番号取得前のデモ用。音声認識済みテキストを電話チャネルとして受注処理（EventGrid共有鍵必須） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
@@ -236,6 +237,7 @@ src/
 ├── services/
 │   ├── line_handler.py           # LINE Webhook処理（署名検証・セッション管理）
 │   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation）
+│   ├── email_handler.py          # Email Webhook処理（正規化・セッション管理）
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
 │   ├── dashboard_agent.py        # Dashboard Agent サービス（Exception Triage / Resolution プレビュー）

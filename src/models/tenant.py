@@ -20,5 +20,10 @@ class TenantConfig(BaseModel):
     line_channel_access_token: str | None = None
     acs_connection_string: str | None = None
     acs_phone_number: str | None = None
+    graph_client_id: str | None = None
+    graph_client_secret: str | None = None
+    graph_tenant_id: str | None = None
+    graph_mailbox_user_id: str | None = None
+    email_address: str | None = None
     auto_confirm_threshold: float = 0.9
     connectors: dict[str, ConnectorConfig] = Field(default_factory=dict)

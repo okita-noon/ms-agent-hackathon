@@ -167,7 +167,7 @@ function renderTable() {
       <td class="px-5 py-3 whitespace-nowrap text-gray-600">${o.order_date || '-'}</td>
       <td class="px-5 py-3 font-medium text-gray-900">${o.customer_name}</td>
       <td class="px-5 py-3">
-        <span class="inline-flex items-center gap-1 text-xs font-medium ${o.source === 'LINE' ? 'text-green-600' : 'text-blue-600'}">
+        <span class="inline-flex items-center gap-1 text-xs font-medium" style="color: ${SOURCE_COLORS[o.source] || '#64748b'}">
           ${o.source}
         </span>
       </td>

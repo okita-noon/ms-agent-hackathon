@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Message, Order } from "../lib/api";
 import { fetchOrderMessages } from "../lib/api";
+import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
 
@@ -176,7 +177,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           <div className="flex items-start justify-between">
             <div>
               <h4 className="text-lg font-bold text-gray-900">{order.customer_name}</h4>
-              <span className={`text-xs font-semibold ${order.source === "LINE" ? "text-green-600" : "text-brand-600"}`}>{order.source}</span>
+              <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
             </div>
             <StatusBadge status={order.status} />
           </div>
