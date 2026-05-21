@@ -134,3 +134,24 @@ class CosmosOrderRepository:
             except CosmosAccessConditionFailedError:
                 if attempt == 2:
                     raise
+
+    async def update_memo(self, tenant_id: str, order_id: str, memo: str | None) -> Order:
+        for attempt in range(3):
+            doc = await self._container.read_item(order_id, partition_key=tenant_id)
+            if doc.get("tenant_id") != tenant_id:
+                raise ValueError(f"受注ID「{order_id}」が見つかりません。")
+            etag = doc.get("_etag")
+            doc["memo"] = memo
+            doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                await self._container.replace_item(
+                    order_id,
+                    doc,
+                    match_condition=MatchConditions.IfNotModified,
+                    etag=etag,
+                )
+                return Order.model_validate(doc)
+            except CosmosAccessConditionFailedError:
+                if attempt == 2:
+                    raise
+        raise RuntimeError("update_memo failed after retries")

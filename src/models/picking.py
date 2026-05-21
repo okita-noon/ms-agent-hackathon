@@ -29,7 +29,7 @@ class PickingItem(BaseModel):
     delivery_time_slot: str | None = None
     yamato_tracking_number: str | None = None
     source: str | None = None
-    status: OrderStatus = OrderStatus.PENDING
+    status: OrderStatus = OrderStatus.ACCEPTED
 
 
 class PickingList(BaseModel):
