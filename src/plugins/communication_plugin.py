@@ -103,19 +103,15 @@ class CommunicationPlugin:
             token = await self._get_graph_token()
             mailbox = cfg.graph_mailbox_user_id
 
-            if reply_to_message_id:
-                url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/messages/{reply_to_message_id}/reply"
-                payload = {"comment": body}
-            else:
-                url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail"
-                payload = {
-                    "message": {
-                        "subject": subject,
-                        "body": {"contentType": "Text", "content": body},
-                        "toRecipients": [{"emailAddress": {"address": to_address}}],
-                    },
-                    "saveToSentItems": True,
-                }
+            url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail"
+            payload = {
+                "message": {
+                    "subject": subject if subject.startswith("RE:") else f"RE: {subject}",
+                    "body": {"contentType": "Text", "content": body},
+                    "toRecipients": [{"emailAddress": {"address": to_address}}],
+                },
+                "saveToSentItems": True,
+            }
 
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
