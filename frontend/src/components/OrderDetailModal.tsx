@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Message, Order } from "../lib/api";
 import { fetchOrderMessages } from "../lib/api";
+import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
 
