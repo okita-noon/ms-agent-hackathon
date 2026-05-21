@@ -21,4 +21,5 @@ class Customer(BaseModel):
     phone: str | None = None
     fax: str | None = None
     delivery_preference: CustomerDeliveryPreference = Field(default_factory=CustomerDeliveryPreference)
+    delivery_group: str | None = None
     active: bool = True

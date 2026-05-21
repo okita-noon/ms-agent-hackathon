@@ -47,6 +47,7 @@ export interface Order {
   yamato_tracking_number?: string;
   status: string;
   preparation_date?: string;
+  memo?: string;
   remarks?: string;
   session_id?: string;
   updated_at?: string;
@@ -77,6 +78,7 @@ export interface Customer {
   email?: string;
   phone?: string;
   fax?: string;
+  delivery_group?: string;
   active: boolean;
 }
 
@@ -240,6 +242,18 @@ export async function previewAgentResolution(
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return (await resp.json()) as AgentResolutionResponse;
+}
+
+export async function updateOrderMemo(
+  orderId: string,
+  memo: string | null
+): Promise<Order> {
+  const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/memo`, {
+    method: "PUT",
+    body: JSON.stringify({ memo }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
 }
 
 export async function updateCustomer(

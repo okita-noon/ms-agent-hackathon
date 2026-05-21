@@ -174,18 +174,6 @@ def _classify_status(order: Order) -> list[ExceptionCase]:
                 evidence=[Evidence(label="ステータス", value=order.status.value)],
             )
         ]
-    if order.status == OrderStatus.AWAITING_REPLY:
-        return [
-            _build_case(
-                order=order,
-                case_type="awaiting_reply",
-                severity="medium",
-                title="顧客返信待ちの受注",
-                summary="Communication Agent が確認を送信し、顧客からの返信を待っています。",
-                suggested_action="未回答のままであればリマインドを送ってください。",
-                evidence=[Evidence(label="ステータス", value=order.status.value)],
-            )
-        ]
     return []
 
 

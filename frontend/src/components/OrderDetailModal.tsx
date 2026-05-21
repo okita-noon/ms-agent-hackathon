@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Message, Order } from "../lib/api";
-import { fetchOrderMessages } from "../lib/api";
+import { fetchOrderMessages, updateOrderMemo } from "../lib/api";
 import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
@@ -143,6 +143,76 @@ function MessageThread({ orderId }: { orderId: string }) {
   );
 }
 
+function MemoSection({ order }: { order: Order }) {
+  const [memo, setMemo] = useState(order.memo || "");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing) textareaRef.current?.focus();
+  }, [editing]);
+
+  const handleSave = async () => {
+    const orderId = order.uid || order.id || "";
+    if (!orderId) return;
+    setSaving(true);
+    try {
+      await updateOrderMemo(orderId, memo || null);
+      setEditing(false);
+    } catch {
+      alert("メモの保存に失敗しました。");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-100">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-medium text-amber-600 uppercase tracking-wider">メモ</p>
+        {!editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-[11px] text-amber-600 hover:text-amber-800 font-medium transition-colors"
+          >
+            編集
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            ref={textareaRef}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            rows={3}
+            placeholder="特殊対応・申し送りを記入"
+            className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm outline-none bg-white resize-none focus:ring-2 focus:ring-amber-300"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setMemo(order.memo || ""); setEditing(false); }}
+              className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {saving ? "保存中..." : "保存"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-900 whitespace-pre-wrap">{memo || <span className="text-amber-400 italic">メモなし（クリックして追加）</span>}</p>
+      )}
+    </div>
+  );
+}
+
 export default function OrderDetailModal({ order, onClose }: Props) {
   if (!order) return null;
 
@@ -227,11 +297,13 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           )}
 
           {order.remarks && (
-            <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-100">
-              <p className="text-[11px] font-medium text-amber-600 uppercase tracking-wider mb-1">備考</p>
-              <p className="text-sm text-amber-900">{order.remarks}</p>
+            <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">備考（システム）</p>
+              <p className="text-sm text-gray-700">{order.remarks}</p>
             </div>
           )}
+
+          <MemoSection order={order} />
         </div>
 
         <div className="px-6 py-3 border-t border-gray-100 flex justify-end">

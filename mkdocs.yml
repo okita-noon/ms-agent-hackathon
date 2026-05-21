@@ -41,6 +41,7 @@ markdown_extensions:
 
 nav:
   - ホーム: index.md
+  - 業務課題と解決策: business-problem.md
   - 図解フロー: visual-flows.md
   - アーキテクチャ概要: architecture-overview.md
   - マルチエージェント設計: multi-agent-design.md

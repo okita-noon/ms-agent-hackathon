@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import { Doughnut } from "react-chartjs-2";
 import {
   fetchAgentExceptions,
   fetchAgentFeatures,
@@ -10,7 +8,7 @@ import {
   type Order,
 } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
-import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS, SOURCE_COLORS } from "../lib/constants";
+import { ACCEPTED_ORDER_STATUSES, STATUS_COLORS } from "../lib/constants";
 import LoadingState from "../components/LoadingState";
 import StatusBadge from "../components/StatusBadge";
 import TempBadge from "../components/TempBadge";
@@ -19,9 +17,6 @@ import OrderFilterBar from "../components/OrderFilterBar";
 import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import DashboardAgentPanel from "../components/DashboardAgentPanel";
-import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 const PAGE_SIZE = 50;
 
@@ -146,11 +141,9 @@ export default function Orders() {
   }, [orders, tempZoneFilter, sortKey]);
 
   const statusCounts: Record<string, number> = {};
-  const sourceCounts: Record<string, number> = {};
   for (const s of Object.keys(STATUS_COLORS)) statusCounts[s] = 0;
   orders.forEach((o) => {
     statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
-    sourceCounts[o.source] = (sourceCounts[o.source] || 0) + 1;
   });
   const acceptedOrderCount = orders.filter((o) => ACCEPTED_ORDER_STATUSES.has(o.status)).length;
   const reviewOrderCount = orders.length - acceptedOrderCount;
@@ -172,21 +165,6 @@ export default function Orders() {
   const filterStatusUI = statusFilter || "すべて";
   const filterChannelUI = sourceFilter || "すべて";
   const filterTempZoneUI = tempZoneFilter || "すべて";
-
-  const chartOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: "65%",
-    plugins: {
-      legend: {
-        position: "right" as const,
-        labels: { boxWidth: 10, padding: 14, font: { size: 11, family: "Noto Sans JP" }, usePointStyle: true, pointStyle: "circle" },
-      },
-    },
-  };
-
-  const statusLabels = Object.keys(statusCounts).filter((s) => statusCounts[s] > 0);
-  const sourceLabels = Object.keys(sourceCounts);
 
   return (
     <>
@@ -255,88 +233,6 @@ export default function Orders() {
 
       <div className={agentPanelOpen ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start" : ""}>
         <div className="min-w-0">
-      {/* Stats cards */}
-      {loading && orders.length === 0 ? (
-        <SkeletonStatCards count={8} />
-      ) : (
-        <div
-          className={`grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 stagger-in ${
-            agentPanelOpen ? "2xl:grid-cols-8" : "xl:grid-cols-8"
-          }`}
-        >
-          <div className="card-shine bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">受注合計</p>
-            <p className="text-2xl font-bold text-gray-900 tabular-nums">{acceptedOrderCount}</p>
-          </div>
-          {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => {
-                setStatusFilter((current) => current === status ? "" : status);
-                setOffset(0);
-              }}
-              className={`card-shine bg-white rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 ${
-                statusFilter === status ? "ring-2 ring-brand-400 " : ""
-              } ${color.border}`}
-            >
-              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2 whitespace-nowrap">{status}</p>
-              <p className={`text-2xl font-bold tabular-nums ${color.text}`}>{statusCounts[status] || 0}</p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Charts */}
-      {loading && orders.length === 0 ? (
-        <SkeletonCharts />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">ステータス別</h3>
-            <div className="h-48 flex items-center justify-center">
-              {statusLabels.length > 0 ? (
-                <Doughnut
-                  data={{
-                    labels: statusLabels,
-                    datasets: [{
-                      data: statusLabels.map((s) => statusCounts[s]),
-                      backgroundColor: statusLabels.map((s) => STATUS_COLORS[s]?.chart ?? "#d1d5db"),
-                      borderWidth: 0,
-                      spacing: 2,
-                    }],
-                  }}
-                  options={chartOpts}
-                />
-              ) : (
-                <p className="text-sm text-gray-300">データなし</p>
-              )}
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">チャネル別</h3>
-            <div className="h-48 flex items-center justify-center">
-              {sourceLabels.length > 0 ? (
-                <Doughnut
-                  data={{
-                    labels: sourceLabels,
-                    datasets: [{
-                      data: sourceLabels.map((s) => sourceCounts[s]),
-                      backgroundColor: sourceLabels.map((s) => SOURCE_COLORS[s] ?? "#d1d5db"),
-                      borderWidth: 0,
-                      spacing: 2,
-                    }],
-                  }}
-                  options={chartOpts}
-                />
-              ) : (
-                <p className="text-sm text-gray-300">データなし</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Section header */}

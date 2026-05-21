@@ -16,13 +16,11 @@ class OrderSource(StrEnum):
 
 
 class OrderStatus(StrEnum):
-    PENDING = "未処理"
     NEEDS_REVIEW = "要対応"
-    MANUFACTURING = "製造"
-    SHIPPING = "配送"
+    CONFIRMED = "受注済み"
+    SHIPPING = "配送中"
     COMPLETED = "完了"
     CANCELLED = "キャンセル"
-    AWAITING_REPLY = "返信待ち"
 
 
 class TemperatureZone(StrEnum):
@@ -80,7 +78,8 @@ class Order(BaseModel):
     delivery_carrier: DeliveryCarrier | None = None
     delivery_time_slot: str | None = None
     yamato_tracking_number: str | None = None
-    status: OrderStatus = OrderStatus.PENDING
+    status: OrderStatus = OrderStatus.CONFIRMED
+    memo: str | None = None
     remarks: str | None = None
     session_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

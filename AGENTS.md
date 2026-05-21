@@ -113,6 +113,7 @@
 | GET | `/api/inventory/{product_id}?required_qty=0&tenant_id=T-001` | 在庫照会 |
 | GET | `/api/customers?tenant_id=T-001` | 顧客一覧 |
 | GET | `/api/orders/{order_id}/messages?tenant_id=T-001` | 受注に紐づく会話メッセージ一覧 |
+| PUT | `/api/orders/{order_id}/memo?tenant_id=T-001` | 受注メモ更新（担当者コメント・申し送り） |
 | PUT | `/api/customers/{customer_id}?tenant_id=T-001` | 顧客更新（LINE User ID紐付け等） |
 | GET | `/api/agent/features` | Dashboard Agent 機能フラグ（dashboard_agent/exception_triage/resolution_agent/resolution_execute/demo_mode） |
 | GET | `/api/agent/exceptions?delivery_date=YYYY-MM-DD` | 配送日単位の Exception Case 一覧（Z-score 数量異常・単位異常・在庫不足・要対応・返信待ち） |
@@ -281,7 +282,7 @@ requirements.txt                  # fastapi, semantic-kernel, azure-cosmos, aioo
 | テーブル | 行数 | 用途 |
 |---|---|---|
 | `tenants` | 2 | テナント管理 |
-| `customers` | 10 | 顧客マスタ（LINE User ID紐付け対応） |
+| `customers` | 10 | 顧客マスタ（LINE User ID紐付け対応、`delivery_group` カラム追加済み: `infra/sql/003-add-delivery-group.sql`） |
 | `products` | 17 | 商品マスタ（温度帯・不定貫フラグ付き） |
 | `product_aliases` | 0 | 商品名エイリアス（表記ゆれ対応） |
 | `inventory` | 17 | 在庫（quantity - reserved_qty = 有効在庫） |

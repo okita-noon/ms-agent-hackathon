@@ -13,6 +13,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
   const [lineUserId, setLineUserId] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [deliveryGroup, setDeliveryGroup] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
       setLineUserId(customer.line_user_id || "");
       setPhone(customer.phone || "");
       setEmail(customer.email || "");
+      setDeliveryGroup(customer.delivery_group || "");
     }
   }, [customer]);
 
@@ -37,6 +39,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
         line_user_id: lineUserId || undefined,
         phone: phone || undefined,
         email: email || undefined,
+        delivery_group: deliveryGroup || undefined,
       });
       onClose();
     } catch {
@@ -103,6 +106,13 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 className="input-field w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none bg-white" />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">納品グループ</label>
+            <input type="text" value={deliveryGroup} onChange={(e) => setDeliveryGroup(e.target.value)}
+              placeholder="例: 翌日配送、中1日"
+              className="input-field w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none bg-white" />
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">

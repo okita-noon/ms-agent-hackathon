@@ -19,7 +19,7 @@ class SqlCustomerRepository:
         query = """
         SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, active, delivery_group
         FROM customers
         WHERE tenant_id = ? AND active = 1
           AND (line_user_id = ? OR phone = ? OR email = ? OR name LIKE ?)
@@ -39,7 +39,7 @@ class SqlCustomerRepository:
         query = """
         SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, active, delivery_group
         FROM customers
         WHERE tenant_id = ? AND email = ? AND active = 1
         """
@@ -55,7 +55,7 @@ class SqlCustomerRepository:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, active, delivery_group
         FROM customers
         WHERE tenant_id = ? AND line_user_id = ? AND active = 1
         """
@@ -71,7 +71,7 @@ class SqlCustomerRepository:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, active, delivery_group
         FROM customers WHERE tenant_id = ? AND customer_id = ?
         """
         async with await self._get_connection() as conn:
@@ -86,7 +86,7 @@ class SqlCustomerRepository:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, active, delivery_group
         FROM customers WHERE tenant_id = ?
         ORDER BY customer_id
         """
@@ -105,6 +105,7 @@ class SqlCustomerRepository:
             "phone",
             "fax",
             "active",
+            "delivery_group",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -145,4 +146,5 @@ def _row_to_customer(row) -> Customer:
         fax=row[7],
         delivery_preference=pref,
         active=bool(row[11]),
+        delivery_group=row[12] if len(row) > 12 else None,
     )

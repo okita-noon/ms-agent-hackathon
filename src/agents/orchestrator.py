@@ -429,7 +429,7 @@ class OrderOrchestrator:
         draft: dict,
         source: OrderSource = OrderSource.LINE,
         session_id: str | None = None,
-        status: OrderStatus = OrderStatus.PENDING,
+        status: OrderStatus = OrderStatus.CONFIRMED,
         remarks: str | None = None,
     ) -> Order:
         items = []
