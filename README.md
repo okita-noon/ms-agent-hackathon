@@ -39,16 +39,24 @@
 - `docs/mvp-scope.md` - MVP / デモ対象範囲
 - `docs/email-channel-design.md` - メール連携設計
 - `docs/line-conversation-memory.md` - LINE 会話継続設計
+- `docs/dashboard-agent-design.md` - ダッシュボード Agent 設計
+- `docs/auth-setup.md` - 認証セットアップ
+- `docs/deployment-split.md` - デプロイ分割設計
 
 ## 3. いまできること
 
-- LINE webhook 経由で注文メッセージを受信
-- 電話チャネルの受信フローを処理
+- LINE webhook 経由で注文メッセージを受信（会話履歴を保持し文脈を維持）
+- 電話チャネル（ACS Call Automation）の受信フローを処理
+- 電話デモモード（実際の電話番号なしでテスト可能）
+- 在庫問い合わせ（「りんごの在庫ある？」等のメッセージに直接回答）
 - Semantic Kernel を使った注文解析、異常検知、在庫確認、返信生成
+- 配送時間帯の指定（午前中、14時、夕方等の表現を解釈）
+- ダッシュボード Agent（異常トリアージ・解決プレビュー）
 - Cosmos DB / Azure SQL を使った受注・セッション・学習データ管理
-- FastAPI による REST API 提供
-- React + Vite ベースのダッシュボード表示
+- JWT 認証付き REST API（FastAPI）
+- React + Vite ベースのダッシュボード（受注一覧・在庫管理・顧客管理）
 - Azure Container Apps / ACR / GitHub Actions を使ったデプロイ
+- Azure 予算アラート（コスト上限管理）
 
 未実装や残課題は `STATUS.md` を参照してください。
 
@@ -86,12 +94,17 @@ ms-agent-hackathon/
 │   ├── multi-agent-design.md               # Agent 役割分担と連携
 │   ├── mvp-scope.md                        # デモ対象スコープ
 │   ├── phone-testing.md                    # 電話チャネル検証メモ
+│   ├── dashboard-agent-design.md           # ダッシュボード Agent 設計
+│   ├── auth-setup.md                       # 認証セットアップ
+│   ├── deployment-split.md                 # デプロイ分割設計
+│   ├── agent-behavior-testing.md           # Agent 動作テスト
 │   ├── security.md                         # セキュリティ補足
 │   ├── visual-flows.md                     # 図解系ドキュメント
 │   └── assets/                             # ドキュメント用画像・補助素材
 ├── src/                                    # バックエンド本体
 │   ├── api/
-│   │   └── main.py                         # FastAPI エントリポイント
+│   │   ├── main.py                         # FastAPI エントリポイント
+│   │   └── dashboard_agent.py              # ダッシュボード Agent API
 │   ├── agents/
 │   │   ├── definitions.py                  # Agent instructions 定義
 │   │   └── orchestrator.py                 # Agent 統合実行フロー
@@ -135,7 +148,7 @@ ms-agent-hackathon/
 ├── .env.example                            # ローカル環境変数の雛形
 ├── AGENTS.md                               # プロジェクト固有ルール・構成説明
 ├── CLAUDE.md                               # AI 作業ルール
-├── CLAUDE.kio.md                           # 個人用メモ
+├── CLAUDE.kio.md                           # 個人用メモ（.gitignore で除外）
 ├── STATUS.md                               # 進捗・残課題・既知の問題
 ├── README.md                               # このファイル
 ├── SECURITY.md                             # セキュリティルール
@@ -215,7 +228,7 @@ Azure 利用が必要な場合の大まかな流れです。
 4. `Microsoft Entra ID` からテナント ID を確認する
 5. CLI ログイン後、利用できるか確認する
 
-詳細な権限や現在の進捗は `CLAUDE.kio.md` やチーム内連絡に依存するため、都度確認してください。
+詳細な権限や現在の進捗はチーム内連絡に依存するため、都度確認してください。
 
 ## 11. デプロイと運用メモ
 
