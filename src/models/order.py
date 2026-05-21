@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class OrderSource(StrEnum):
@@ -16,13 +17,19 @@ class OrderSource(StrEnum):
 
 
 class OrderStatus(StrEnum):
-    PENDING = "未処理"
     NEEDS_REVIEW = "要対応"
-    MANUFACTURING = "製造"
-    SHIPPING = "配送"
+    ACCEPTED = "受注済み"
+    SHIPPING = "配送中"
     COMPLETED = "完了"
     CANCELLED = "キャンセル"
-    AWAITING_REPLY = "返信待ち"
+
+
+_LEGACY_STATUS_MAP: dict[str, str] = {
+    "未処理": OrderStatus.ACCEPTED.value,
+    "製造": OrderStatus.ACCEPTED.value,
+    "配送": OrderStatus.SHIPPING.value,
+    "返信待ち": OrderStatus.NEEDS_REVIEW.value,
+}
 
 
 class TemperatureZone(StrEnum):
@@ -80,10 +87,18 @@ class Order(BaseModel):
     delivery_carrier: DeliveryCarrier | None = None
     delivery_time_slot: str | None = None
     yamato_tracking_number: str | None = None
-    status: OrderStatus = OrderStatus.PENDING
+    status: OrderStatus = OrderStatus.ACCEPTED
     remarks: str | None = None
+    memo: str | None = None
     session_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_legacy_status(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return _LEGACY_STATUS_MAP.get(value, value)
+        return value

@@ -27,7 +27,7 @@ from src.services.dashboard_agent import (
 def _order(
     *,
     uid: str = "ORD-001",
-    status: OrderStatus = OrderStatus.PENDING,
+    status: OrderStatus = OrderStatus.ACCEPTED,
     items: list[OrderItem] | None = None,
     remarks: str | None = None,
 ) -> Order:
@@ -206,12 +206,12 @@ class TestDashboardAgentClassification:
         assert {"注文数量", "在庫数量", "不足"} <= labels
 
     @pytest.mark.asyncio
-    async def test_status_review_and_awaiting_reply_emit_cases(self, mock_tenant_ctx):
+    async def test_status_review_emits_case(self, mock_tenant_ctx):
+        # 「返信待ち」は要対応に統合されたため、要対応ステータスのみが対象
         ctx = mock_tenant_ctx
         repo = ctx.get_connector("IOrderRepository")
         repo.list_by_date.return_value = [
             _order(uid="ORD-A", status=OrderStatus.NEEDS_REVIEW),
-            _order(uid="ORD-B", status=OrderStatus.AWAITING_REPLY),
         ]
         ctx.get_connector("IOrderIntelligenceStore").get_customer_profile.return_value = None
         ctx._connectors["IInventoryService"] = _inventory_ok()
@@ -220,7 +220,6 @@ class TestDashboardAgentClassification:
 
         types_by_order = {(c.order_id, c.type) for c in cases}
         assert ("ORD-A", "needs_review") in types_by_order
-        assert ("ORD-B", "awaiting_reply") in types_by_order
 
     @pytest.mark.asyncio
     async def test_no_orders_returns_empty(self, mock_tenant_ctx):
@@ -409,27 +408,6 @@ class TestDashboardAgentResolutionPreview:
         inventory.find_alternatives.assert_awaited_once_with("T-TEST", "P-001", 20)
         assert "ミニトマト" in preview.customer_message
         assert any("ミニトマト" in action for action in preview.recommended_actions)
-
-    @pytest.mark.asyncio
-    async def test_awaiting_reply_preview_includes_reminder(self, service):
-        case = ExceptionCase(
-            id="exc-3",
-            order_id="ORD-003",
-            customer_id="C-001",
-            customer_name="テスト食堂",
-            type="awaiting_reply",
-            severity="medium",
-            title="返信待ち",
-            summary="返信待ち",
-            suggested_action="リマインド",
-            evidence=[],
-            metadata={},
-        )
-
-        preview = await service.preview_resolution(case)
-
-        assert "リマインド" in preview.summary or "リマインド" in preview.title
-        assert "テスト食堂 様" not in preview.customer_message
 
 
 class TestDashboardAgentApi:

@@ -37,7 +37,7 @@ class TestOrderModel:
             ],
         )
         assert order.id == "ORD-001"
-        assert order.status == OrderStatus.PENDING
+        assert order.status == OrderStatus.ACCEPTED
         assert len(order.items) == 1
         assert order.items[0].quantity == 10
 
@@ -55,10 +55,35 @@ class TestOrderModel:
         assert data["source"] == "Phone"
 
     def test_order_status_enum(self):
-        assert OrderStatus.PENDING == "未処理"
+        assert OrderStatus.ACCEPTED == "受注済み"
         assert OrderStatus.NEEDS_REVIEW == "要対応"
+        assert OrderStatus.SHIPPING == "配送中"
         assert OrderStatus.COMPLETED == "完了"
-        assert OrderStatus.AWAITING_REPLY == "返信待ち"
+        assert OrderStatus.CANCELLED == "キャンセル"
+
+    def test_legacy_status_normalization(self):
+        # 旧ステータスは新ステータスへ自動マッピングされる
+        order = Order(
+            uid="ORD-OLD",
+            tenant_id="T-001",
+            order_date=date(2026, 5, 16),
+            customer_id="C-001",
+            customer_name="テスト",
+            source=OrderSource.LINE,
+            status="未処理",
+        )
+        assert order.status == OrderStatus.ACCEPTED
+
+        order2 = Order(
+            uid="ORD-OLD-2",
+            tenant_id="T-001",
+            order_date=date(2026, 5, 16),
+            customer_id="C-001",
+            customer_name="テスト",
+            source=OrderSource.LINE,
+            status="返信待ち",
+        )
+        assert order2.status == OrderStatus.NEEDS_REVIEW
 
     def test_temperature_zone_enum(self):
         assert TemperatureZone.AMBIENT == "常温"

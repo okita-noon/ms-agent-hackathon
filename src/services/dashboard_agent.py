@@ -30,7 +30,6 @@ ExceptionCaseType = Literal[
     "unit_anomaly",
     "inventory_shortage",
     "needs_review",
-    "awaiting_reply",
 ]
 ExceptionSeverity = Literal["high", "medium", "low"]
 
@@ -135,8 +134,6 @@ class DashboardAgentService:
             return _preview_unit_anomaly(case)
         if case.type == "inventory_shortage":
             return await self._preview_inventory_shortage(case)
-        if case.type == "awaiting_reply":
-            return _preview_awaiting_reply(case)
         return _preview_needs_review(case)
 
     async def _preview_inventory_shortage(self, case: ExceptionCase) -> ResolutionPreview:
@@ -171,18 +168,6 @@ def _classify_status(order: Order) -> list[ExceptionCase]:
                 title="担当者確認が必要な受注",
                 summary="Orchestrator が確定できず「要対応」となっています。",
                 suggested_action="注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
-                evidence=[Evidence(label="ステータス", value=order.status.value)],
-            )
-        ]
-    if order.status == OrderStatus.AWAITING_REPLY:
-        return [
-            _build_case(
-                order=order,
-                case_type="awaiting_reply",
-                severity="medium",
-                title="顧客返信待ちの受注",
-                summary="Communication Agent が確認を送信し、顧客からの返信を待っています。",
-                suggested_action="未回答のままであればリマインドを送ってください。",
                 evidence=[Evidence(label="ステータス", value=order.status.value)],
             )
         ]
@@ -494,21 +479,6 @@ def _preview_inventory_shortage_body(case: ExceptionCase, alternatives: list[dic
         confidence=0.75 if alternatives else 0.55,
         recommended_actions=actions,
         customer_message="\n".join(message_lines),
-        requires_approval=True,
-    )
-
-
-def _preview_awaiting_reply(case: ExceptionCase) -> ResolutionPreview:
-    return ResolutionPreview(
-        exception_id=case.id,
-        title="返信待ちのリマインド文案",
-        summary="顧客が確認に返信していないため、リマインドを送る準備をしました。",
-        confidence=0.6,
-        recommended_actions=[
-            "Communication Agent から push メッセージでリマインドを送信",
-            "返信が無い場合は担当者から電話確認",
-        ],
-        customer_message=("先ほどお送りした確認事項について、お手すきの際にご返信いただけますと幸いです。"),
         requires_approval=True,
     )
 

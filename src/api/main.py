@@ -440,6 +440,29 @@ async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     return order.model_dump(mode="json")
 
 
+class OrderMemoUpdate(BaseModel):
+    memo: str | None = None
+
+
+@app.put("/api/orders/{order_id}/memo")
+async def update_order_memo(
+    order_id: str,
+    payload: OrderMemoUpdate,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await repo.find_by_id(tenant_id, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
+    memo = (payload.memo or "").strip() or None
+    updated = await repo.update_memo(tenant_id, order_id, memo)
+    return updated.model_dump(mode="json")
+
+
 @app.get("/api/orders/{order_id}/messages")
 async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
