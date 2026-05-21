@@ -403,11 +403,14 @@ class OrderOrchestrator:
 
         final_prompt = channel_instruction + "\n\n".join(context_parts)
         response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
-        return _enforce_response_policy(
+        enforced = _enforce_response_policy(
             response_text,
             needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
             inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
         )
+        if source in (OrderSource.LINE, OrderSource.PHONE):
+            enforced = _strip_addressing_and_closing(enforced)
+        return enforced
 
     async def _send_line_message(
         self,
@@ -788,6 +791,38 @@ def _enforce_response_policy(
     if inventory_needs_review:
         return "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
     return "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+
+
+# 返信文から削除する宛名・会社名呼びかけのパターン（行頭限定）
+_ADDRESSING_PREFIX_PATTERNS = (
+    re.compile(r"^\s*[^\s。\n]{1,40}(?:御中|様)\s*[、。\s]*", re.MULTILINE),
+    re.compile(r"^\s*(?:ご担当者様|お客様各位|担当者様|関係者各位)\s*[、。\s]*", re.MULTILINE),
+)
+# 返信文から削除する挨拶・締め文（汎用締め文の抑制）
+_GENERIC_CLOSING_PATTERNS = (
+    re.compile(r"(?:今後とも|引き続き|何卒)?\s*よろしく\s*お願い\s*(?:いたし|申し上げ|致し)?ます[。．.！!]*\s*$"),
+    re.compile(r"よろしくお願いします[。．.！!]*\s*$"),
+)
+_GENERIC_GREETING_PATTERNS = (
+    re.compile(r"^\s*(?:いつも|平素より)?\s*お世話に\s*なって?おります[。．.\s]*", re.MULTILINE),
+    re.compile(r"^\s*いつもありがとうございます[。．.\s]*", re.MULTILINE),
+)
+
+
+def _strip_addressing_and_closing(response_text: str) -> str:
+    """LINE/電話用に宛名・会社名呼びかけ・汎用締め文・挨拶文を削除して簡潔化する。
+
+    #66 の方針：返信は注文内容と納品日のみを含む簡潔な文面に統一する。
+    プロンプトで指示しても LLM が付ける場合があるため、念のため後処理で除去する。
+    """
+    text = response_text
+    for pattern in _ADDRESSING_PREFIX_PATTERNS:
+        text = pattern.sub("", text, count=1)
+    for pattern in _GENERIC_GREETING_PATTERNS:
+        text = pattern.sub("", text, count=1)
+    for pattern in _GENERIC_CLOSING_PATTERNS:
+        text = pattern.sub("", text)
+    return text.strip()
 
 
 def _parse_order_items(message: str) -> list[dict]:

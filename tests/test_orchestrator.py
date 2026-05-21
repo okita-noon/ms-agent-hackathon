@@ -15,6 +15,7 @@ from src.agents.orchestrator import (
     _is_affirmative_reply,
     _is_inventory_inquiry,
     _parse_order_items,
+    _strip_addressing_and_closing,
 )
 from src.connectors.interfaces.inventory_service import InventoryStatus
 from src.models.message_history import MessageHistory
@@ -202,6 +203,37 @@ class TestResponsePolicy:
         response = "在庫状況を確認中です。担当者が確認して折り返します。"
 
         assert _enforce_response_policy(response, needs_confirmation=True, inventory_needs_review=True) == response
+
+
+class TestStripAddressingAndClosing:
+    """#66: LINE返信から会社名呼びかけ・汎用締め文・挨拶文を除去する."""
+
+    def test_removes_company_address_and_closing(self):
+        text = "株式会社A様、ご注文ありがとうございます。みかん100キロ、明日お届けいたします。今後ともよろしくお願いいたします。"
+        assert (
+            _strip_addressing_and_closing(text) == "ご注文ありがとうございます。みかん100キロ、明日お届けいたします。"
+        )
+
+    def test_removes_generic_greeting(self):
+        text = "お世話になっております。ご注文承りました。よろしくお願いします。"
+        assert _strip_addressing_and_closing(text) == "ご注文承りました。"
+
+    def test_removes_contact_person_address(self):
+        text = "ご担当者様、いちご5パック、5月22日午前中にお届けいたします。何卒よろしくお願い申し上げます。"
+        assert _strip_addressing_and_closing(text) == "いちご5パック、5月22日午前中にお届けいたします。"
+
+    def test_preserves_clean_response(self):
+        text = "ご注文ありがとうございます。バナナ20kg、明日お届けいたします。"
+        assert _strip_addressing_and_closing(text) == text
+
+    def test_removes_aisatsu_and_long_closing(self):
+        text = "いつもお世話になっております。りんご10箱、5月22日にお届けいたします。引き続きよろしくお願いいたします。"
+        assert _strip_addressing_and_closing(text) == "りんご10箱、5月22日にお届けいたします。"
+
+    def test_does_not_strip_arigatou(self):
+        # 「ご注文ありがとうございます」は標準フォーマットなので残す
+        text = "ご注文ありがとうございます。りんご10箱、明日お届けいたします。"
+        assert _strip_addressing_and_closing(text) == text
 
 
 class TestMemoryContext:
