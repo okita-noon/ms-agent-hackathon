@@ -182,6 +182,8 @@ async def _process_email_notification(
     azure_openai_key: str,
 ) -> None:
     try:
+        from src.services.email_handler import EmailIngestionService
+
         tenant_ctx = resolve_tenant_for_email(recipient_address)
         service = EmailIngestionService(
             tenant_ctx=tenant_ctx,
