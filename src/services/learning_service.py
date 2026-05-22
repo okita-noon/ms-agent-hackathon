@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.connectors.context import TenantContext
 from src.models.intelligence import (
@@ -34,7 +34,7 @@ class LearningService:
         if existing and _same_resolution(existing.resolved_items, resolved_items):
             existing.confidence = min(1.0, existing.confidence + 0.1)
             existing.occurrence_count += 1
-            existing.last_confirmed_at = datetime.utcnow()
+            existing.last_confirmed_at = datetime.now(timezone.utc)
             return await store.update_pattern(existing)
 
         pattern_type = "template" if len(resolved_items) > 1 else "single"
@@ -85,7 +85,7 @@ class LearningService:
 
         stats.typical_unit = unit
         stats.total_orders = n + 1
-        stats.last_ordered_at = datetime.utcnow().strftime("%Y-%m-%d")
+        stats.last_ordered_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         profile.product_stats[product_id] = stats
         return await store.upsert_profile(profile)
