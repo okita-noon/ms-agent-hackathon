@@ -1,0 +1,1 @@
+${customer_name}様、ご無沙汰しております。本日${product_origin}産の${product_name}をご案内いたします。${product_appeal}ご入用でしたらお気軽にご連絡ください。

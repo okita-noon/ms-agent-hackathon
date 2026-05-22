@@ -1,7 +1,7 @@
 """休眠顧客への営業メッセージ自動送信サービス.
 
 Created: 2026-05-22
-Updated: 2026-05-22 22:13
+Updated: 2026-05-22 22:23
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from string import Template
 
 from src.connectors.context import TenantContext
@@ -24,28 +25,18 @@ SEND_HOUR_START = 9
 SEND_HOUR_END = 18
 MAX_DAILY_SENDS = 10
 
-# --- テンプレート3パターン ---
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_TEMPLATE_DIR = _PROJECT_ROOT / "_templates"
+_TEMPLATE_GLOB = "販促営業_久しぶりの顧客用_*.txt"
 
-_TEMPLATES: list[Template] = [
-    Template(
-        "${customer_name}様、いつもお世話になっております。"
-        "${product_origin}産の${product_name}が入荷しました。"
-        "${product_appeal}"
-        "そろそろいかがでしょうか？"
-    ),
-    Template(
-        "${customer_name}様、ご無沙汰しております。"
-        "本日${product_origin}産の${product_name}をご案内いたします。"
-        "${product_appeal}"
-        "ご入用でしたらお気軽にご連絡ください。"
-    ),
-    Template(
-        "${customer_name}様、お世話になっております。"
-        "おすすめのご案内です。${product_origin}産の${product_name}が届きました。"
-        "${product_appeal}"
-        "よろしければご検討ください。"
-    ),
-]
+
+def _load_templates() -> list[Template]:
+    """_templates/ フォルダからテンプレートファイルを読み込む."""
+    files = sorted(_TEMPLATE_DIR.glob(_TEMPLATE_GLOB))
+    if not files:
+        logger.warning("テンプレートファイルが見つかりません: %s/%s", _TEMPLATE_DIR, _TEMPLATE_GLOB)
+        return []
+    return [Template(f.read_text(encoding="utf-8")) for f in files]
 
 
 def render_message(
@@ -53,7 +44,10 @@ def render_message(
     product: Product,
 ) -> str:
     """テンプレートからランダムに1つ選び、変数を埋めてメッセージを生成する."""
-    template = random.choice(_TEMPLATES)
+    templates = _load_templates()
+    if not templates:
+        return f"{customer.short_name or customer.name}様、おすすめ商品のご案内です。"
+    template = random.choice(templates)
     return template.safe_substitute(
         customer_name=customer.short_name or customer.name,
         product_name=product.display_name or product.name,

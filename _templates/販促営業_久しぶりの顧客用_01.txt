@@ -1,0 +1,1 @@
+${customer_name}様、いつもお世話になっております。${product_origin}産の${product_name}が入荷しました。${product_appeal}そろそろいかがでしょうか？
