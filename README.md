@@ -57,6 +57,7 @@
 - JWT 認証付き REST API（FastAPI）
 - React + Vite ベースのダッシュボード（受注一覧・在庫管理・顧客管理）
 - Azure Container Apps / ACR / GitHub Actions を使ったデプロイ
+- 休眠顧客への販促営業メッセージ自動送信（テンプレート × 変数でLINE・メール両チャネル対応、dry_run可）
 - Azure 予算アラート（コスト上限管理）
 
 未実装や残課題は `STATUS.md` を参照してください。
@@ -143,7 +144,10 @@ ms-agent-hackathon/
 │   ├── test_phone_handler.py               # 電話フローのテスト
 │   ├── test_plugins.py                     # Plugin ロジックのテスト
 │   ├── test_delivery_estimator.py          # 到着予定日推定のテスト
+│   ├── test_dormant_customer_service.py    # 休眠顧客サービスのテスト
 │   └── test_tenant_resolver.py             # テナント解決のテスト
+├── _templates/                             # メッセージテンプレート（.txt）
+│   └── 販促営業_久しぶりの顧客用_*.txt    # 休眠顧客向け営業メッセージ（3パターン）
 ├── articles/                               # 記事草稿や発信用素材
 ├── images/                                 # 図版・画像
 ├── scripts/                                # 補助スクリプト
@@ -172,6 +176,15 @@ ms-agent-hackathon/
 - ダッシュボードを変えたい -> `frontend/src/`
 - Azure 構成を変えたい -> `infra/`
 - 設計の前提を確認したい -> `docs/`
+- 営業メッセージのテンプレートを変えたい -> `_templates/`
+
+### テンプレートの管理
+
+`_templates/` フォルダに `.txt` ファイルとしてメッセージテンプレートを配置しています。
+
+- ファイル名でテンプレートの用途がわかるようにする（例: `販促営業_久しぶりの顧客用_01.txt`）
+- テンプレート内で使える変数: `${customer_name}`, `${product_name}`, `${product_origin}`, `${product_appeal}`
+- パターンを増やしたい場合は同じ命名規則でファイルを追加するだけでOK（コード変更不要）
 
 ## 7. セットアップ
 
