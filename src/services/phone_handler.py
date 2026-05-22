@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from azure.communication.callautomation import (
     CallAutomationClient,
@@ -408,16 +408,16 @@ class PhoneCallHandler:
         async with get_channel_user_lock("phone", state.caller_number):
             session = await session_repo.find_active_session(state.tenant_ctx.tenant_id, "phone", state.caller_number)
             if session:
-                session.last_message_at = datetime.utcnow()
+                session.last_message_at = datetime.now(timezone.utc)
                 await session_repo.update_session(session)
                 return session
 
             session = OrderSession(
-                id=f"sess-phone-{state.caller_number[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                id=f"sess-phone-{state.caller_number[-8:]}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                 tenant_id=state.tenant_ctx.tenant_id,
                 channel="phone",
                 channel_user_id=state.caller_number,
                 status="active",
-                expires_at=datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS),
             )
             return await session_repo.create_session(session)

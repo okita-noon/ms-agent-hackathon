@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const DEPLOYED_BASE =
-  "https://storderaidev2.z11.web.core.windows.net/dashboard";
+const DEPLOYED_BASE = "https://storderaidev2.z11.web.core.windows.net";
 
 test.describe("SSO Login flow (deployed)", () => {
   test.skip(
@@ -27,7 +26,7 @@ test.describe("SSO Login flow (deployed)", () => {
     const popupUrl = popup.url();
 
     expect(popupUrl).toContain("login.microsoftonline.com");
-    expect(popupUrl).not.toContain("/dashboard/login");
+    expect(popupUrl).not.toContain("/login");
 
     await popup.close();
   });
@@ -49,6 +48,7 @@ test.describe("SSO Login flow (deployed)", () => {
       const url = new URL(popupUrl);
       const redirectUri = url.searchParams.get("redirect_uri") || "";
       expect(redirectUri).not.toContain("auth-popup.html");
+      expect(redirectUri).not.toContain("/dashboard");
     }
 
     await popup.close();
@@ -76,7 +76,7 @@ test.describe("SSO Login flow (deployed)", () => {
 
 test.describe("SSO Login flow (local dev)", () => {
   test("login page loads without infinite loading", async ({ page }) => {
-    await page.goto("/dashboard/login");
+    await page.goto("/login");
     await page.waitForLoadState("networkidle");
 
     await expect(page.locator("text=ログイン").first()).toBeVisible({
@@ -88,7 +88,7 @@ test.describe("SSO Login flow (local dev)", () => {
   });
 
   test("login page has Microsoft SSO button", async ({ page }) => {
-    await page.goto("/dashboard/login");
+    await page.goto("/login");
     await expect(
       page.locator("text=Microsoft アカウントでログイン")
     ).toBeVisible();
@@ -104,7 +104,7 @@ test.describe("SSO Login flow (local dev)", () => {
       });
     });
 
-    await popup.goto("/dashboard/", { waitUntil: "domcontentloaded" });
+    await popup.goto("/", { waitUntil: "domcontentloaded" });
 
     const reactRoot = popup.locator("#root");
     await expect(reactRoot).toBeEmpty({ timeout: 5_000 });
