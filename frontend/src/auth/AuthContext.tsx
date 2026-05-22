@@ -147,17 +147,23 @@ export function AuthProvider({ children, onLoginSuccess }: AuthProviderProps) {
         display_name: data.display_name,
       });
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("user_cancelled")) {
-        return;
-      }
-      if (
-        err instanceof Error &&
-        err.message.includes("interaction_in_progress")
-      ) {
-        sessionStorage.clear();
-        throw new Error(
-          "ブラウザの状態をリセットしました。もう一度お試しください。"
-        );
+      if (err instanceof Error) {
+        const msg = err.message;
+        // Silent: user cancelled or popup closed before completing login
+        if (
+          msg.includes("user_cancelled") ||
+          msg.includes("popup_window_error") ||
+          msg.includes("monitor_window_timeout") ||
+          msg.includes("hash_not_found")
+        ) {
+          return;
+        }
+        if (msg.includes("interaction_in_progress")) {
+          sessionStorage.clear();
+          throw new Error(
+            "ブラウザの状態をリセットしました。もう一度お試しください。"
+          );
+        }
       }
       throw err;
     }
