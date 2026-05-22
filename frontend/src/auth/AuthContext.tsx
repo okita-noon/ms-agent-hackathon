@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -39,15 +40,23 @@ export function useAuth(): AuthContextType {
   return ctx;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode;
+  onLoginSuccess?: () => void;
+}
+
+export function AuthProvider({ children, onLoginSuccess }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const onLoginSuccessRef = useRef(onLoginSuccess);
+  onLoginSuccessRef.current = onLoginSuccess;
 
   const saveToken = useCallback((t: string, u: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
     setUser(u);
+    onLoginSuccessRef.current?.();
   }, []);
 
   const logout = useCallback(() => {
@@ -56,7 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  // Validate existing token on mount
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     if (!stored) {
