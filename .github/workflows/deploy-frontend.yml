@@ -80,7 +80,7 @@ jobs:
             --account-key "$ACCOUNT_KEY" \
             --static-website \
             --index-document "index.html" \
-            --404-document "index.html"
+            --404-document "${{ env.FRONTEND_PATH }}/index.html"
 
       - name: Upload frontend
         run: |
