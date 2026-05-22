@@ -1,7 +1,7 @@
 targetScope = 'resourceGroup'
 
-@description('環境名 (dev, staging, prod)')
-@allowed(['dev', 'staging', 'prod'])
+@description('環境名 (dev, dev2, staging, prod)')
+@allowed(['dev', 'dev2', 'staging', 'prod'])
 param environment string = 'dev'
 
 @description('プロジェクト名')

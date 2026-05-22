@@ -100,7 +100,7 @@
 # 環境変数（.env に設定）
 COSMOS_CONNECTION_STRING=...
 SQL_CONNECTION_STRING=...
-AZURE_OPENAI_ENDPOINT=https://ai-orderai-dev.openai.azure.com/
+AZURE_OPENAI_ENDPOINT=https://ai-orderai-dev2.openai.azure.com/
 AZURE_OPENAI_KEY=...
 LINE_CHANNEL_ID=...
 LINE_CHANNEL_SECRET=...
@@ -114,12 +114,12 @@ uvicorn src.api.main:app --reload --port 8080
 docker buildx build --platform linux/amd64 -t orderai-api:latest -f Dockerfile .
 
 # ACR にプッシュ
-az acr login --name ca61bef3ed27acr
-docker tag orderai-api:latest ca61bef3ed27acr.azurecr.io/orderai-api:latest
-docker push ca61bef3ed27acr.azurecr.io/orderai-api:latest
+az acr login --name acrorderaidev2
+docker tag orderai-api:latest acrorderaidev2.azurecr.io/orderai-api:latest
+docker push acrorderaidev2.azurecr.io/orderai-api:latest
 
 # Container Apps 更新
-az containerapp update --name ca-api-orderai-dev --resource-group rg-orderai-dev --image ca61bef3ed27acr.azurecr.io/orderai-api:latest
+az containerapp update --name ca-api-orderai-dev2 --resource-group rg-orderai-dev2 --image acrorderaidev2.azurecr.io/orderai-api:latest
 ```
 
 ## デモシナリオ（ハッカソン審査用）

@@ -39,16 +39,16 @@
 
 | リソース | 名前 | URL/エンドポイント |
 |---|---|---|
-| リソースグループ | `rg-orderai-dev` | Japan East |
-| Container Apps API | `ca-api-orderai-dev` | `https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io` |
-| ダッシュボード | `storderaidev` Static Website | `https://storderaidev.z11.web.core.windows.net/dashboard/` |
-| ACR | `ca61bef3ed27acr` | `ca61bef3ed27acr.azurecr.io` |
-| Cosmos DB | `cosmos-orderai-dev` | DB: `orders`, `intelligence` |
-| Azure SQL | `sql-orderai-dev` | DB: `db-orderai-dev` |
-| OpenAI | `ai-orderai-dev` | gpt-5.4-mini + text-embedding-3-small |
-| Speech | `ai-orderai-dev-speech` | |
-| AI Search | `search-orderai-dev` | |
-| Key Vault | `kv-orderai-dev` | RBAC認可 |
+| リソースグループ | `rg-orderai-dev2` | Japan East |
+| Container Apps API | `ca-api-orderai-dev2` | `https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io` |
+| ダッシュボード | `storderaidev2` Static Website | `https://storderaidev2.z11.web.core.windows.net/dashboard/` |
+| ACR | `acrorderaidev2` | `acrorderaidev2.azurecr.io` |
+| Cosmos DB | `cosmos-orderai-dev2` | DB: `orders`, `intelligence` |
+| Azure SQL | `sql-orderai-dev2` | DB: `db-orderai-dev2` |
+| OpenAI | `ai-orderai-dev2` | gpt-5.4-mini + text-embedding-3-small |
+| Speech | `ai-orderai-dev2-speech` | |
+| AI Search | `search-orderai-dev2` | |
+| Key Vault | `kv-orderai-dev2` | RBAC認可 |
 
 ### Key Vault シークレット一覧
 
@@ -66,7 +66,7 @@
 
 ### Container Apps 環境変数
 
-`ca-api-orderai-dev` に以下の環境変数が設定済み:
+`ca-api-orderai-dev2` に以下の環境変数が設定済み:
 
 **基盤**
 `COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
