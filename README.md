@@ -51,11 +51,13 @@
 - 在庫問い合わせ（「りんごの在庫ある？」等のメッセージに直接回答）
 - Semantic Kernel を使った注文解析、異常検知、在庫確認、返信生成
 - 配送時間帯の指定（午前中、14時、夕方等の表現を解釈）
+- 到着予定日の自動推定（顧客リードタイム・締め時間・定休日を考慮し、受注確定メッセージに含める）
 - ダッシュボード Agent（異常トリアージ・解決プレビュー）
 - Cosmos DB / Azure SQL を使った受注・セッション・学習データ管理
 - JWT 認証付き REST API（FastAPI）
 - React + Vite ベースのダッシュボード（受注一覧・在庫管理・顧客管理）
 - Azure Container Apps / ACR / GitHub Actions を使ったデプロイ
+- 休眠顧客への販促営業メッセージ自動送信（テンプレート × 変数でLINE・メール両チャネル対応、dry_run可）
 - Azure 予算アラート（コスト上限管理）
 
 未実装や残課題は `STATUS.md` を参照してください。
@@ -117,7 +119,7 @@ ms-agent-hackathon/
 │   ├── dashboard/                          # 旧ダッシュボード資産
 │   ├── models/                             # Pydantic モデル群
 │   ├── plugins/                            # Agent が呼ぶ業務機能
-│   └── services/                           # LINE / 電話 / 学習などの処理
+│   └── services/                           # LINE / 電話 / 学習 / 配送推定などの処理
 ├── frontend/                               # React + Vite ベースの新ダッシュボード
 │   ├── public/                             # 静的ファイル
 │   ├── src/
@@ -141,7 +143,11 @@ ms-agent-hackathon/
 │   ├── test_orchestrator.py                # Agent 統合処理のテスト
 │   ├── test_phone_handler.py               # 電話フローのテスト
 │   ├── test_plugins.py                     # Plugin ロジックのテスト
+│   ├── test_delivery_estimator.py          # 到着予定日推定のテスト
+│   ├── test_dormant_customer_service.py    # 休眠顧客サービスのテスト
 │   └── test_tenant_resolver.py             # テナント解決のテスト
+├── _templates/                             # メッセージテンプレート（.txt）
+│   └── 販促営業_久しぶりの顧客用_*.txt    # 休眠顧客向け営業メッセージ（3パターン）
 ├── articles/                               # 記事草稿や発信用素材
 ├── images/                                 # 図版・画像
 ├── scripts/                                # 補助スクリプト
@@ -170,6 +176,15 @@ ms-agent-hackathon/
 - ダッシュボードを変えたい -> `frontend/src/`
 - Azure 構成を変えたい -> `infra/`
 - 設計の前提を確認したい -> `docs/`
+- 営業メッセージのテンプレートを変えたい -> `_templates/`
+
+### テンプレートの管理
+
+`_templates/` フォルダに `.txt` ファイルとしてメッセージテンプレートを配置しています。
+
+- ファイル名でテンプレートの用途がわかるようにする（例: `販促営業_久しぶりの顧客用_01.txt`）
+- テンプレート内で使える変数: `${customer_name}`, `${product_name}`, `${product_origin}`, `${product_appeal}`
+- パターンを増やしたい場合は同じ命名規則でファイルを追加するだけでOK（コード変更不要）
 
 ## 7. セットアップ
 
@@ -230,13 +245,40 @@ Azure 利用が必要な場合の大まかな流れです。
 
 詳細な権限や現在の進捗はチーム内連絡に依存するため、都度確認してください。
 
-## 11. デプロイと運用メモ
+## 11. テナント設定（配送関連）
+
+`TenantConfig`（`src/models/tenant.py`）で受注側の会社の配送設定を管理します。
+
+| 設定項目 | フィールド名 | デフォルト値 | 説明 |
+|----------|-------------|-------------|------|
+| 締め時間 | `order_cutoff_hour` | `16`（16時） | この時刻以降の注文は翌営業日起算になる |
+| 定休日（曜日） | `closed_weekdays` | `[6]`（日曜） | 配送しない曜日。月=0〜日=6 |
+| 臨時休業日 | `extra_holidays` | `[]` | YYYY-MM-DD 形式のリスト（年末年始・GW等） |
+
+顧客ごとのリードタイムは `Customer.delivery_lead_time` で設定します。
+
+| リードタイム | 値 | 意味 |
+|-------------|-----|------|
+| 当日 | `SAME_DAY` | 締め時間前の注文 → 当日お届け |
+| 翌日 | `NEXT_DAY` | 締め時間前の注文 → 翌営業日お届け |
+| 中1日 | `ONE_DAY_GAP` | 締め時間前の注文 → 2営業日後お届け |
+| 中2日 | `TWO_DAY_GAP` | 締め時間前の注文 → 3営業日後お届け |
+
+顧客にリードタイムが未設定の場合は、配送ルート（地域）から日数を幅で推定します。
+
+### 設定例
+
+- 締め時間を15時に変更: `order_cutoff_hour=15`
+- 水曜・日曜を定休日に: `closed_weekdays=[2, 6]`
+- 年末年始を追加: `extra_holidays=["2026-12-31", "2027-01-01", "2027-01-02", "2027-01-03"]`
+
+## 12. デプロイと運用メモ
 
 - `main` ブランチへの push で GitHub Actions が自動デプロイ
 - 手動デプロイ時は Docker build -> ACR push -> Container Apps update
 - 新しい環境変数を追加した場合、Container Apps 側にも設定が必要
 
-## 12. セキュリティ
+## 13. セキュリティ
 
 - `.env` や秘密情報はコミットしない
 - API キー、接続文字列、シークレットは Key Vault または安全な方法で管理する

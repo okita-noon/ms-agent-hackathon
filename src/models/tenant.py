@@ -26,4 +26,7 @@ class TenantConfig(BaseModel):
     graph_mailbox_user_id: str | None = None
     email_address: str | None = None
     auto_confirm_threshold: float = 0.9
+    order_cutoff_hour: int = 16
+    closed_weekdays: list[int] = Field(default_factory=lambda: [6])
+    extra_holidays: list[str] = Field(default_factory=list)
     connectors: dict[str, ConnectorConfig] = Field(default_factory=dict)

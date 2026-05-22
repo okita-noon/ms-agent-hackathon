@@ -20,7 +20,9 @@ from src.agents.definitions import (
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundMessage
 from src.models.message_history import MessageHistory
-from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.services import delivery_estimator
+from src.models.customer import DeliveryLeadTime
+from src.models.order import DeliveryRoute, Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.models.session import OrderSession
 from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
@@ -158,6 +160,14 @@ class OrderOrchestrator:
                 source=source,
                 session_id=session_id,
             )
+            route = _resolve_delivery_route(pending_order_draft, self._ctx)
+            lead_time = await _resolve_lead_time(pending_order_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            affirm_delivery_estimate = delivery_estimator.format_estimate(min_d, max_d)
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -167,6 +177,7 @@ class OrderOrchestrator:
                 source=source,
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
+                delivery_estimate=affirm_delivery_estimate,
             )
             result["response"] = response_text
             result["order_id"] = saved_order.id
@@ -320,6 +331,18 @@ class OrderOrchestrator:
             except Exception:
                 logger.exception("Failed to save order from multi-agent chain")
 
+        # ── Step 4.5: Estimate delivery date ─────────────────────────────────
+        delivery_estimate_text: str | None = None
+        if not needs_confirmation:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+
         # ── Step 5: Generate final response via orchestrator ───────────────────
         response_text = await self._generate_final_response(
             message=message,
@@ -331,6 +354,7 @@ class OrderOrchestrator:
             conversation_history=conversation_history,
             pending_order_draft=pending_order_draft,
             processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+            delivery_estimate=delivery_estimate_text,
         )
         result["response"] = response_text
 
@@ -377,6 +401,7 @@ class OrderOrchestrator:
         conversation_history: list[MessageHistory] | None = None,
         pending_order_draft: dict | None = None,
         processing_note: str | None = None,
+        delivery_estimate: str | None = None,
     ) -> str:
         orchestrator_agent = self._make_orchestrator_agent()
         context_parts = [
@@ -392,6 +417,8 @@ class OrderOrchestrator:
             context_parts.append(f"[Exception Agent結果]\n{exception_text}")
         if inventory_text:
             context_parts.append(f"[Inventory Agent結果]\n{inventory_text}")
+        if delivery_estimate:
+            context_parts.append(f"[配送予定]\n{delivery_estimate}")
         if processing_note:
             context_parts.append(f"[処理ステータス]\n{processing_note}")
 
@@ -575,6 +602,32 @@ class OrderOrchestrator:
             "delivery_carrier": preference.default_carrier,
             "delivery_time_slot": preference.default_time_slot,
         }
+
+
+def _resolve_delivery_route(draft: dict, ctx: TenantContext) -> DeliveryRoute | None:
+    """ドラフトまたは顧客情報から配送ルートを取得する."""
+    route_val = draft.get("delivery_route")
+    if route_val:
+        try:
+            return DeliveryRoute(route_val)
+        except ValueError:
+            pass
+    return None
+
+
+async def _resolve_lead_time(draft: dict, ctx: TenantContext) -> DeliveryLeadTime | None:
+    """ドラフトの顧客IDから配送リードタイムを取得する."""
+    customer_id = draft.get("customer_id")
+    if not customer_id:
+        return None
+    try:
+        repo = ctx.get_connector("ICustomerRepository")
+        customer = await repo.find_by_identifier(ctx.tenant_id, customer_id)
+        if customer and customer.delivery_lead_time:
+            return customer.delivery_lead_time
+    except Exception:
+        logger.debug("Could not resolve delivery_lead_time for %s", customer_id)
+    return None
 
 
 def _build_draft_from_intake(intake_draft: dict) -> dict | None:
