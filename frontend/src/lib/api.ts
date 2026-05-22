@@ -48,6 +48,7 @@ export interface Order {
   status: string;
   preparation_date?: string;
   remarks?: string;
+  memo?: string;
   session_id?: string;
   updated_at?: string;
 }
@@ -68,6 +69,16 @@ export interface OrdersResponse {
   offset: number;
 }
 
+export type DeliveryLeadTime = "当日" | "翌日" | "中1日" | "中2日";
+
+export const DELIVERY_LEAD_TIME_OPTIONS: DeliveryLeadTime[] = [
+  "当日",
+  "翌日",
+  "中1日",
+  "中2日",
+];
+
+
 export interface Customer {
   id: string;
   tenant_id: string;
@@ -77,8 +88,19 @@ export interface Customer {
   email?: string;
   phone?: string;
   fax?: string;
+  delivery_lead_time?: DeliveryLeadTime | null;
   active: boolean;
 }
+
+export async function updateOrderMemo(orderId: string, memo: string | null): Promise<Order> {
+  const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/memo`, {
+    method: "PUT",
+    body: JSON.stringify({ memo }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 
 export async function fetchOrders(
   date: string,

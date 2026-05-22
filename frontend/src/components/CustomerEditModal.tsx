@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import type { Customer } from "../lib/api";
+import type { Customer, DeliveryLeadTime } from "../lib/api";
+import { DELIVERY_LEAD_TIME_OPTIONS } from "../lib/api";
 
 interface Props {
   customer: Customer | null;
@@ -13,6 +14,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
   const [lineUserId, setLineUserId] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [leadTime, setLeadTime] = useState<DeliveryLeadTime | "">("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -22,6 +24,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
       setLineUserId(customer.line_user_id || "");
       setPhone(customer.phone || "");
       setEmail(customer.email || "");
+      setLeadTime((customer.delivery_lead_time as DeliveryLeadTime | undefined) || "");
     }
   }, [customer]);
 
@@ -37,6 +40,7 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
         line_user_id: lineUserId || undefined,
         phone: phone || undefined,
         email: email || undefined,
+        delivery_lead_time: leadTime || null,
       });
       onClose();
     } catch {
@@ -103,6 +107,23 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 className="input-field w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none bg-white" />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">納品グループ</label>
+            <select
+              value={leadTime}
+              onChange={(e) => setLeadTime(e.target.value as DeliveryLeadTime | "")}
+              className="input-field w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none bg-white cursor-pointer"
+            >
+              <option value="">未設定</option>
+              {DELIVERY_LEAD_TIME_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+              受注日から納品日までのリードタイム（当日／翌日／中1日／中2日）
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">

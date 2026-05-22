@@ -4,9 +4,14 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
-import { msalInstance, loginScopes } from "./msalConfig";
+import {
+  msalInstance,
+  msalReady,
+  loginScopes,
+} from "./msalConfig";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "foogent_token";
@@ -35,15 +40,23 @@ export function useAuth(): AuthContextType {
   return ctx;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode;
+  onLoginSuccess?: () => void;
+}
+
+export function AuthProvider({ children, onLoginSuccess }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const onLoginSuccessRef = useRef(onLoginSuccess);
+  onLoginSuccessRef.current = onLoginSuccess;
 
   const saveToken = useCallback((t: string, u: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
     setUser(u);
+    onLoginSuccessRef.current?.();
   }, []);
 
   const logout = useCallback(() => {
@@ -52,7 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  // Validate existing token on mount
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     if (!stored) {
@@ -106,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithMicrosoft = useCallback(async () => {
     try {
-      await msalInstance.initialize();
+      await msalReady;
       const result = await msalInstance.loginPopup({
         scopes: loginScopes,
       });
@@ -131,9 +143,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: data.email,
         display_name: data.display_name,
       });
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof Error && err.message.includes("user_cancelled")) {
-        return; // User cancelled popup
+        return;
+      }
+      if (
+        err instanceof Error &&
+        err.message.includes("interaction_in_progress")
+      ) {
+        sessionStorage.clear();
+        throw new Error(
+          "ブラウザの状態をリセットしました。もう一度お試しください。"
+        );
       }
       throw err;
     }

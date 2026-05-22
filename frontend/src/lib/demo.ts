@@ -2,13 +2,15 @@ import type { Order, Customer, Message } from "./api";
 
 export function getDemoOrders(): Order[] {
   const today = new Date().toISOString().split("T")[0];
+  const ts = (h: number, m: number) => `${today}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
   return [
-    { uid: "ORD-001", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-001", customer_name: "株式会社A", source: "LINE", items: [{ product_name: "りんご", quantity: 10, unit: "箱", temperature_zone: "冷蔵" }, { product_name: "バナナ", quantity: 20, unit: "kg", temperature_zone: "常温" }], delivery_carrier: "自社便", delivery_route: "北関東便", delivery_time_slot: "午前中", status: "未処理", remarks: undefined },
-    { uid: "ORD-002", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-002", customer_name: "株式会社B", source: "LINE", items: [{ product_name: "もも", quantity: 5, unit: "箱", temperature_zone: "冷蔵" }], delivery_carrier: "芦川便", delivery_route: "西日本便", delivery_time_slot: "14:00-16:00", status: "完了", remarks: undefined },
-    { uid: "ORD-003", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-003", customer_name: "株式会社C", source: "Phone", items: [{ product_name: "メロン", quantity: 3, unit: "玉", temperature_zone: "冷凍" }], delivery_carrier: "自社便", delivery_route: "中部便", status: "製造", remarks: undefined },
-    { uid: "ORD-004", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-004", customer_name: "株式会社D", source: "LINE", items: [{ product_name: "いちご", quantity: 15, unit: "パック", temperature_zone: "常温" }, { product_name: "ぶどう", quantity: 8, unit: "房", temperature_zone: "常温" }], delivery_carrier: "自社便", delivery_route: "九州便", delivery_time_slot: "18:00-20:00", status: "配送", remarks: undefined },
-    { uid: "ORD-005", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-005", customer_name: "株式会社E", source: "Phone", items: [{ product_name: "みかん", quantity: 100, unit: "個", temperature_zone: "冷凍" }], delivery_carrier: "冷凍ヤマト便", delivery_route: "北海道便", status: "要対応", remarks: "在庫不足のため担当者確認中" },
-    { uid: "ORD-006", tenant_id: "T-001", order_date: today, delivery_date: today, customer_id: "C-006", customer_name: "株式会社F", source: "LINE", items: [{ product_name: "レモン", quantity: 30, unit: "個", temperature_zone: "常温" }], delivery_carrier: "自社便", delivery_route: "東北便", status: "完了", remarks: undefined },
+    { uid: "ORD-001", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "手入力", items: [{ product_name: "メロン", quantity: 3, unit: "玉", temperature_zone: "冷凍" }], delivery_carrier: "芦川便", delivery_route: "関西便", delivery_time_slot: "午後", status: "完了", remarks: "急ぎ対応済み", updated_at: ts(15, 10) },
+    { uid: "ORD-002", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "Email", items: [{ product_name: "さくらんぼ", quantity: 10, unit: "パック", temperature_zone: "冷蔵" }], delivery_carrier: "冷蔵ヤマト便", delivery_route: "東北便", delivery_time_slot: "16:00", status: "配送中", remarks: undefined, updated_at: ts(15, 5) },
+    { uid: "ORD-003", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "LINE", items: [{ product_name: "いちじく", quantity: 5, unit: "箱", temperature_zone: "冷凍" }], delivery_carrier: "冷凍ヤマト便", delivery_route: "北海道便", delivery_time_slot: "午前", status: "完了", remarks: undefined, updated_at: ts(15, 0) },
+    { uid: "ORD-004", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "Email", items: [{ product_name: "メロン", quantity: 5, unit: "玉", temperature_zone: "冷凍" }, { product_name: "マンゴー", quantity: 3, unit: "個", temperature_zone: "冷凍" }], delivery_carrier: "冷凍ヤマト便", delivery_route: "四国便", delivery_time_slot: "午後", status: "完了", remarks: "冷凍まとめ便", updated_at: ts(15, 12) },
+    { uid: "ORD-005", tenant_id: "T-001", order_date: ts(10, 23), delivery_date: today, customer_id: "C-002", customer_name: "佐藤 花子", source: "LINE", items: [{ product_name: "りんご", quantity: 10, unit: "箱", temperature_zone: "冷蔵" }], delivery_carrier: "自社便", delivery_route: "北関東便", delivery_time_slot: "午前中", status: "要対応", remarks: "配送日変更希望", updated_at: ts(11, 0) },
+    { uid: "ORD-006", tenant_id: "T-001", order_date: ts(11, 45), delivery_date: today, customer_id: "C-003", customer_name: "田中 一郎", source: "Phone", items: [{ product_name: "ぶどう", quantity: 8, unit: "房", temperature_zone: "常温" }], delivery_carrier: "自社便", delivery_route: "九州便", delivery_time_slot: "18:00-20:00", status: "要対応", remarks: undefined, updated_at: ts(12, 0) },
+    { uid: "ORD-007", tenant_id: "T-001", order_date: ts(9, 15), delivery_date: today, customer_id: "C-004", customer_name: "鈴木 次郎", source: "FAX", items: [{ product_name: "みかん", quantity: 20, unit: "箱", temperature_zone: "冷蔵" }], delivery_carrier: "冷蔵ヤマト便", delivery_route: "北海道便", status: "受注済み", remarks: undefined, updated_at: ts(10, 0) },
   ];
 }
 
@@ -57,8 +59,8 @@ export function getDemoMessages(orderId: string): Message[] {
 
 export function getDemoCustomers(): Customer[] {
   return [
-    { id: "C-001", tenant_id: "T-001", name: "株式会社テスト", short_name: "テスト社", line_user_id: undefined, phone: "03-1234-5678", email: "test@example.com", active: true },
-    { id: "C-002", tenant_id: "T-001", name: "株式会社サンプル", short_name: "サンプル社", line_user_id: "U1234567890abcdef", phone: "06-9876-5432", email: undefined, active: true },
-    { id: "C-003", tenant_id: "T-001", name: "有限会社デモ", short_name: "デモ社", line_user_id: undefined, phone: undefined, email: "demo@example.com", active: true },
+    { id: "C-001", tenant_id: "T-001", name: "株式会社テスト", short_name: "テスト社", line_user_id: undefined, phone: "03-1234-5678", email: "test@example.com", delivery_lead_time: "翌日", active: true },
+    { id: "C-002", tenant_id: "T-001", name: "株式会社サンプル", short_name: "サンプル社", line_user_id: "U1234567890abcdef", phone: "06-9876-5432", email: undefined, delivery_lead_time: "中1日", active: true },
+    { id: "C-003", tenant_id: "T-001", name: "有限会社デモ", short_name: "デモ社", line_user_id: undefined, phone: undefined, email: "demo@example.com", delivery_lead_time: "当日", active: true },
   ];
 }

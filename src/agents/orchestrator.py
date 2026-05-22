@@ -18,8 +18,10 @@ from src.agents.definitions import (
     ORCHESTRATOR_INSTRUCTIONS,
 )
 from src.connectors.context import TenantContext
+from src.models.inbound import InboundMessage
 from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.models.session import OrderSession
 from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
@@ -189,6 +191,9 @@ class OrderOrchestrator:
         if source == OrderSource.PHONE:
             lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
             user_label = f"電話番号: {line_user_id}"
+        elif source == OrderSource.EMAIL:
+            lookup_instruction = "lookup_customer でこの顧客をメールアドレスから特定し、"
+            user_label = f"メールアドレス: {line_user_id}"
         else:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
@@ -329,6 +334,26 @@ class OrderOrchestrator:
 
         return result
 
+    async def process_email(
+        self,
+        inbound: InboundMessage,
+        session: OrderSession,
+        reply_callback: Callable[[str, str, str | None], Awaitable[None]],
+    ) -> dict:
+        async def email_response_callback(body: str) -> None:
+            base_subject = inbound.subject or "ご注文の確認"
+            subject = base_subject if base_subject.startswith("Re: ") else f"Re: {base_subject}"
+            await reply_callback(subject, body, inbound.reply_to_message_id or inbound.external_message_id)
+
+        return await self.process_order_message(
+            message=inbound.text,
+            line_user_id=inbound.channel_user_id,
+            reply_token=None,
+            source=OrderSource.EMAIL,
+            response_callback=email_response_callback,
+            pending_order_draft=session.pending_order_draft,
+        )
+
     async def _generate_final_response(
         self,
         message: str,
@@ -364,6 +389,12 @@ class OrderOrchestrator:
                 "電話で読み上げるため、簡潔で自然な話し言葉にしてください。\n"
                 "返信メッセージのみを出力してください（JSON不要）。\n\n"
             )
+        elif source == OrderSource.EMAIL:
+            channel_instruction = (
+                "以下の各Agentの処理結果を踏まえて、顧客へのメール返信本文を生成してください。\n"
+                "丁寧で簡潔な日本語にしてください。\n"
+                "返信本文のみを出力してください（件名やJSON不要）。\n\n"
+            )
         else:
             channel_instruction = (
                 "以下の各Agentの処理結果を踏まえて、顧客へのLINE返信メッセージを生成してください。\n"
@@ -398,7 +429,7 @@ class OrderOrchestrator:
         draft: dict,
         source: OrderSource = OrderSource.LINE,
         session_id: str | None = None,
-        status: OrderStatus = OrderStatus.PENDING,
+        status: OrderStatus = OrderStatus.ACCEPTED,
         remarks: str | None = None,
     ) -> Order:
         items = []
@@ -710,7 +741,9 @@ def _format_inventory_inquiry_response(
         required_qty = item["required_qty"]
         if required_qty:
             if item["is_sufficient"]:
-                lines.append(f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。")
+                lines.append(
+                    f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。"
+                )
             else:
                 shortage = max(required_qty - available_qty, 0)
                 lines.append(

@@ -80,6 +80,7 @@ export default function Customers() {
                   <th className="px-5 py-3">ID</th>
                   <th className="px-5 py-3">顧客名</th>
                   <th className="px-5 py-3">略称</th>
+                  <th className="px-5 py-3">納品グループ</th>
                   <th className="px-5 py-3">LINE連携</th>
                   <th className="px-5 py-3">電話</th>
                   <th className="px-5 py-3">メール</th>
@@ -93,6 +94,15 @@ export default function Customers() {
                     <td className="px-5 py-3.5 font-mono text-xs text-gray-400">{c.id}</td>
                     <td className="px-5 py-3.5 font-medium text-gray-900">{c.name}</td>
                     <td className="px-5 py-3.5 text-gray-500">{c.short_name || <span className="text-gray-300">-</span>}</td>
+                    <td className="px-5 py-3.5">
+                      {c.delivery_lead_time ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200">
+                          {c.delivery_lead_time}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       {c.line_user_id ? (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">

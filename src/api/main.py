@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import (
@@ -25,7 +26,7 @@ from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
-from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_line
+from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_email, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,11 +37,99 @@ LineWebhookHandler: Any | None = None
 PhoneCallHandler: Any | None = None
 
 
+GRAPH_SUBSCRIPTION_EXPIRY_HOURS = 48
+GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS = 3600
+
+
+async def _create_graph_subscription() -> str | None:
+    """Graph APIのSubscriptionを作成し、メール受信通知を有効にする"""
+    mailbox = os.environ.get("GRAPH_MAILBOX_USER_ID")
+    client_id = os.environ.get("GRAPH_CLIENT_ID")
+    client_secret = os.environ.get("GRAPH_CLIENT_SECRET")
+    graph_tenant_id = os.environ.get("GRAPH_TENANT_ID")
+    callback_url = os.environ.get("GRAPH_WEBHOOK_URL")
+
+    if not all([mailbox, client_id, client_secret, graph_tenant_id, callback_url]):
+        logger.info("Graph Subscription: 環境変数不足のためスキップ")
+        return None
+
+    try:
+        import httpx
+
+        from src.services.email_handler import _token_cache
+
+        token = await _token_cache.get_token(graph_tenant_id, client_id, client_secret)
+        expiry = datetime.now(timezone.utc) + timedelta(hours=GRAPH_SUBSCRIPTION_EXPIRY_HOURS)
+
+        payload = {
+            "changeType": "created",
+            "notificationUrl": callback_url,
+            "resource": f"/users/{mailbox}/messages",
+            "expirationDateTime": expiry.strftime("%Y-%m-%dT%H:%M:%S.0000000Z"),
+            "clientState": os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook"),
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://graph.microsoft.com/v1.0/subscriptions",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json=payload,
+            )
+            if resp.status_code in (200, 201):
+                sub_id = resp.json().get("id")
+                logger.info("Graph Subscription 作成完了: id=%s expiry=%s", sub_id, expiry.isoformat())
+                return sub_id
+            logger.error("Graph Subscription 作成失敗: %s %s", resp.status_code, resp.text)
+            return None
+    except Exception:
+        logger.exception("Graph Subscription 作成エラー")
+        return None
+
+
+async def _renew_graph_subscription(subscription_id: str) -> None:
+    """Subscriptionの自動更新ループ"""
+    while True:
+        renew_interval = GRAPH_SUBSCRIPTION_EXPIRY_HOURS * 3600 - GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS
+        await asyncio.sleep(renew_interval)
+        try:
+            import httpx
+
+            from src.services.email_handler import _token_cache
+
+            client_id = os.environ.get("GRAPH_CLIENT_ID", "")
+            client_secret = os.environ.get("GRAPH_CLIENT_SECRET", "")
+            graph_tenant_id = os.environ.get("GRAPH_TENANT_ID", "")
+            token = await _token_cache.get_token(graph_tenant_id, client_id, client_secret)
+
+            expiry = datetime.now(timezone.utc) + timedelta(hours=GRAPH_SUBSCRIPTION_EXPIRY_HOURS)
+            async with httpx.AsyncClient() as client:
+                resp = await client.patch(
+                    f"https://graph.microsoft.com/v1.0/subscriptions/{subscription_id}",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    json={"expirationDateTime": expiry.strftime("%Y-%m-%dT%H:%M:%S.0000000Z")},
+                )
+                if resp.status_code == 200:
+                    logger.info("Graph Subscription 更新完了: id=%s expiry=%s", subscription_id, expiry.isoformat())
+                else:
+                    logger.error("Graph Subscription 更新失敗: %s %s", resp.status_code, resp.text)
+        except Exception:
+            logger.exception("Graph Subscription 更新エラー")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     register_all_adapters()
     logger.info("Adapter registry initialized")
+
+    renew_task = None
+    sub_id = await _create_graph_subscription()
+    if sub_id:
+        renew_task = asyncio.create_task(_renew_graph_subscription(sub_id))
+
     yield
+
+    if renew_task:
+        renew_task.cancel()
 
 
 app = FastAPI(title="foogent API", lifespan=lifespan)
@@ -86,6 +175,26 @@ async def _process_line_events(handler: Any, body_json: dict) -> None:
         logger.exception("Error processing LINE webhook in background")
 
 
+async def _process_email_notification(
+    message_id: str,
+    recipient_address: str,
+    azure_openai_endpoint: str,
+    azure_openai_key: str,
+) -> None:
+    try:
+        from src.services.email_handler import EmailIngestionService
+
+        tenant_ctx = resolve_tenant_for_email(recipient_address)
+        service = EmailIngestionService(
+            tenant_ctx=tenant_ctx,
+            azure_openai_endpoint=azure_openai_endpoint,
+            azure_openai_key=azure_openai_key,
+        )
+        await service.process_notification(message_id, recipient_address)
+    except Exception:
+        logger.exception("Error processing email notification in background")
+
+
 @app.post("/api/line-webhook")
 async def line_webhook(
     request: Request,
@@ -123,6 +232,49 @@ async def line_webhook(
 
     background_tasks.add_task(_process_line_events, handler, body_json)
     return Response(status_code=200)
+
+
+@app.api_route("/api/email-webhook", methods=["GET", "POST"])
+async def email_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    validationToken: str | None = None,
+):
+    if validationToken:
+        return Response(content=validationToken, media_type="text/plain")
+
+    body = await request.json()
+
+    expected_state = os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook")
+    notifications = body.get("value", [])
+    notifications = [n for n in notifications if n.get("clientState") == expected_state]
+    if not notifications:
+        logger.warning("Email webhook: clientState不一致または通知なし")
+        return Response(status_code=202)
+    default_recipient = os.environ.get("GRAPH_MAILBOX_ADDRESS", "order@example.com")
+    azure_openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+    azure_openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
+
+    for notification in notifications:
+        resource_data = notification.get("resourceData", {}) or {}
+        message_id = resource_data.get("id")
+        if not message_id:
+            continue
+        recipient_address = (
+            notification.get("recipientAddress")
+            or notification.get("toAddress")
+            or resource_data.get("recipientAddress")
+            or default_recipient
+        )
+        background_tasks.add_task(
+            _process_email_notification,
+            message_id,
+            recipient_address,
+            azure_openai_endpoint,
+            azure_openai_key,
+        )
+
+    return Response(status_code=202)
 
 
 # ── Phone (ACS Call Automation) webhook ───────────────────────────────────────
@@ -286,6 +438,29 @@ async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
             detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
         )
     return order.model_dump(mode="json")
+
+
+class OrderMemoUpdate(BaseModel):
+    memo: str | None = None
+
+
+@app.put("/api/orders/{order_id}/memo")
+async def update_order_memo(
+    order_id: str,
+    payload: OrderMemoUpdate,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await repo.find_by_id(tenant_id, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
+    memo = (payload.memo or "").strip() or None
+    updated = await repo.update_memo(tenant_id, order_id, memo)
+    return updated.model_dump(mode="json")
 
 
 @app.get("/api/orders/{order_id}/messages")

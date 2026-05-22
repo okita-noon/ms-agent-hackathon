@@ -1,4 +1,8 @@
-import { PublicClientApplication, type Configuration } from "@azure/msal-browser";
+import {
+  PublicClientApplication,
+  BrowserAuthError,
+  type Configuration,
+} from "@azure/msal-browser";
 
 const msalConfig: Configuration = {
   auth: {
@@ -12,4 +16,20 @@ const msalConfig: Configuration = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
+
+export const msalReady: Promise<void> = msalInstance
+  .initialize()
+  .then(() => msalInstance.handleRedirectPromise())
+  .then(() => undefined)
+  .catch((err) => {
+    if (
+      err instanceof BrowserAuthError &&
+      err.errorCode === "interaction_in_progress"
+    ) {
+      sessionStorage.clear();
+      return;
+    }
+    console.error("MSAL init error:", err);
+  });
+
 export const loginScopes = ["openid", "profile", "email"];

@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
 
   // Close menu on outside click
@@ -56,6 +58,7 @@ export default function Header() {
                     onClick={() => {
                       setMenuOpen(false);
                       logout();
+                      navigate("/login", { replace: true });
                     }}
                     className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                   >

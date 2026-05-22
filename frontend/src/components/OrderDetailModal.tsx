@@ -1,12 +1,74 @@
 import { useEffect, useState } from "react";
 import type { Message, Order } from "../lib/api";
-import { fetchOrderMessages } from "../lib/api";
+import { fetchOrderMessages, updateOrderMemo } from "../lib/api";
+import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
 
 interface Props {
   order: Order | null;
   onClose: () => void;
+  onMemoUpdated?: (order: Order) => void;
+}
+
+function MemoEditor({
+  orderId,
+  initialMemo,
+  onSaved,
+}: {
+  orderId: string;
+  initialMemo: string;
+  onSaved?: (order: Order) => void;
+}) {
+  const [memo, setMemo] = useState(initialMemo);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty = memo !== initialMemo;
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateOrderMemo(orderId, memo.trim() || null);
+      onSaved?.(updated);
+    } catch {
+      setError("メモの保存に失敗しました。時間を置いて再度お試しください。");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          メモ（アレルギー対応・特別包装など）
+        </h5>
+        {dirty && !saving && (
+          <span className="text-[11px] text-amber-600">未保存の変更があります</span>
+        )}
+      </div>
+      <textarea
+        value={memo}
+        onChange={(e) => setMemo(e.target.value)}
+        placeholder="特殊な対応事項があれば記録してください（例：ギフト包装、アレルギー対応など）"
+        rows={3}
+        className="input-field w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white resize-none focus:border-brand-400 focus:ring-1 focus:ring-brand-200"
+      />
+      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-xs font-medium disabled:opacity-50 transition-colors"
+        >
+          {saving ? "保存中..." : "メモを保存"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -21,7 +83,7 @@ function Field({ label, value }: { label: string; value: string }) {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
   } catch {
     return "";
   }
@@ -142,7 +204,7 @@ function MessageThread({ orderId }: { orderId: string }) {
   );
 }
 
-export default function OrderDetailModal({ order, onClose }: Props) {
+export default function OrderDetailModal({ order, onClose, onMemoUpdated }: Props) {
   if (!order) return null;
 
   const orderId = order.uid || order.id || "";
@@ -176,7 +238,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           <div className="flex items-start justify-between">
             <div>
               <h4 className="text-lg font-bold text-gray-900">{order.customer_name}</h4>
-              <span className={`text-xs font-semibold ${order.source === "LINE" ? "text-green-600" : "text-brand-600"}`}>{order.source}</span>
+              <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
             </div>
             <StatusBadge status={order.status} />
           </div>
@@ -230,6 +292,15 @@ export default function OrderDetailModal({ order, onClose }: Props) {
               <p className="text-[11px] font-medium text-amber-600 uppercase tracking-wider mb-1">備考</p>
               <p className="text-sm text-amber-900">{order.remarks}</p>
             </div>
+          )}
+
+          {orderId && (
+            <MemoEditor
+              key={`memo-${orderId}`}
+              orderId={orderId}
+              initialMemo={order.memo || ""}
+              onSaved={onMemoUpdated}
+            />
           )}
         </div>
 

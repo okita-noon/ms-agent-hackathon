@@ -3,7 +3,7 @@ from __future__ import annotations
 import aioodbc
 
 from src.connectors.adapters._sql_util import to_odbc_dsn
-from src.models.customer import Customer, CustomerDeliveryPreference
+from src.models.customer import Customer, CustomerDeliveryPreference, DeliveryLeadTime
 from src.models.order import DeliveryCarrier, DeliveryRoute
 from src.models.tenant import ConnectorConfig
 
@@ -19,7 +19,7 @@ class SqlCustomerRepository:
         query = """
         SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, delivery_lead_time, active
         FROM customers
         WHERE tenant_id = ? AND active = 1
           AND (line_user_id = ? OR phone = ? OR email = ? OR name LIKE ?)
@@ -35,11 +35,27 @@ class SqlCustomerRepository:
                     return None
                 return _row_to_customer(row)
 
+    async def find_by_email(self, tenant_id: str, email: str) -> Customer | None:
+        query = """
+        SELECT TOP 1 customer_id, tenant_id, name, short_name, line_user_id,
+               email, phone, fax, default_route, default_carrier,
+               default_time_slot, delivery_lead_time, active
+        FROM customers
+        WHERE tenant_id = ? AND email = ? AND active = 1
+        """
+        async with await self._get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(query, (tenant_id, email))
+                row = await cur.fetchone()
+                if not row:
+                    return None
+                return _row_to_customer(row)
+
     async def find_by_line_user_id(self, tenant_id: str, line_user_id: str) -> Customer | None:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, delivery_lead_time, active
         FROM customers
         WHERE tenant_id = ? AND line_user_id = ? AND active = 1
         """
@@ -55,7 +71,7 @@ class SqlCustomerRepository:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, delivery_lead_time, active
         FROM customers WHERE tenant_id = ? AND customer_id = ?
         """
         async with await self._get_connection() as conn:
@@ -70,7 +86,7 @@ class SqlCustomerRepository:
         query = """
         SELECT customer_id, tenant_id, name, short_name, line_user_id,
                email, phone, fax, default_route, default_carrier,
-               default_time_slot, active
+               default_time_slot, delivery_lead_time, active
         FROM customers WHERE tenant_id = ?
         ORDER BY customer_id
         """
@@ -88,6 +104,7 @@ class SqlCustomerRepository:
             "email",
             "phone",
             "fax",
+            "delivery_lead_time",
             "active",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
@@ -118,6 +135,7 @@ def _row_to_customer(row) -> Customer:
         default_carrier=DeliveryCarrier(row[9]) if row[9] else None,
         default_time_slot=row[10],
     )
+    lead_time = DeliveryLeadTime(row[11]) if row[11] else None
     return Customer(
         id=row[0],
         tenant_id=row[1],
@@ -128,5 +146,6 @@ def _row_to_customer(row) -> Customer:
         phone=row[6],
         fax=row[7],
         delivery_preference=pref,
-        active=bool(row[11]),
+        delivery_lead_time=lead_time,
+        active=bool(row[12]),
     )

@@ -86,3 +86,10 @@ site/
 
 # ARM template output (generated from Bicep)
 infra/main.json
+
+# 個人用
+CLAUDE.kio.md
+
+# Playwright / Vite
+frontend/test-results/
+frontend/playwright-report/

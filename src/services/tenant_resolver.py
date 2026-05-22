@@ -16,6 +16,9 @@ _LINE_CHANNEL_TENANT_MAP: dict[str, str] = {}
 # ACS phone number → tenant ID mapping (for phone webhook routing)
 _PHONE_TENANT_MAP: dict[str, str] = {}
 
+# recipient email address → tenant ID mapping (for email webhook routing)
+_EMAIL_TENANT_MAP: dict[str, str] = {}
+
 
 def _get_tenant_config(tenant_id: str) -> TenantConfig:
     """Return TenantConfig for the given tenant_id.
@@ -46,6 +49,11 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
     # T-001 uses the shared ACS phone number for the demo.
     acs_conn = os.environ.get("ACS_CONNECTION_STRING") if tenant_id == "T-001" else None
     acs_phone = os.environ.get("ACS_PHONE_NUMBER") if tenant_id == "T-001" else None
+    email_address = os.environ.get("GRAPH_MAILBOX_ADDRESS", "order@example.com") if tenant_id == "T-001" else None
+    graph_client_id = os.environ.get("GRAPH_CLIENT_ID") if tenant_id == "T-001" else None
+    graph_client_secret = os.environ.get("GRAPH_CLIENT_SECRET") if tenant_id == "T-001" else None
+    graph_tenant_id = os.environ.get("GRAPH_TENANT_ID") if tenant_id == "T-001" else None
+    graph_mailbox_user_id = os.environ.get("GRAPH_MAILBOX_USER_ID") if tenant_id == "T-001" else None
 
     config = TenantConfig(
         tenant_id=tenant_id,
@@ -55,6 +63,11 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
         line_channel_access_token=line_channel_access_token,
         acs_connection_string=acs_conn,
         acs_phone_number=acs_phone,
+        graph_client_id=graph_client_id,
+        graph_client_secret=graph_client_secret,
+        graph_tenant_id=graph_tenant_id,
+        graph_mailbox_user_id=graph_mailbox_user_id,
+        email_address=email_address,
         auto_confirm_threshold=0.9,
         connectors={
             "IOrderRepository": ConnectorConfig(type="cosmosdb", connection=cosmos_conn, database="orders"),
@@ -78,6 +91,10 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
     # Register ACS phone number → tenant mapping for phone webhook routing
     if config.acs_phone_number:
         _PHONE_TENANT_MAP[config.acs_phone_number] = tenant_id
+
+    # Register recipient email address → tenant mapping for email webhook routing
+    if config.email_address:
+        _EMAIL_TENANT_MAP[config.email_address.lower()] = tenant_id
 
     return config
 
@@ -107,6 +124,19 @@ def resolve_tenant_for_phone(called_number: str) -> TenantContext:
     tenant_id = "T-001"
     if called_number and called_number in _PHONE_TENANT_MAP:
         tenant_id = _PHONE_TENANT_MAP[called_number]
+    config = _get_tenant_config(tenant_id)
+    return TenantContext.from_config(config)
+
+
+def resolve_tenant_for_email(recipient_address: str) -> TenantContext:
+    """Resolve tenant from a recipient mailbox address.
+
+    Falls back to T-001 when the mailbox address is not mapped.
+    """
+    tenant_id = "T-001"
+    normalized = (recipient_address or "").strip().lower()
+    if normalized and normalized in _EMAIL_TENANT_MAP:
+        tenant_id = _EMAIL_TENANT_MAP[normalized]
     config = _get_tenant_config(tenant_id)
     return TenantContext.from_config(config)
 

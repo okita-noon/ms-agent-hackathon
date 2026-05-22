@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from azure.core import MatchConditions
 from azure.cosmos.aio import CosmosClient, ContainerProxy
@@ -25,7 +25,7 @@ class CosmosOrderRepository:
     async def save(self, order: Order) -> str:
         if not order.id:
             order.id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-        order.updated_at = datetime.utcnow()
+        order.updated_at = datetime.now(timezone.utc)
         doc = order.model_dump(mode="json", by_alias=True)
         doc["id"] = order.id
         await self._container.upsert_item(doc)
@@ -103,10 +103,7 @@ class CosmosOrderRepository:
             {"name": "@offset", "value": offset},
             {"name": "@limit", "value": limit},
         ]
-        page_query = (
-            f"SELECT * FROM c WHERE {where_clause} "
-            "ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
-        )
+        page_query = f"SELECT * FROM c WHERE {where_clause} ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
         items = self._container.query_items(page_query, parameters=page_params)
         orders = [Order.model_validate(doc) async for doc in items]
         return orders, total
@@ -137,3 +134,24 @@ class CosmosOrderRepository:
             except CosmosAccessConditionFailedError:
                 if attempt == 2:
                     raise
+
+    async def update_memo(self, tenant_id: str, order_id: str, memo: str | None) -> Order:
+        for attempt in range(3):
+            doc = await self._container.read_item(order_id, partition_key=tenant_id)
+            if doc.get("tenant_id") != tenant_id:
+                raise ValueError(f"受注ID「{order_id}」が見つかりません。")
+            etag = doc.get("_etag")
+            doc["memo"] = memo
+            doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                await self._container.replace_item(
+                    order_id,
+                    doc,
+                    match_condition=MatchConditions.IfNotModified,
+                    etag=etag,
+                )
+                return Order.model_validate(doc)
+            except CosmosAccessConditionFailedError:
+                if attempt == 2:
+                    raise
+        raise RuntimeError("update_memo failed after retries")
