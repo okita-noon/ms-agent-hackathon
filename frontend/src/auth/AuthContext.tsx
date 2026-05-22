@@ -127,11 +127,14 @@ export function AuthProvider({ children, onLoginSuccess }: AuthProviderProps) {
         throw new Error("Microsoft login failed: no id_token");
       }
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
       const res = await fetch(`${API_BASE}/api/auth/microsoft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: result.idToken }),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Microsoftログインに失敗しました");
