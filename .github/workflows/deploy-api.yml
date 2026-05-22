@@ -10,7 +10,6 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_SUBSCRIPTION_ID: e1418747-0279-42cb-94df-edce53fdbf03
   ACR_NAME: ca61bef3ed27acr
   ACR_LOGIN_SERVER: ca61bef3ed27acr.azurecr.io
   IMAGE_NAME: orderai-api
@@ -28,9 +27,6 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Select target subscription
-        run: az account set --subscription ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
