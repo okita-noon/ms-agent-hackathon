@@ -6,7 +6,11 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { msalInstance, msalReady, loginScopes } from "./msalConfig";
+import {
+  msalInstance,
+  msalReady,
+  loginScopes,
+} from "./msalConfig";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "foogent_token";
@@ -131,9 +135,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: data.email,
         display_name: data.display_name,
       });
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof Error && err.message.includes("user_cancelled")) {
-        return; // User cancelled popup
+        return;
+      }
+      if (
+        err instanceof Error &&
+        err.message.includes("interaction_in_progress")
+      ) {
+        sessionStorage.clear();
+        throw new Error(
+          "ブラウザの状態をリセットしました。もう一度お試しください。"
+        );
       }
       throw err;
     }
