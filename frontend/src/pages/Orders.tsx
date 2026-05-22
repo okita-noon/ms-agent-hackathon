@@ -20,8 +20,6 @@ import DashboardAgentPanel from "../components/DashboardAgentPanel";
 
 const PAGE_SIZE = 50;
 
-const PAGE_SIZE = 50;
-
 function formatDate(value?: string): string {
   if (!value) return "-";
   return value.slice(0, 10);
