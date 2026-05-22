@@ -14,10 +14,10 @@ on:
   workflow_dispatch:
 
 env:
-  RESOURCE_GROUP: rg-orderai-dev
-  STORAGE_ACCOUNT_NAME: storderaidev
+  RESOURCE_GROUP: rg-orderai-dev2
+  STORAGE_ACCOUNT_NAME: storderaidev2
   FRONTEND_PATH: dashboard
-  VITE_API_BASE_URL: https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io
+  VITE_API_BASE_URL: https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io
   VITE_ENTRA_CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
   VITE_ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
 

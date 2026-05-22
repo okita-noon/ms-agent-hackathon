@@ -1,7 +1,7 @@
 targetScope = 'resourceGroup'
 
 @description('環境名 (dev, staging, prod)')
-@allowed(['dev', 'staging', 'prod'])
+@allowed(['dev', 'dev2', 'staging', 'prod'])
 param environment string = 'dev'
 
 @description('プロジェクト名')
@@ -79,20 +79,21 @@ module sqlDatabase 'modules/sql-database.bicep' = {
 
 // ============================================================
 // Azure AI Services (OpenAI / Speech)
+// NOTE: クォータ承認後に有効化する。ai-orderai-dev2 は手動作成済み。
 // ============================================================
-module aiServices 'modules/ai-services.bicep' = {
-  name: 'aiServices'
-  params: {
-    name: 'ai-${suffix}'
-    location: location
-    tags: tags
-    openAiModelDeploymentName: openAiModelDeploymentName
-    openAiModelName: openAiModelName
-    openAiModelVersion: openAiModelVersion
-    embeddingModelDeploymentName: embeddingModelDeploymentName
-    keyVaultName: keyVault.outputs.name
-  }
-}
+// module aiServices 'modules/ai-services.bicep' = {
+//   name: 'aiServices'
+//   params: {
+//     name: 'ai-${suffix}'
+//     location: location
+//     tags: tags
+//     openAiModelDeploymentName: openAiModelDeploymentName
+//     openAiModelName: openAiModelName
+//     openAiModelVersion: openAiModelVersion
+//     embeddingModelDeploymentName: embeddingModelDeploymentName
+//     keyVaultName: keyVault.outputs.name
+//   }
+// }
 
 // ============================================================
 // Azure AI Search (商品/顧客あいまい検索)
@@ -144,20 +145,6 @@ module containerApps 'modules/container-apps.bicep' = {
   }
 }
 
-// ============================================================
-// Azure Functions (Webhook受信・イベント駆動・Learning Service)
-// ============================================================
-module functions 'modules/functions.bicep' = {
-  name: 'functions'
-  params: {
-    name: suffix
-    location: location
-    tags: tags
-    storageAccountName: storage.outputs.name
-    appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
-    keyVaultName: keyVault.outputs.name
-  }
-}
 
 // ============================================================
 // Budget (コスト管理アラート)
@@ -168,7 +155,7 @@ module budget 'modules/budget.bicep' = {
     budgetName: 'budget-${suffix}'
     amount: 30000
     contactEmails: [
-      'inaba.y.ac@gmail.com'
+      'yi.asdf761@gmail.com'
     ]
   }
 }
@@ -190,8 +177,7 @@ module communicationServices 'modules/communication-services.bicep' = {
 output keyVaultName string = keyVault.outputs.name
 output cosmosDbEndpoint string = cosmosDb.outputs.endpoint
 output sqlServerFqdn string = sqlDatabase.outputs.serverFqdn
-output aiServicesEndpoint string = aiServices.outputs.endpoint
+// output aiServicesEndpoint string = aiServices.outputs.endpoint  // クォータ承認後に有効化
 output aiSearchEndpoint string = aiSearch.outputs.endpoint
 output containerAppsUrl string = containerApps.outputs.appUrl
 output frontendUrl string = '${storage.outputs.webEndpoint}dashboard/'
-output functionsAppName string = functions.outputs.appName

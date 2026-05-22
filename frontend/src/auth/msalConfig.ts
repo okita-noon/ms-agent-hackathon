@@ -12,4 +12,10 @@ const msalConfig: Configuration = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
+
+export const msalReady: Promise<void> = msalInstance
+  .initialize()
+  .then(() => msalInstance.handleRedirectPromise())
+  .then(() => undefined);
+
 export const loginScopes = ["openid", "profile", "email"];
