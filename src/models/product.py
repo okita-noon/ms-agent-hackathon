@@ -28,5 +28,7 @@ class Product(BaseModel):
     unit_weight_kg: float | None = None
     is_variable_weight: bool = False
     price_per_unit: float | None = None
+    origin: str | None = None
+    appeal: str | None = None
     aliases: list[str] | None = None
     active: bool = True
