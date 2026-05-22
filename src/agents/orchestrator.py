@@ -21,6 +21,7 @@ from src.connectors.context import TenantContext
 from src.models.inbound import InboundMessage
 from src.models.message_history import MessageHistory
 from src.services import delivery_estimator
+from src.models.customer import DeliveryLeadTime
 from src.models.order import DeliveryRoute, Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.models.session import OrderSession
 from src.plugins.communication_plugin import CommunicationPlugin
@@ -160,7 +161,12 @@ class OrderOrchestrator:
                 session_id=session_id,
             )
             route = _resolve_delivery_route(pending_order_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(route)
+            lead_time = await _resolve_lead_time(pending_order_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
             affirm_delivery_estimate = delivery_estimator.format_estimate(min_d, max_d)
             response_text = await self._generate_final_response(
                 message=message,
@@ -329,7 +335,12 @@ class OrderOrchestrator:
         delivery_estimate_text: str | None = None
         if not needs_confirmation:
             route = _resolve_delivery_route(intake_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(route)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
 
         # ── Step 5: Generate final response via orchestrator ───────────────────
@@ -601,6 +612,21 @@ def _resolve_delivery_route(draft: dict, ctx: TenantContext) -> DeliveryRoute | 
             return DeliveryRoute(route_val)
         except ValueError:
             pass
+    return None
+
+
+async def _resolve_lead_time(draft: dict, ctx: TenantContext) -> DeliveryLeadTime | None:
+    """ドラフトの顧客IDから配送リードタイムを取得する."""
+    customer_id = draft.get("customer_id")
+    if not customer_id:
+        return None
+    try:
+        repo = ctx.get_connector("ICustomerRepository")
+        customer = await repo.find_by_identifier(ctx.tenant_id, customer_id)
+        if customer and customer.delivery_lead_time:
+            return customer.delivery_lead_time
+    except Exception:
+        logger.debug("Could not resolve delivery_lead_time for %s", customer_id)
     return None
 
 
