@@ -121,7 +121,6 @@ export function AuthProvider({ children, onLoginSuccess }: AuthProviderProps) {
       await msalReady;
       const result = await msalInstance.loginPopup({
         scopes: loginScopes,
-        redirectUri: window.location.origin + "/dashboard/auth-popup.html",
       });
 
       if (!result.idToken) {
