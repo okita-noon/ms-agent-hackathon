@@ -161,10 +161,8 @@ function LoginRoute() {
 }
 
 function AppRoutes() {
-  const navigate = useNavigate();
-
   return (
-    <AuthProvider onLoginSuccess={() => navigate("/orders", { replace: true })}>
+    <AuthProvider>
       <Routes>
         <Route path="login" element={<LoginRoute />} />
         <Route path="/*" element={<DashboardLayout />} />
