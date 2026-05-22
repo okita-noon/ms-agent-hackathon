@@ -16,7 +16,6 @@ on:
 env:
   RESOURCE_GROUP: rg-orderai-dev2
   STORAGE_ACCOUNT_NAME: storderaidev2
-  FRONTEND_PATH: dashboard
   VITE_API_BASE_URL: https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io
   VITE_ENTRA_CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
   VITE_ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
@@ -80,7 +79,7 @@ jobs:
             --account-key "$ACCOUNT_KEY" \
             --static-website \
             --index-document "index.html" \
-            --404-document "${{ env.FRONTEND_PATH }}/index.html"
+            --404-document "index.html"
 
       - name: Upload frontend
         run: |
@@ -93,7 +92,6 @@ jobs:
             --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
             --account-key "$ACCOUNT_KEY" \
             --destination '$web' \
-            --destination-path "${{ env.FRONTEND_PATH }}" \
             --source dist \
             --overwrite true
 
@@ -104,4 +102,4 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --query "primaryEndpoints.web" \
             -o tsv)
-          echo "Frontend deployed to: ${WEB_ENDPOINT}${{ env.FRONTEND_PATH }}/"
+          echo "Frontend deployed to: ${WEB_ENDPOINT}"
