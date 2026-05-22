@@ -92,6 +92,19 @@ Key Vault secret と Container Apps 環境変数に、以下を追加する。
 | `GRAPH_CLIENT_ID` | メール連携用アプリ登録の client ID |
 | `GRAPH_CLIENT_SECRET` | client secret |
 | `GRAPH_MAILBOX_USER_ID` | 受信・返信に使うメールボックスの user id または UPN |
+| `GRAPH_DELEGATED_ACCESS_TOKEN` | delegated送信用の access token（短期デモ向け、期限あり） |
+| `GRAPH_DELEGATED_REFRESH_TOKEN` | delegated送信用の refresh token（外部宛を delegated で送る場合） |
+| `GRAPH_DELEGATED_SCOPE` | delegated token取得時の scope（既定: `https://graph.microsoft.com/Mail.Send offline_access`） |
+| `GRAPH_DELEGATED_SEND_AS_USER_ID` | delegated送信で使う送信者 mailbox（未指定時は `GRAPH_MAILBOX_USER_ID`） |
+| `EMAIL_EXTERNAL_ROUTE_MODE` | 外部宛の送信ルート（`delegated_first` / `delegated_only` / `smtp_only` / `app_only`） |
+| `EMAIL_EXTERNAL_FALLBACK_PROVIDER` | 外部宛のフォールバックプロバイダ（現状 `smtp`） |
+| `EMAIL_INTERNAL_DOMAINS` | 内部宛とみなすドメイン一覧（カンマ区切り） |
+| `SMTP_FALLBACK_HOST` | SMTPフォールバックのホスト |
+| `SMTP_FALLBACK_PORT` | SMTPフォールバックのポート |
+| `SMTP_FALLBACK_USERNAME` | SMTPフォールバックのユーザー名 |
+| `SMTP_FALLBACK_PASSWORD` | SMTPフォールバックのパスワード |
+| `SMTP_FALLBACK_FROM_ADDRESS` | SMTPフォールバックのFromアドレス |
+| `SMTP_FALLBACK_STARTTLS` | SMTPフォールバックで STARTTLS を使うか |
 | `EMAIL_POLL_INTERVAL_SECONDS` | polling 間隔。デモでは 30-60 秒程度 |
 | `EMAIL_REPLY_FROM_ADDRESS` | 表示・ルーティング用の送信元メールアドレス |
 
