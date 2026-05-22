@@ -6,7 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { msalInstance, loginScopes } from "./msalConfig";
+import { msalInstance, msalReady, loginScopes } from "./msalConfig";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "foogent_token";
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithMicrosoft = useCallback(async () => {
     try {
-      await msalInstance.initialize();
+      await msalReady;
       const result = await msalInstance.loginPopup({
         scopes: loginScopes,
       });
