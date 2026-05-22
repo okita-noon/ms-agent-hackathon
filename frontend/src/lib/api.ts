@@ -78,6 +78,7 @@ export const DELIVERY_LEAD_TIME_OPTIONS: DeliveryLeadTime[] = [
   "中2日",
 ];
 
+
 export interface Customer {
   id: string;
   tenant_id: string;
@@ -99,6 +100,7 @@ export async function updateOrderMemo(orderId: string, memo: string | null): Pro
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }
+
 
 export async function fetchOrders(
   date: string,

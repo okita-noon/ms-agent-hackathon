@@ -1,6 +1,6 @@
 using './main.bicep'
 
-param environment = 'dev'
+param environment = 'dev2'
 param projectName = 'orderai'
 param location = 'japaneast'
 param sqlAdminLogin = 'sqladmin'

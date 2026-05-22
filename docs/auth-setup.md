@@ -48,8 +48,8 @@ Container Apps に以下を追加:
 
 ```bash
 az containerapp update \
-  --name ca-api-orderai-dev \
-  --resource-group rg-orderai-dev \
+  --name ca-api-orderai-dev2 \
+  --resource-group rg-orderai-dev2 \
   --set-env-vars \
     "JWT_SECRET_KEY=<python3 -c 'import secrets; print(secrets.token_urlsafe(48))' で生成>" \
     "AZURE_AD_ALLOWED_TENANTS=<Entra テナントID>"
@@ -87,7 +87,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
      - 外部ユーザーも許可する場合は「任意の組織ディレクトリ」を選択
    - リダイレクト URI:
      - 種類: **SPA (Single Page Application)**
-     - URI: `https://storderaidev.z11.web.core.windows.net/dashboard/`
+     - URI: `https://storderaidev2.z11.web.core.windows.net/dashboard/`
 3. **登録** をクリック
 
 ### 3-2. アプリケーション情報の取得
@@ -118,13 +118,13 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ```bash
 az containerapp update \
-  --name ca-api-orderai-dev \
-  --resource-group rg-orderai-dev \
+  --name ca-api-orderai-dev2 \
+  --resource-group rg-orderai-dev2 \
   --set-env-vars \
     "ENTRA_CLIENT_ID=<アプリケーション(クライアント)ID>" \
     "AZURE_AD_ALLOWED_TENANTS=<ディレクトリ(テナント)ID>" \
-    "FRONTEND_ORIGINS=https://storderaidev.z11.web.core.windows.net" \
-    "FRONTEND_URL=https://storderaidev.z11.web.core.windows.net/dashboard/"
+    "FRONTEND_ORIGINS=https://storderaidev2.z11.web.core.windows.net" \
+    "FRONTEND_URL=https://storderaidev2.z11.web.core.windows.net/dashboard/"
 ```
 
 > `AZURE_AD_ALLOWED_TENANTS` は SSO 受け入れテナントの allowlist。複数組織を許可するならカンマ区切り。
@@ -176,7 +176,7 @@ VALUES (
 有効化する場合は以下の env を設定し、招待トークンをユーザーに共有してから叩いてもらう:
 
 ```bash
-az containerapp update --name ca-api-orderai-dev --resource-group rg-orderai-dev \
+az containerapp update --name ca-api-orderai-dev2 --resource-group rg-orderai-dev2 \
   --set-env-vars \
     "REGISTRATION_ENABLED=true" \
     "REGISTRATION_INVITE_TOKEN=<ランダムな招待トークン>"
