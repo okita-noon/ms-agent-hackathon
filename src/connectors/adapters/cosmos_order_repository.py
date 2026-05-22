@@ -103,10 +103,7 @@ class CosmosOrderRepository:
             {"name": "@offset", "value": offset},
             {"name": "@limit", "value": limit},
         ]
-        page_query = (
-            f"SELECT * FROM c WHERE {where_clause} "
-            "ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
-        )
+        page_query = f"SELECT * FROM c WHERE {where_clause} ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
         items = self._container.query_items(page_query, parameters=page_params)
         orders = [Order.model_validate(doc) async for doc in items]
         return orders, total

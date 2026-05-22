@@ -728,7 +728,9 @@ def _format_inventory_inquiry_response(
         required_qty = item["required_qty"]
         if required_qty:
             if item["is_sufficient"]:
-                lines.append(f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。")
+                lines.append(
+                    f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。"
+                )
             else:
                 shortage = max(required_qty - available_qty, 0)
                 lines.append(

@@ -1,0 +1,17 @@
+﻿{
+    "saveToSentItems":  true,
+    "message":  {
+                    "subject":  "Delegated /me send test 2026-05-22T13:01:06+09:00",
+                    "body":  {
+                                 "contentType":  "Text",
+                                 "content":  "delegated /me route test from az rest"
+                             },
+                    "toRecipients":  [
+                                         {
+                                             "emailAddress":  {
+                                                                  "address":  "kyo.5up.net@gmail.com"
+                                                              }
+                                         }
+                                     ]
+                }
+}
