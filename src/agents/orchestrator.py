@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -24,6 +25,7 @@ from src.services import delivery_estimator
 from src.models.customer import DeliveryLeadTime
 from src.models.order import DeliveryRoute, Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.models.session import OrderSession
+from src.models.intelligence import ResolvedItem
 from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
@@ -160,6 +162,7 @@ class OrderOrchestrator:
                 source=source,
                 session_id=session_id,
             )
+            asyncio.create_task(self._run_learning(saved_order, message))
             route = _resolve_delivery_route(pending_order_draft, self._ctx)
             lead_time = await _resolve_lead_time(pending_order_draft, self._ctx)
             min_d, max_d = delivery_estimator.estimate(
@@ -326,6 +329,7 @@ class OrderOrchestrator:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
                     saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
+                    asyncio.create_task(self._run_learning(saved_order, message))
                     logger.info("Created order %s from multi-agent chain", saved_order.id)
                     result["order_id"] = saved_order.id
             except Exception:
@@ -510,6 +514,36 @@ class OrderOrchestrator:
         order_id = await repo.save(order)
         order.id = order_id
         return order
+
+    async def _run_learning(self, order: Order, original_message: str) -> None:
+        try:
+            from src.services.learning_service import LearningService
+
+            learning_service = LearningService(self._ctx)
+            resolved_items = [
+                ResolvedItem(
+                    product_id=item.product_id,
+                    product_name=item.product_name,
+                    qty=item.quantity,
+                    unit=item.unit,
+                )
+                for item in order.items
+            ]
+            await learning_service.record_pattern(
+                customer_id=order.customer_id,
+                input_expression=original_message,
+                resolved_items=resolved_items,
+            )
+            for item in order.items:
+                await learning_service.update_customer_profile(
+                    customer_id=order.customer_id,
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                )
+            logger.info("Learning completed for order %s", order.id)
+        except Exception:
+            logger.exception("Learning failed for order %s — order flow unaffected", order.id)
 
     async def _try_handle_inventory_inquiry(self, message: str, source: OrderSource) -> dict | None:
         if not _is_inventory_inquiry(message):
