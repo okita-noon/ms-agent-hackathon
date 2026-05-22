@@ -173,6 +173,21 @@ function AppRoutes() {
   );
 }
 
+function MsalPopupGuard({ children }: { children: ReactNode }) {
+  const isPopup = window.opener && window.opener !== window;
+  const hasAuthParams = window.location.hash.includes("code=") || window.location.hash.includes("error=");
+
+  if (isPopup || hasAuthParams) {
+    return <LoadingScreen />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
-  return <AppRoutes />;
+  return (
+    <MsalPopupGuard>
+      <AppRoutes />
+    </MsalPopupGuard>
+  );
 }
