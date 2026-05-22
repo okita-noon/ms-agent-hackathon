@@ -85,7 +85,7 @@ class TestMsalRedirectUri:
         assert vite_base_m
         vite_base = vite_base_m.group(1).rstrip("/")
 
-        redirect_m = re.search(r'redirectUri:\s*(.+)', msal_text)
+        redirect_m = re.search(r"redirectUri:\s*(.+)", msal_text)
         assert redirect_m, "Could not parse redirectUri from msalConfig.ts"
         redirect_line = redirect_m.group(1).strip().rstrip(",")
 
@@ -119,19 +119,13 @@ class TestNoTopLevelDuplicates:
         return dupes
 
     def test_orders_page_no_duplicate_declarations(self):
-        dupes = self._find_duplicate_declarations(
-            FRONTEND_DIR / "src" / "pages" / "Orders.tsx"
-        )
+        dupes = self._find_duplicate_declarations(FRONTEND_DIR / "src" / "pages" / "Orders.tsx")
         assert dupes == [], f"Duplicate top-level declarations in Orders.tsx: {dupes}"
 
     def test_api_ts_no_duplicate_declarations(self):
-        dupes = self._find_duplicate_declarations(
-            FRONTEND_DIR / "src" / "lib" / "api.ts"
-        )
+        dupes = self._find_duplicate_declarations(FRONTEND_DIR / "src" / "lib" / "api.ts")
         assert dupes == [], f"Duplicate top-level declarations in api.ts: {dupes}"
 
     def test_constants_no_duplicate_declarations(self):
-        dupes = self._find_duplicate_declarations(
-            FRONTEND_DIR / "src" / "lib" / "constants.ts"
-        )
+        dupes = self._find_duplicate_declarations(FRONTEND_DIR / "src" / "lib" / "constants.ts")
         assert dupes == [], f"Duplicate top-level declarations in constants.ts: {dupes}"
