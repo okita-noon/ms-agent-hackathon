@@ -311,3 +311,120 @@ class CommunicationPlugin:
         except Exception:
             logger.exception("Email send error: to=%s", recipient)
             return {"success": False, "error": "送信中にエラーが発生しました"}
+
+    # ── 受注確認メール ─────────────────────────────────────────────────────
+
+    @kernel_function(
+        name="send_order_confirmation_email",
+        description="受注確定後に顧客のメールアドレスへ受注確認メールを送信する",
+    )
+    async def send_order_confirmation_email(
+        self,
+        customer_id: Annotated[str, "顧客ID"],
+        customer_name: Annotated[str, "顧客名"],
+        order_id: Annotated[str, "受注ID"],
+        items_summary: Annotated[str, "注文商品の一覧テキスト（例: りんご10箱、バナナ5kg）"],
+        delivery_date: Annotated[str, "配送予定日（YYYY-MM-DD形式）"] = "",
+        delivery_time_slot: Annotated[str, "配送時間帯"] = "",
+    ) -> dict:
+        """顧客のメールアドレスを取得し、受注確認メールを送信する."""
+        customer_repo = self._ctx.get_connector("ICustomerRepository")
+        customer = await customer_repo.get_by_id(self._ctx.tenant_id, customer_id)
+        if not customer:
+            logger.warning("Customer %s not found, skipping email", customer_id)
+            return {"success": False, "error": f"Customer {customer_id} not found"}
+
+        if not customer.email:
+            logger.info("Customer %s has no email address, skipping", customer_id)
+            return {"success": False, "error": "Customer has no email address"}
+
+        subject = f"【受注確認】ご注文 {order_id} を承りました"
+        body_html = _build_order_confirmation_html(
+            customer_name=customer_name,
+            order_id=order_id,
+            items_summary=items_summary,
+            delivery_date=delivery_date,
+            delivery_time_slot=delivery_time_slot,
+        )
+
+        try:
+            email_service = self._ctx.get_connector("IEmailService")
+        except ValueError:
+            logger.warning("IEmailService not configured for tenant %s", self._ctx.tenant_id)
+            return {"success": False, "error": "Email service not configured"}
+
+        result = await email_service.send_email(
+            tenant_id=self._ctx.tenant_id,
+            to_address=customer.email,
+            subject=subject,
+            body_html=body_html,
+        )
+        if result.get("success"):
+            logger.info("Order confirmation email sent to %s for order %s", customer.email, order_id)
+        else:
+            logger.error("Failed to send order confirmation email: %s", result.get("error"))
+        return result
+
+
+def _build_order_confirmation_html(
+    *,
+    customer_name: str,
+    order_id: str,
+    items_summary: str,
+    delivery_date: str,
+    delivery_time_slot: str,
+) -> str:
+    """受注確認メールのHTML本文を生成する."""
+    from datetime import date as _date
+
+    delivery_info = ""
+    if delivery_date:
+        delivery_info += f"<p><strong>配送予定日:</strong> {delivery_date}</p>"
+    if delivery_time_slot:
+        delivery_info += f"<p><strong>配送時間帯:</strong> {delivery_time_slot}</p>"
+
+    items_html = ""
+    for line in items_summary.replace("、", "\n").splitlines():
+        line = line.strip()
+        if line:
+            items_html += f"<li>{line}</li>"
+    if not items_html:
+        items_html = f"<li>{items_summary}</li>"
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"></head>
+<body style="font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; color: #333; line-height: 1.6;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #2c5f2d; border-bottom: 2px solid #2c5f2d; padding-bottom: 8px;">
+      受注確認
+    </h2>
+    <p>{customer_name} 様</p>
+    <p>いつもお世話になっております。<br>
+    以下のご注文を承りました。</p>
+
+    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+      <tr style="background: #f5f5f5;">
+        <td style="padding: 8px 12px; font-weight: bold;">受注番号</td>
+        <td style="padding: 8px 12px;">{order_id}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 12px; font-weight: bold;">受注日</td>
+        <td style="padding: 8px 12px;">{_date.today().isoformat()}</td>
+      </tr>
+    </table>
+
+    <h3 style="color: #555;">ご注文内容</h3>
+    <ul style="padding-left: 20px;">{items_html}</ul>
+
+    {delivery_info}
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+    <p style="font-size: 12px; color: #999;">
+      本メールはシステムから自動送信されています。<br>
+      ご不明な点がございましたら担当者までお問い合わせください。
+    </p>
+  </div>
+</body>
+</html>"""

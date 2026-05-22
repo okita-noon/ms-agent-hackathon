@@ -223,6 +223,7 @@ src/
 │   │   ├── order_intelligence_store.py  # IOrderIntelligenceStore
 │   │   ├── product_master.py     # IProductMaster
 │   │   ├── customer_repository.py # ICustomerRepository
+│   │   ├── email_service.py       # IEmailService
 │   │   └── inventory_service.py  # IInventoryService
 │   ├── adapters/                 # 実装
 │   │   ├── cosmos_order_repository.py     # Cosmos DB → orders
@@ -232,6 +233,7 @@ src/
 │   │   ├── sql_product_master.py          # Azure SQL → products（LIKE検索）
 │   │   ├── sql_customer_repository.py     # Azure SQL → customers
 │   │   ├── sql_inventory_service.py       # Azure SQL → inventory
+│   │   ├── graph_email_service.py          # Microsoft Graph API → メール送信
 │   │   └── registry.py                    # 全Adapterの登録
 │   ├── factory.py                # ConnectorFactory（テナント設定→Adapter解決）
 │   └── context.py                # TenantContext（テナント単位の依存注入コンテナ）

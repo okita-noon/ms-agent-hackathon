@@ -18,7 +18,7 @@
 - [x] Connector インターフェース（7 Protocol）
 - [x] Cosmos DB アダプタ（受注・セッション・メッセージ履歴・パターン学習）
 - [x] Azure SQL アダプタ（商品・顧客・在庫）
-- [x] Semantic Kernel Plugin（Intake・Inventory・Exception・Communication）
+- [x] Semantic Kernel Plugin（Intake・Inventory・Exception・Communication＋Email）
 - [x] Agent 定義 + Orchestrator（gpt-5.4-mini 連携）
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
 - [x] 電話 Webhook ハンドラ（ACS Call Automation・音声認識・TTS応答）

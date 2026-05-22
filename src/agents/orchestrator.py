@@ -509,7 +509,34 @@ class OrderOrchestrator:
         repo = self._ctx.get_connector("IOrderRepository")
         order_id = await repo.save(order)
         order.id = order_id
+
+        # 受注確定メールを非同期で送信（エラーが起きても受注処理は継続）
+        if status == OrderStatus.PENDING:
+            await self._send_order_confirmation_email(order, draft)
         return order
+
+    async def _send_order_confirmation_email(
+        self,
+        order: Order,
+        draft: dict,
+    ) -> None:
+        """受注確定後に顧客へ確認メールを送信する（失敗しても例外を握りつぶす）."""
+        try:
+            comm_plugin = CommunicationPlugin(self._ctx)
+            items_summary = "、".join(
+                f"{item.product_name}{item.quantity or ''}{item.unit}"
+                for item in order.items
+            )
+            await comm_plugin.send_order_confirmation_email(
+                customer_id=order.customer_id,
+                customer_name=order.customer_name,
+                order_id=order.id,
+                items_summary=items_summary,
+                delivery_date=str(order.delivery_date) if order.delivery_date else "",
+                delivery_time_slot=order.delivery_time_slot or "",
+            )
+        except Exception:
+            logger.exception("Failed to send order confirmation email for order %s", order.id)
 
     async def _try_handle_inventory_inquiry(self, message: str, source: OrderSource) -> dict | None:
         if not _is_inventory_inquiry(message):

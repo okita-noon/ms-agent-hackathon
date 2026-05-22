@@ -42,3 +42,9 @@ def register_all_adapters() -> None:
         "azure_sql",
         "src.connectors.adapters.sql_inventory_service.SqlInventoryService",
     )
+    # ── Email ──────────────────────────────────────────────────────────
+    register_adapter(
+        "IEmailService",
+        "microsoft_graph",
+        "src.connectors.adapters.graph_email_service.GraphEmailService",
+    )

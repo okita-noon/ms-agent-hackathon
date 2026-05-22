@@ -79,6 +79,15 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
             "IProductMaster": ConnectorConfig(type="azure_sql", connection=sql_conn),
             "ICustomerRepository": ConnectorConfig(type="azure_sql", connection=sql_conn),
             "IInventoryService": ConnectorConfig(type="azure_sql", connection=sql_conn),
+            "IEmailService": ConnectorConfig(
+                type="microsoft_graph",
+                extra={
+                    "tenant_id": os.environ.get("GRAPH_TENANT_ID", ""),
+                    "client_id": os.environ.get("GRAPH_CLIENT_ID", ""),
+                    "client_secret": os.environ.get("GRAPH_CLIENT_SECRET", ""),
+                    "sender_email": os.environ.get("GRAPH_SENDER_EMAIL", ""),
+                },
+            ),
         },
     )
 
