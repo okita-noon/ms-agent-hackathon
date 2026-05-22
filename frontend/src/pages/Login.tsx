@@ -6,24 +6,25 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [msLoading, setMsLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setPwLoading(true);
     try {
       await login(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
-      setLoading(false);
+      setPwLoading(false);
     }
   }
 
   async function handleMicrosoft() {
     setError("");
-    setLoading(true);
+    setMsLoading(true);
     try {
       await loginWithMicrosoft();
     } catch (err) {
@@ -31,7 +32,7 @@ export default function Login() {
         err instanceof Error ? err.message : "Microsoftログインに失敗しました"
       );
     } finally {
-      setLoading(false);
+      setMsLoading(false);
     }
   }
 
@@ -84,10 +85,10 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={pwLoading || msLoading}
               className="w-full py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50"
             >
-              {loading ? "ログイン中..." : "ログイン"}
+              {pwLoading ? "ログイン中..." : "ログイン"}
             </button>
           </form>
 
@@ -106,7 +107,7 @@ export default function Login() {
           {/* Microsoft SSO */}
           <button
             onClick={handleMicrosoft}
-            disabled={loading}
+            disabled={msLoading || pwLoading}
             className="w-full flex items-center justify-center gap-2.5 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <svg className="w-4 h-4" viewBox="0 0 21 21">
