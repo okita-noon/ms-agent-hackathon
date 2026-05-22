@@ -76,6 +76,43 @@ def decode_access_token(token: str) -> CurrentUser | None:
         return None
 
 
+class InMemoryUserStore:
+    """ローカル開発用インメモリ UserStore（SQL_CONNECTION_STRING が未設定時に使用）。"""
+
+    def __init__(self) -> None:
+        self._by_email: dict[str, tuple[UserInDB, str | None]] = {}
+        self._by_oid: dict[str, UserInDB] = {}
+
+    async def find_by_email(self, email: str) -> tuple[UserInDB, str | None] | None:
+        return self._by_email.get(email)
+
+    async def find_by_entra_oid(self, oid: str) -> UserInDB | None:
+        return self._by_oid.get(oid)
+
+    async def create_user(
+        self,
+        tenant_id: str,
+        email: str,
+        display_name: str,
+        password_hash: str | None = None,
+        auth_provider: str = "local",
+        entra_oid: str | None = None,
+    ) -> UserInDB:
+        user_id = f"U-{uuid.uuid4().hex[:8].upper()}"
+        user = UserInDB(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            email=email,
+            display_name=display_name,
+            auth_provider=auth_provider,
+            entra_oid=entra_oid,
+        )
+        self._by_email[email] = (user, password_hash)
+        if entra_oid:
+            self._by_oid[entra_oid] = user
+        return user
+
+
 class UserStore:
     """User CRUD backed by Azure SQL via aioodbc."""
 

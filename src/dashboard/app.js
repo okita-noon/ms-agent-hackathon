@@ -26,7 +26,62 @@ const SOURCE_COLORS = {
   '手入力': '#64748b',
 };
 
+// ── 認証ヘルパー ──────────────────────────────────────────────────────────────
+
+function getAuthToken() {
+  return localStorage.getItem('auth_token');
+}
+
+function showLoginOverlay() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('appContent').classList.add('hidden');
+}
+
+function hideLoginOverlay() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+}
+
+function logout() {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user_name');
+  localStorage.removeItem('auth_user_email');
+  showLoginOverlay();
+}
+
+async function authFetch(url, options = {}) {
+  const token = getAuthToken();
+  if (!token) {
+    showLoginOverlay();
+    throw new Error('Not authenticated');
+  }
+  const headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token}` };
+  const resp = await fetch(url, { ...options, headers });
+  if (resp.status === 401) {
+    localStorage.removeItem('auth_token');
+    showLoginOverlay();
+    throw new Error('Session expired');
+  }
+  return resp;
+}
+
+// ── 初期化 ────────────────────────────────────────────────────────────────────
+
 function init() {
+  const token = getAuthToken();
+  if (!token) {
+    showLoginOverlay();
+    return;
+  }
+
+  hideLoginOverlay();
+
+  const name = localStorage.getItem('auth_user_name') || '';
+  const email = localStorage.getItem('auth_user_email') || '';
+  document.getElementById('userDisplayName').textContent = name;
+  document.getElementById('userEmail').textContent = email;
+  document.getElementById('userInfo').classList.remove('hidden');
+
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('deliveryDate').value = today;
   updateClock();
@@ -48,13 +103,14 @@ async function loadData() {
   overlay.classList.remove('hidden');
 
   try {
-    const resp = await fetch(`${API_BASE}/api/orders?delivery_date=${date}`);
+    const resp = await authFetch(`${API_BASE}/api/orders?delivery_date=${date}`);
     const data = await resp.json();
     orders = data.orders || [];
     renderStats();
     renderCharts();
     renderTable();
   } catch (e) {
+    if (e.message === 'Not authenticated' || e.message === 'Session expired') return;
     console.error('Failed to load orders:', e);
     orders = getDemoOrders();
     renderStats();
@@ -266,11 +322,12 @@ async function loadCustomers() {
   const btn = document.getElementById('loadCustomersBtn');
   btn.disabled = true;
   try {
-    const resp = await fetch(`${API_BASE}/api/customers`);
+    const resp = await authFetch(`${API_BASE}/api/customers`);
     const data = await resp.json();
     customers = data.customers || [];
     renderCustomers();
   } catch (e) {
+    if (e.message === 'Not authenticated' || e.message === 'Session expired') return;
     console.error('Failed to load customers:', e);
     customers = getDemoCustomers();
     renderCustomers();
@@ -355,7 +412,7 @@ async function saveCustomer(e) {
   };
 
   try {
-    const resp = await fetch(`${API_BASE}/api/customers/${customerId}`, {
+    const resp = await authFetch(`${API_BASE}/api/customers/${customerId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -364,6 +421,7 @@ async function saveCustomer(e) {
     closeCustomerModal();
     await loadCustomers();
   } catch (err) {
+    if (err.message === 'Not authenticated' || err.message === 'Session expired') return;
     alert('顧客情報の保存に失敗しました。ネットワーク接続を確認して、もう一度お試しください。');
   } finally {
     btn.disabled = false;

@@ -39,6 +39,33 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
 
+  <!-- ログインオーバーレイ -->
+  <div id="loginOverlay" class="fixed inset-0 z-50 bg-brand-900 flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden fade-in">
+      <div class="bg-brand-900 px-8 py-6 text-center">
+        <img src="logo.png" alt="foogent" class="h-12 mx-auto">
+      </div>
+      <div class="px-8 py-8 text-center">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">ダッシュボードにログイン</h2>
+        <p class="text-sm text-gray-500 mb-8">組織のMicrosoftアカウントでサインインしてください</p>
+        <a href="/api/auth/login/microsoft"
+          class="flex items-center justify-center gap-3 w-full bg-white border-2 border-gray-200 hover:border-brand-500 hover:bg-brand-50 text-gray-700 font-medium px-5 py-3 rounded-xl transition-all duration-200 shadow-sm hover:shadow">
+          <svg class="w-5 h-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+            <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+            <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+            <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+          </svg>
+          Microsoftアカウントでログイン
+        </a>
+        <p class="text-xs text-gray-400 mt-6">このシステムは組織内ユーザーのみアクセスできます</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリ本体（ログイン後に表示） -->
+  <div id="appContent" class="hidden">
+
   <!-- Header -->
   <header class="bg-brand-900 text-white shadow-lg sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -52,6 +79,17 @@
             <span>稼働中</span>
           </div>
           <div class="text-sm text-blue-200" id="currentTime"></div>
+          <!-- ユーザー情報 -->
+          <div id="userInfo" class="hidden flex items-center gap-3 border-l border-blue-700 pl-4">
+            <div class="text-right">
+              <p class="text-sm font-medium text-white leading-tight" id="userDisplayName"></p>
+              <p class="text-xs text-blue-300 leading-tight" id="userEmail"></p>
+            </div>
+            <button onclick="logout()"
+              class="text-xs text-blue-300 hover:text-white border border-blue-600 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors">
+              ログアウト
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -268,6 +306,8 @@
       <span class="text-sm text-gray-500">読み込み中...</span>
     </div>
   </div>
+
+  </div><!-- /appContent -->
 
   <script src="app.js"></script>
 </body>

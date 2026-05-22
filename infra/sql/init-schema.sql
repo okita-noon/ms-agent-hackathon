@@ -95,6 +95,22 @@ CREATE TABLE connector_registry (
     UNIQUE (tenant_id, interface_name)
 );
 
+-- ダッシュボードユーザー（Microsoft SSO / ローカル認証）
+CREATE TABLE users (
+    user_id         NVARCHAR(50)   PRIMARY KEY,
+    tenant_id       NVARCHAR(50)   NOT NULL REFERENCES tenants(tenant_id),
+    email           NVARCHAR(200)  NOT NULL,
+    password_hash   NVARCHAR(200),
+    display_name    NVARCHAR(200)  NOT NULL,
+    auth_provider   NVARCHAR(50)   NOT NULL DEFAULT 'local',
+    entra_oid       NVARCHAR(200),
+    active          BIT            NOT NULL DEFAULT 1,
+    created_at      DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at      DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    UNIQUE (email)
+);
+CREATE INDEX IX_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
+
 -- ============================================================
 -- デモ用初期データ
 -- ============================================================
