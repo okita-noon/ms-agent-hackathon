@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -18,7 +19,7 @@ from src.agents.orchestrator import (
 )
 from src.connectors.interfaces.inventory_service import InventoryStatus
 from src.models.message_history import MessageHistory
-from src.models.order import OrderSource, OrderStatus
+from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 
 
 def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
@@ -621,3 +622,178 @@ class TestEndToEndMessageFlow:
             assert result["error"] == "agent_processing_failed"
             assert mock_push.call_count == 1
             assert "担当者が確認" in mock_push.call_args[0][1]
+
+
+class TestLearningIntegration:
+    """Orchestrator が受注確定時に Learning Service をバックグラウンド起動する。"""
+
+    def _make_order(self) -> Order:
+        return Order(
+            uid="ORD-LEARN-001",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="テスト社",
+            order_date=date.today(),
+            source=OrderSource.LINE,
+            items=[
+                OrderItem(
+                    product_id="P-001",
+                    product_name="りんご",
+                    quantity=5,
+                    unit="箱",
+                    temperature_zone=TemperatureZone.CHILLED,
+                ),
+                OrderItem(
+                    product_id="P-002",
+                    product_name="バナナ",
+                    quantity=10,
+                    unit="kg",
+                    temperature_zone=TemperatureZone.AMBIENT,
+                ),
+            ],
+            status=OrderStatus.ACCEPTED,
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_learning_calls_record_pattern_and_update_profile(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order = self._make_order()
+
+        with patch("src.services.learning_service.LearningService", autospec=True) as MockLS:
+            mock_ls = AsyncMock()
+            MockLS.return_value = mock_ls
+
+            await orch._run_learning(order, "りんご5箱とバナナ10kg")
+
+            mock_ls.record_pattern.assert_awaited_once()
+            call_kwargs = mock_ls.record_pattern.call_args[1]
+            assert call_kwargs["customer_id"] == "C-001"
+            assert call_kwargs["input_expression"] == "りんご5箱とバナナ10kg"
+            assert len(call_kwargs["resolved_items"]) == 2
+
+            assert mock_ls.update_customer_profile.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_run_learning_exception_does_not_propagate(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order = self._make_order()
+
+        with patch("src.services.learning_service.LearningService", side_effect=RuntimeError("DB down")):
+            await orch._run_learning(order, "りんご5箱")
+
+    @pytest.mark.asyncio
+    async def test_affirmative_reply_triggers_learning_task(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-LEARN")
+
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {"product_id": "P-001", "product_name": "りんご", "quantity": 5, "unit": "箱"},
+            ],
+        }
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock, return_value="ご注文を確定しました。"),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch.object(orch, "_run_learning", new_callable=AsyncMock) as mock_learn,
+        ):
+            await orch.process_order_message(
+                message="OK",
+                line_user_id="U123",
+                source=OrderSource.LINE,
+                pending_order_draft=pending_draft,
+            )
+
+            mock_learn.assert_called_once()
+            args = mock_learn.call_args[0]
+            assert args[0].id == "ORD-LEARN"
+            assert args[1] == "OK"
+
+    @pytest.mark.asyncio
+    async def test_normal_flow_triggers_learning_task(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-NORMAL")
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            elif call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            elif call_count == 3:
+                return '```json\n{"all_reserved": true}\n```'
+            else:
+                return "りんご1個、承りました。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch.object(orch, "_run_learning", new_callable=AsyncMock) as mock_learn,
+        ):
+            await orch.process_order_message(
+                message="りんご1個",
+                line_user_id="U123",
+                source=OrderSource.LINE,
+            )
+
+            mock_learn.assert_called_once()
+            args = mock_learn.call_args[0]
+            assert args[0].id == "ORD-NORMAL"
+            assert args[1] == "りんご1個"
+
+    @pytest.mark.asyncio
+    async def test_needs_review_does_not_trigger_learning(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-REVIEW")
+
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "テスト社",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
+                "needs_confirmation": False,
+            }
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return f"```json\n{intake_json}\n```"
+            if call_count == 2:
+                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+            if call_count == 3:
+                return '```json\n{"all_available": false, "items": [{"product_id": "P-001", "available": false}]}\n```'
+            return "担当者が確認いたします。"
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch.object(orch, "_run_learning", new_callable=AsyncMock) as mock_learn,
+        ):
+            await orch.process_order_message(
+                message="りんご10箱",
+                line_user_id="U123",
+                source=OrderSource.LINE,
+            )
+
+            mock_learn.assert_not_called()
