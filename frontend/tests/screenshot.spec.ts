@@ -25,9 +25,9 @@ test("capture order table screenshot", async ({ page }) => {
   );
 
   await page.setViewportSize({ width: 1400, height: 900 });
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.evaluate(() => localStorage.setItem("foogent_token", "test-token"));
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
 
   // Scroll to order table section

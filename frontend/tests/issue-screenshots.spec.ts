@@ -1,11 +1,5 @@
 import { test } from "@playwright/test";
 
-test.use({
-  launchOptions: {
-    executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-  },
-});
-
 const fakeUser = {
   user_id: "test-user",
   tenant_id: "T-001",
@@ -39,19 +33,19 @@ async function mockBackend(page: import("@playwright/test").Page) {
 test.beforeEach(async ({ page }) => {
   await mockBackend(page);
   await page.setViewportSize({ width: 1400, height: 900 });
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.evaluate(() => localStorage.setItem("foogent_token", "test-token"));
 });
 
 test("orders page is default (issue 63 & 64)", async ({ page }) => {
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: "test-results/01-orders-default.png", fullPage: true });
 });
 
 test("analytics tab shows stats and charts (issue 63)", async ({ page }) => {
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
   await page.click("text=分析");
   await page.waitForSelector("text=ステータス別", { timeout: 5_000 });
@@ -60,7 +54,7 @@ test("analytics tab shows stats and charts (issue 63)", async ({ page }) => {
 });
 
 test("customers shows delivery lead time (issue 65)", async ({ page }) => {
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
   await page.click("text=顧客");
   await page.waitForSelector("text=納品グループ", { timeout: 5_000 });
@@ -69,7 +63,7 @@ test("customers shows delivery lead time (issue 65)", async ({ page }) => {
 });
 
 test("customer edit modal exposes lead time (issue 65)", async ({ page }) => {
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
   await page.click("text=顧客");
   await page.waitForSelector("text=納品グループ", { timeout: 5_000 });
@@ -80,7 +74,7 @@ test("customer edit modal exposes lead time (issue 65)", async ({ page }) => {
 });
 
 test("order detail with memo editor (issue 69)", async ({ page }) => {
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
   // Open the first row in the demo data
   await page.locator("tr").nth(1).click();

@@ -29,9 +29,9 @@ test.beforeEach(async ({ page }) => {
     }),
   );
 
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.evaluate(() => localStorage.setItem("foogent_token", "test-token"));
-  await page.goto("/dashboard/");
+  await page.goto("/");
   await page.waitForSelector("text=注文一覧", { timeout: 15_000 });
 });
 
