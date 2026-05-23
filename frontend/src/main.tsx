@@ -13,6 +13,8 @@ if (isPopup || hasMsalResponse) {
   // postMessage the result back to the parent's loginPopup() call.
   // Also handles the case where window.opener is lost but the URL hash
   // contains an MSAL auth response (code= or error=).
+  // Force-close after 1s so the parent detects popup.closed and rejects
+  // with user_cancelled instead of hanging on MSAL failure.
   import("./auth/msalConfig.ts").then(({ msalReady }) => {
     msalReady.finally(() => setTimeout(() => window.close(), 1_000));
   });
