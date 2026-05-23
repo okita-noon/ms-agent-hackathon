@@ -1,11 +1,12 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-22 09:20
+Updated: 2026-05-23 23:35
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
 import threading
 import time
@@ -249,6 +250,21 @@ class EmailIngestionService:
             customer = await customer_repo.find_by_email(self._ctx.tenant_id, inbound.channel_user_id)
             if customer:
                 inbound.customer_id = customer.id
+
+        demo_mode = os.environ.get("EMAIL_DEMO_MODE", "false").strip().lower() == "true"
+        if not customer and demo_mode:
+            demo_customer_id = os.environ.get("EMAIL_DEMO_CUSTOMER_ID", "").strip()
+            if demo_customer_id:
+                customer = await customer_repo.get_by_id(self._ctx.tenant_id, demo_customer_id)
+            if not customer:
+                customers = await customer_repo.list_all(self._ctx.tenant_id)
+                if customers:
+                    customer = customers[0]
+            if customer:
+                inbound.customer_id = customer.id
+                logger.info(
+                    "Demo mode: unregistered email %s mapped to customer %s", inbound.channel_user_id, customer.id
+                )
 
         session = None
         if inbound.conversation_id:
