@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 GRAPH_TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 DEFAULT_GRAPH_DELEGATED_SCOPE = "https://graph.microsoft.com/Mail.Send offline_access"
-DEFAULT_EXTERNAL_ROUTE_MODE = "delegated_first"
-DEFAULT_EXTERNAL_FALLBACK_PROVIDER = "smtp"
+DEFAULT_EXTERNAL_ROUTE_MODE = "smtp_first"
+DEFAULT_EXTERNAL_FALLBACK_PROVIDER = "graph"
 
 
 class _GraphDelegatedTokenCache:
@@ -253,7 +253,7 @@ class CommunicationPlugin:
 
     @kernel_function(
         name="send_email",
-        description="Graph API経由でメールを顧客へ送信する",
+        description="メールを顧客へ送信する（SMTP メイン、Graph API フォールバック）",
     )
     async def send_email(
         self,
@@ -264,50 +264,31 @@ class CommunicationPlugin:
     ) -> dict:
         cfg = self._ctx.config
         recipient = (to_address or "").strip()
-        is_external = self._is_external_recipient(recipient)
-        external_route_mode = os.environ.get("EMAIL_EXTERNAL_ROUTE_MODE", DEFAULT_EXTERNAL_ROUTE_MODE).strip().lower()
-        fallback_provider = (
-            os.environ.get("EMAIL_EXTERNAL_FALLBACK_PROVIDER", DEFAULT_EXTERNAL_FALLBACK_PROVIDER).strip().lower()
-        )
-        delegated_enabled = bool(
-            os.environ.get("GRAPH_DELEGATED_REFRESH_TOKEN", "").strip()
-            or os.environ.get("GRAPH_DELEGATED_ACCESS_TOKEN", "").strip()
-        )
+        route_mode = os.environ.get("EMAIL_EXTERNAL_ROUTE_MODE", DEFAULT_EXTERNAL_ROUTE_MODE).strip().lower()
 
+        # --- SMTP メイン ---
+        if route_mode in {"smtp_first", "smtp_only"}:
+            smtp_result = self._send_via_smtp_fallback(recipient, subject, body)
+            if smtp_result.get("success"):
+                return smtp_result
+            if route_mode == "smtp_only":
+                return smtp_result
+            logger.warning("SMTP送信失敗、Graph APIへフォールバック: to=%s", recipient)
+
+        # --- Graph API フォールバック ---
         if not cfg.graph_mailbox_user_id or not cfg.graph_client_id:
-            if is_external and fallback_provider == "smtp":
-                smtp_result = self._send_via_smtp_fallback(recipient, subject, body)
-                if smtp_result.get("success"):
-                    return smtp_result
-            logger.warning("Graph API未設定: モック送信 to=%s subject=%s", recipient, subject)
+            if route_mode in {"smtp_first", "smtp_only"}:
+                logger.warning("Graph API未設定かつSMTP失敗: モック送信 to=%s", recipient)
+            else:
+                logger.warning("Graph API未設定: モック送信 to=%s subject=%s", recipient, subject)
             return {"success": True, "mock": True, "to_address": recipient, "subject": subject}
 
         try:
-            mailbox = cfg.graph_mailbox_user_id
-
-            if is_external and external_route_mode in {"delegated_only", "delegated_first"} and delegated_enabled:
-                try:
-                    token = await self._get_graph_delegated_token()
-                    delegated_mailbox = os.environ.get("GRAPH_DELEGATED_SEND_AS_USER_ID", "").strip() or mailbox
-                    delegated_result = await self._send_via_graph(token, delegated_mailbox, recipient, subject, body)
-                    if delegated_result.get("success"):
-                        delegated_result["provider"] = "graph_delegated"
-                        return delegated_result
-                except Exception:  # noqa: BLE001
-                    logger.exception("Delegated Graph send failed: to=%s", recipient)
-                    if external_route_mode == "delegated_only":
-                        return {"success": False, "error": "Delegated Graph send failed"}
-
-            if is_external and fallback_provider == "smtp" and external_route_mode in {"delegated_first", "smtp_only"}:
-                smtp_result = self._send_via_smtp_fallback(recipient, subject, body)
-                if smtp_result.get("success") or external_route_mode == "smtp_only":
-                    return smtp_result
-
             token = await self._get_graph_token()
-            app_only_result = await self._send_via_graph(token, mailbox, recipient, subject, body)
-            if app_only_result.get("success"):
-                app_only_result["provider"] = "graph_app_only"
-            return app_only_result
+            graph_result = await self._send_via_graph(token, cfg.graph_mailbox_user_id, recipient, subject, body)
+            if graph_result.get("success"):
+                graph_result["provider"] = "graph_app_only"
+            return graph_result
         except Exception:
             logger.exception("Email send error: to=%s", recipient)
             return {"success": False, "error": "送信中にエラーが発生しました"}
