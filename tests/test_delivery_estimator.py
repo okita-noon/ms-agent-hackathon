@@ -1,7 +1,7 @@
 """配送日数推定のテスト.
 
 Created: 2026-05-22
-Updated: 2026-05-22 21:28
+Updated: 2026-05-24 01:03
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class TestEstimateByRoute:
             now=datetime(2026, 5, 22, 10, 0),
         )
         assert min_d == date(2026, 5, 23)
-        assert max_d == date(2026, 5, 24)
+        assert max_d == date(2026, 5, 23)
 
     def test_hokkaido_route(self):
         tc = _make_tenant(closed=[])
@@ -49,7 +49,7 @@ class TestEstimateByRoute:
             now=datetime(2026, 5, 22, 10, 0),
         )
         assert min_d == date(2026, 5, 25)
-        assert max_d == date(2026, 5, 27)
+        assert max_d == date(2026, 5, 25)
 
     def test_none_route_uses_default(self):
         tc = _make_tenant(closed=[])
@@ -60,7 +60,7 @@ class TestEstimateByRoute:
             now=datetime(2026, 5, 22, 10, 0),
         )
         assert min_d == date(2026, 5, 24)
-        assert max_d == date(2026, 5, 26)
+        assert max_d == date(2026, 5, 24)
 
 
 class TestEstimateByLeadTime:
@@ -156,14 +156,14 @@ class TestClosedDays:
 
 
 class TestFormatEstimate:
-    def test_range_format(self):
+    def test_fixed_date_format(self):
         result = format_estimate(date(2026, 5, 23), date(2026, 5, 24))
-        assert result == "5月23日〜5月24日頃のお届け予定"
+        assert result == "5月23日配送予定"
 
     def test_same_date_format(self):
         result = format_estimate(date(2026, 5, 23), date(2026, 5, 23))
-        assert result == "5月23日頃のお届け予定"
+        assert result == "5月23日配送予定"
 
     def test_cross_month(self):
         result = format_estimate(date(2026, 5, 30), date(2026, 6, 2))
-        assert result == "5月30日〜6月2日頃のお届け予定"
+        assert result == "5月30日配送予定"

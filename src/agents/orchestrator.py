@@ -7,6 +7,8 @@ import os
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date
+from pathlib import Path
+from string import Template
 
 from semantic_kernel import Kernel
 from semantic_kernel.agents import ChatCompletionAgent
@@ -35,6 +37,72 @@ from src.plugins.inventory_plugin import InventoryPlugin
 logger = logging.getLogger(__name__)
 
 DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "_templates"
+_email_config_cache: dict | None = None
+
+
+def _load_template(name: str) -> Template:
+    path = _TEMPLATES_DIR / name
+    return Template(path.read_text(encoding="utf-8"))
+
+
+def _load_email_config() -> dict:
+    global _email_config_cache  # noqa: PLW0603
+    if _email_config_cache is None:
+        path = _TEMPLATES_DIR / "メール設定.json"
+        _email_config_cache = json.loads(path.read_text(encoding="utf-8"))
+    return _email_config_cache
+
+
+def _build_email_signature() -> str:
+    cfg = _load_email_config().get("signature", {})
+    company = cfg.get("company_name", "")
+    dept = cfg.get("department", "")
+    tel = cfg.get("tel", "")
+    email = cfg.get("email", "")
+    return (
+        "\n\n──────────────\n"
+        f"{company} {dept}\n"
+        f"TEL: {tel}\n"
+        f"Email: {email}\n"
+        "──────────────\n"
+    )
+
+
+def _build_email_subject(base_subject: str | None, order_id: str | None = None) -> str:
+    cfg = _load_email_config().get("subject", {})
+    subject = base_subject or cfg.get("default", "ご注文の確認")
+    if not subject.startswith("Re: "):
+        subject = f"Re: {subject}"
+    if order_id:
+        suffix_tpl = cfg.get("order_confirmed_suffix", "")
+        if suffix_tpl:
+            suffix = Template(suffix_tpl).safe_substitute(order_id=order_id)
+            subject = f"{subject} {suffix}"
+    return subject
+
+
+def _build_email_from_template(
+    template_name: str,
+    intake_draft: dict,
+    delivery_estimate: str | None = None,
+    body: str | None = None,
+) -> str:
+    tpl = _load_template(template_name)
+    customer_name = intake_draft.get("customer_name", "お客")
+    items = intake_draft.get("items", [])
+    order_lines = "\n".join(
+        f"・{it.get('product_name', '')}: {it.get('quantity', '')} {it.get('unit', '')}" for it in items
+    )
+    email_body = tpl.safe_substitute(
+        customer_name=customer_name,
+        company_name=customer_name,
+        order_items=order_lines,
+        delivery_estimate=delivery_estimate or "",
+        body=body or "",
+    )
+    return email_body + _build_email_signature()
 
 
 class OrderOrchestrator:
@@ -393,19 +461,49 @@ class OrderOrchestrator:
             )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
 
-        # ── Step 5: Generate final response via orchestrator ───────────────────
-        response_text = await self._generate_final_response(
-            message=message,
-            line_user_id=line_user_id,
-            intake_text=intake_text,
-            exception_text=exception_text,
-            inventory_text=inventory_text,
-            source=source,
-            conversation_history=conversation_history,
-            pending_order_draft=pending_order_draft,
-            processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
-            delivery_estimate=delivery_estimate_text,
-        )
+        # ── Step 5: Generate final response ─────────────────────────────────
+        if source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+            response_text = _build_email_from_template(
+                "メール返信_受注確定.txt",
+                intake_draft,
+                delivery_estimate=delivery_estimate_text,
+            )
+            if saved_order:
+                response_text = response_text.replace(
+                    "ご注文を承りました。",
+                    f"ご注文を承りました。（受注No: {saved_order.id}）",
+                )
+        elif source == OrderSource.EMAIL and needs_confirmation and intake_draft:
+            agent_body = await self._generate_final_response(
+                message=message,
+                line_user_id=line_user_id,
+                intake_text=intake_text,
+                exception_text=exception_text,
+                inventory_text=inventory_text,
+                source=OrderSource.LINE,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+                delivery_estimate=delivery_estimate_text,
+            )
+            response_text = _build_email_from_template(
+                "メール返信_異常時.txt",
+                intake_draft,
+                body=agent_body,
+            )
+        else:
+            response_text = await self._generate_final_response(
+                message=message,
+                line_user_id=line_user_id,
+                intake_text=intake_text,
+                exception_text=exception_text,
+                inventory_text=inventory_text,
+                source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+                delivery_estimate=delivery_estimate_text,
+            )
         result["response"] = response_text
 
         # ── Step 6: Send response ─────────────────────────────────────────────
@@ -579,18 +677,48 @@ class OrderOrchestrator:
 
         # ── Chain Step 4: Communication Agent ─────────────────────────────────
         processing_note = _build_processing_note(needs_confirmation, inventory_needs_review)
-        response_text = await self._communication_agent_reply(
-            message=message,
-            line_user_id=line_user_id,
-            source=source,
-            conversation_history=conversation_history,
-            pending_order_draft=pending_order_draft,
-            intake_text=intake_text,
-            exception_text=exception_text,
-            inventory_text=inventory_text,
-            processing_note=processing_note,
-            delivery_estimate=delivery_estimate_text,
-        )
+        if source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+            response_text = _build_email_from_template(
+                "メール返信_受注確定.txt",
+                intake_draft,
+                delivery_estimate=delivery_estimate_text,
+            )
+            if saved_order:
+                response_text = response_text.replace(
+                    "ご注文を承りました。",
+                    f"ご注文を承りました。（受注No: {saved_order.id}）",
+                )
+        elif source == OrderSource.EMAIL and needs_confirmation and intake_draft:
+            agent_body = await self._communication_agent_reply(
+                message=message,
+                line_user_id=line_user_id,
+                source=OrderSource.LINE,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                intake_text=intake_text,
+                exception_text=exception_text,
+                inventory_text=inventory_text,
+                processing_note=processing_note,
+                delivery_estimate=delivery_estimate_text,
+            )
+            response_text = _build_email_from_template(
+                "メール返信_異常時.txt",
+                intake_draft,
+                body=agent_body,
+            )
+        else:
+            response_text = await self._communication_agent_reply(
+                message=message,
+                line_user_id=line_user_id,
+                source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                intake_text=intake_text,
+                exception_text=exception_text,
+                inventory_text=inventory_text,
+                processing_note=processing_note,
+                delivery_estimate=delivery_estimate_text,
+            )
         result["response"] = response_text
 
         # ── 返信送信 ──────────────────────────────────────────────────────────
@@ -679,19 +807,30 @@ class OrderOrchestrator:
         session: OrderSession,
         reply_callback: Callable[[str, str, str | None], Awaitable[None]],
     ) -> dict:
-        async def email_response_callback(body: str) -> None:
-            base_subject = inbound.subject or "ご注文の確認"
-            subject = base_subject if base_subject.startswith("Re: ") else f"Re: {base_subject}"
-            await reply_callback(subject, body, inbound.reply_to_message_id or inbound.external_message_id)
+        captured_body: list[str] = []
 
-        return await self.process_order_message(
+        async def capture_callback(body: str) -> None:
+            captured_body.append(body)
+
+        result = await self.process_order_message(
             message=inbound.text,
             line_user_id=inbound.channel_user_id,
             reply_token=None,
             source=OrderSource.EMAIL,
-            response_callback=email_response_callback,
+            response_callback=capture_callback,
             pending_order_draft=session.pending_order_draft,
         )
+
+        if captured_body:
+            order_id = result.get("order_id")
+            subject = _build_email_subject(inbound.subject, order_id=order_id)
+            await reply_callback(
+                subject,
+                captured_body[0],
+                inbound.reply_to_message_id or inbound.external_message_id,
+            )
+
+        return result
 
     async def _generate_final_response(
         self,
@@ -744,26 +883,18 @@ class OrderOrchestrator:
                 "○○様\n"
                 "\n"
                 "いつもお世話になっております。\n"
-                "○○（会社名・レストラン名）様のご注文を承りました。\n"
+                "○○（会社名・レストラン名）様のご注文について、ご連絡いたします。\n"
                 "\n"
-                "・りんご 10kg\n"
-                "\n"
-                "5月25日〜26日頃のお届け予定です。\n"
+                "（確認事項・異常内容などの本文）\n"
                 "\n"
                 "何かご不明な点がございましたら、お気軽にご連絡ください。\n"
                 "よろしくお願いいたします。\n"
-                "\n"
-                "──────────────\n"
-                "丸山食品株式会社 受注担当係\n"
-                "TEL: 03-XXXX-XXXX\n"
-                "Email: order@aibaske1103gmail.onmicrosoft.com\n"
-                "──────────────\n"
                 "---（出力例ここまで）---\n\n"
                 "ルール:\n"
                 "- 宛名は Intake Agent結果の customer_name を使う\n"
                 "- 挨拶の「○○様」には会社名・レストラン名を入れる\n"
                 "- 各セクション間に必ず空行を1行入れる\n"
-                "- 確認質問・異常警告・在庫不足の場合も同じ構成で書く\n"
+                "- 署名は出力しないこと（システムが自動付加する）\n"
                 f"{context_instruction}"
                 "返信本文のみを出力してください（件名やJSON不要）。\n\n"
             )
