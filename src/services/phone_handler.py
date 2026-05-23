@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from azure.communication.callautomation import (
     CallAutomationClient,
@@ -15,7 +14,6 @@ from src.connectors.context import TenantContext
 from src.models.order import OrderSource
 from src.models.session import OrderSession
 from src.services.channel_locks import get_channel_user_lock
-from src.services.learning_service import LearningService
 from src.services.tenant_resolver import resolve_tenant_for_phone
 
 logger = logging.getLogger(__name__)
@@ -254,14 +252,6 @@ class PhoneCallHandler:
         if order_id:
             state.order_confirmed = True
             state.last_order_id = order_id
-            asyncio.create_task(
-                self._run_learning(
-                    tenant_ctx=state.tenant_ctx,
-                    order_id=order_id,
-                    user_id=state.caller_number,
-                    original_message=transcribed_text,
-                )
-            )
 
         if result.get("session_status") == "awaiting_reply":
             state.order_confirmed = False
@@ -418,66 +408,16 @@ class PhoneCallHandler:
         async with get_channel_user_lock("phone", state.caller_number):
             session = await session_repo.find_active_session(state.tenant_ctx.tenant_id, "phone", state.caller_number)
             if session:
-                session.last_message_at = datetime.utcnow()
+                session.last_message_at = datetime.now(timezone.utc)
                 await session_repo.update_session(session)
                 return session
 
             session = OrderSession(
-                id=f"sess-phone-{state.caller_number[-8:]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                id=f"sess-phone-{state.caller_number[-8:]}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                 tenant_id=state.tenant_ctx.tenant_id,
                 channel="phone",
                 channel_user_id=state.caller_number,
                 status="active",
-                expires_at=datetime.utcnow() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS),
             )
             return await session_repo.create_session(session)
-
-    async def _run_learning(
-        self,
-        tenant_ctx: TenantContext,
-        order_id: str,
-        user_id: str,
-        original_message: str,
-    ) -> None:
-        try:
-            from src.models.intelligence import ResolvedItem
-
-            order_repo = tenant_ctx.get_connector("IOrderRepository")
-            customer_repo = tenant_ctx.get_connector("ICustomerRepository")
-
-            order = await order_repo.find_by_id(tenant_ctx.tenant_id, order_id)
-            if not order:
-                return
-
-            customer = await customer_repo.find_by_identifier(tenant_ctx.tenant_id, user_id)
-            if not customer:
-                return
-
-            learning_service = LearningService(tenant_ctx)
-            resolved_items = [
-                ResolvedItem(
-                    product_id=item.product_id,
-                    product_name=item.product_name,
-                    qty=item.quantity,
-                    unit=item.unit,
-                )
-                for item in order.items
-            ]
-
-            await learning_service.record_pattern(
-                customer_id=customer.id,
-                input_expression=original_message,
-                resolved_items=resolved_items,
-            )
-
-            for item in order.items:
-                await learning_service.update_customer_profile(
-                    customer_id=customer.id,
-                    product_id=item.product_id,
-                    quantity=item.quantity,
-                    unit=item.unit,
-                )
-
-            logger.info("Learning completed for phone order %s", order_id)
-        except Exception:
-            logger.exception("Learning failed for phone order %s", order_id)

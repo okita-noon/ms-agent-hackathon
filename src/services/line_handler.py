@@ -13,11 +13,9 @@ import httpx
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.services.channel_locks import get_channel_user_lock
-from src.models.intelligence import ResolvedItem
 from src.models.message_history import MessageHistory
 from src.models.order import OrderSource
 from src.models.session import OrderSession
-from src.services.learning_service import LearningService
 
 logger = logging.getLogger(__name__)
 
@@ -241,10 +239,6 @@ class LineWebhookHandler:
             session.pending_order_draft = None
             await session_repo.update_session(session)
 
-        order_id = result.get("order_id")
-        if order_id:
-            asyncio.create_task(self._run_learning(order_id=order_id, user_id=user_id, original_message=text))
-
         return {
             "session_id": session.id,
             "user_id": user_id,
@@ -279,55 +273,6 @@ class LineWebhookHandler:
             await history_repo.create_message(message)
         except Exception:
             logger.exception("Failed to save LINE message history; reply flow will continue")
-
-    async def _run_learning(self, order_id: str, user_id: str, original_message: str) -> None:
-        try:
-            order_repo = self._ctx.get_connector("IOrderRepository")
-            customer_repo = self._ctx.get_connector("ICustomerRepository")
-
-            order = await order_repo.find_by_id(self._ctx.tenant_id, order_id)
-            if not order:
-                logger.warning("Learning skipped: order %s not found", order_id)
-                return
-
-            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
-            if not customer:
-                logger.warning("Learning skipped: customer not found for LINE user %s", user_id)
-                return
-
-            learning_service = LearningService(self._ctx)
-
-            resolved_items = [
-                ResolvedItem(
-                    product_id=item.product_id,
-                    product_name=item.product_name,
-                    qty=item.quantity,
-                    unit=item.unit,
-                )
-                for item in order.items
-            ]
-
-            await learning_service.record_pattern(
-                customer_id=customer.id,
-                input_expression=original_message,
-                resolved_items=resolved_items,
-            )
-
-            for item in order.items:
-                await learning_service.update_customer_profile(
-                    customer_id=customer.id,
-                    product_id=item.product_id,
-                    quantity=item.quantity,
-                    unit=item.unit,
-                )
-
-            logger.info("Learning completed for order %s, customer %s", order_id, customer.id)
-        except Exception:
-            logger.exception(
-                "Learning failed for order %s (user %s) — order flow unaffected",
-                order_id,
-                user_id,
-            )
 
     async def _send_line_push(self, user_id: str, message: str) -> bool:
         token = self._ctx.config.line_channel_access_token
