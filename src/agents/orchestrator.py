@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date
@@ -43,11 +44,16 @@ class OrderOrchestrator:
         azure_openai_endpoint: str,
         azure_openai_key: str,
         deployment_name: str = DEFAULT_AZURE_OPENAI_DEPLOYMENT,
+        use_multi_agent: bool | None = None,
     ):
         self._ctx = tenant_ctx
         self._endpoint = azure_openai_endpoint
         self._key = azure_openai_key
         self._deployment = deployment_name
+        if use_multi_agent is None:
+            self._use_multi_agent = os.getenv("USE_MULTI_AGENT", "true").lower() == "true"
+        else:
+            self._use_multi_agent = use_multi_agent
 
     def _build_kernel(self, *plugins: tuple[object, str]) -> Kernel:
         kernel = Kernel()
@@ -200,6 +206,48 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
+        # ── Agent処理の分岐 ───────────────────────────────────────────────────
+        if self._use_multi_agent:
+            logger.info("Using multi-agent chain pipeline")
+            agent_result = await self._run_multi_agent_chain(
+                message=message,
+                line_user_id=line_user_id,
+                reply_token=reply_token,
+                source=source,
+                response_callback=response_callback,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                session_id=session_id,
+            )
+        else:
+            logger.info("Using single-agent pipeline")
+            agent_result = await self._run_single_agent(
+                message=message,
+                line_user_id=line_user_id,
+                reply_token=reply_token,
+                source=source,
+                response_callback=response_callback,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                session_id=session_id,
+            )
+        result.update(agent_result)
+        return result
+
+    async def _run_single_agent(
+        self,
+        message: str,
+        line_user_id: str,
+        reply_token: str | None,
+        source: OrderSource,
+        response_callback: Callable[[str], Awaitable[None]] | None,
+        conversation_history: list[MessageHistory] | None,
+        pending_order_draft: dict | None,
+        session_id: str | None,
+    ) -> dict:
+        """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
+        result: dict = {}
+
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent()
         if source == OrderSource.PHONE:
@@ -239,7 +287,6 @@ class OrderOrchestrator:
 
         intake_draft = self._extract_json(intake_text)
         if not intake_draft or not intake_draft.get("items"):
-            # Could not parse order → fall back to orchestrator for natural reply
             logger.warning("Intake agent returned no parseable draft; falling back to orchestrator")
             response_text = await self._generate_final_response(
                 message=message,
@@ -279,7 +326,6 @@ class OrderOrchestrator:
             logger.info("Exception result: %s", exception_text[:500])
             exception_result = self._extract_json(exception_text)
 
-        # Check if critical anomaly requires user confirmation
         anomaly_confirmation_needed = False
         if exception_result and exception_result.get("confirmation_needed"):
             anomaly_confirmation_needed = True
@@ -330,10 +376,10 @@ class OrderOrchestrator:
                 if draft:
                     saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
                     asyncio.create_task(self._run_learning(saved_order, message))
-                    logger.info("Created order %s from multi-agent chain", saved_order.id)
+                    logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
             except Exception:
-                logger.exception("Failed to save order from multi-agent chain")
+                logger.exception("Failed to save order from single-agent pipeline")
 
         # ── Step 4.5: Estimate delivery date ─────────────────────────────────
         delivery_estimate_text: str | None = None
@@ -373,6 +419,259 @@ class OrderOrchestrator:
             result["pending_order_draft"] = _build_draft_from_intake(intake_draft)
 
         return result
+
+    async def _run_multi_agent_chain(
+        self,
+        message: str,
+        line_user_id: str,
+        reply_token: str | None,
+        source: OrderSource,
+        response_callback: Callable[[str], Awaitable[None]] | None,
+        conversation_history: list[MessageHistory] | None,
+        pending_order_draft: dict | None,
+        session_id: str | None,
+    ) -> dict:
+        """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
+        result: dict = {}
+
+        if source == OrderSource.PHONE:
+            lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
+            user_label = f"電話番号: {line_user_id}"
+        elif source == OrderSource.EMAIL:
+            lookup_instruction = "lookup_customer でこの顧客をメールアドレスから特定し、"
+            user_label = f"メールアドレス: {line_user_id}"
+        else:
+            lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
+            user_label = f"LINE User ID: {line_user_id}"
+
+        memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+
+        # ── Chain Step 1: Intake Agent ─────────────────────────────────────────
+        intake_agent = self._make_intake_agent()
+        if pending_order_draft:
+            intake_prompt = (
+                f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"顧客の回答: {message}\n\n"
+                f"まず {lookup_instruction}"
+                f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
+            )
+        else:
+            intake_prompt = (
+                f"以下の注文メッセージを処理してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"メッセージ: {message}\n\n"
+                f"まず {lookup_instruction}"
+                f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
+                f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
+            )
+        intake_text = await self._invoke_agent(intake_agent, intake_prompt)
+        logger.info("[multi-agent] Intake result: %s", intake_text[:500])
+
+        intake_draft = self._extract_json(intake_text)
+        if not intake_draft or not intake_draft.get("items"):
+            logger.warning("[multi-agent] Intake returned no parseable draft; using Communication Agent for reply")
+            response_text = await self._communication_agent_reply(
+                message=message,
+                line_user_id=line_user_id,
+                source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                intake_text=intake_text,
+            )
+            result["response"] = response_text
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        items = intake_draft.get("items", [])
+        customer_id = intake_draft.get("customer_id", "")
+        needs_confirmation = intake_draft.get("needs_confirmation", False)
+
+        # ── Chain Step 2: Exception Agent ──────────────────────────────────────
+        exception_text: str | None = None
+        exception_result: dict | None = None
+        anomaly_confirmation_needed = False
+        if items and customer_id:
+            exception_agent = self._make_exception_agent()
+            items_summary = json.dumps(items, ensure_ascii=False)
+            exception_prompt = (
+                f"以下の注文ドラフトの異常検知を行ってください。\n"
+                f"顧客ID: {customer_id}\n"
+                f"注文アイテム: {items_summary}\n"
+                f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
+                f"結果をJSON形式で返してください。"
+            )
+            exception_text = await self._invoke_agent(exception_agent, exception_prompt)
+            logger.info("[multi-agent] Exception result: %s", exception_text[:500])
+            exception_result = self._extract_json(exception_text)
+            if exception_result and exception_result.get("confirmation_needed"):
+                anomaly_confirmation_needed = True
+                needs_confirmation = True
+
+        # ── Chain Step 3: Inventory Agent ──────────────────────────────────────
+        inventory_text: str | None = None
+        inventory_result: dict | None = None
+        inventory_needs_review = False
+        if not anomaly_confirmation_needed and items:
+            inventory_agent = self._make_inventory_agent()
+            items_summary = json.dumps(items, ensure_ascii=False)
+            inventory_prompt = (
+                f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
+                f"注文アイテム: {items_summary}\n"
+                f"各アイテムに対して check_inventory を実行し、"
+                f"在庫が足りない場合は find_alternatives を検索し、"
+                f"在庫が確保できたアイテムは reserve_inventory で引当を行ってください。"
+                f"結果をJSON形式で返してください。"
+            )
+            inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
+            logger.info("[multi-agent] Inventory result: %s", inventory_text[:500])
+            inventory_result = self._extract_json(inventory_text)
+            inventory_needs_review = _inventory_requires_operator_review(inventory_result)
+            if inventory_needs_review:
+                needs_confirmation = True
+
+        # ── 注文保存 ──────────────────────────────────────────────────────────
+        saved_order: Order | None = None
+        if inventory_needs_review:
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        session_id=session_id,
+                        status=OrderStatus.NEEDS_REVIEW,
+                        remarks=_build_inventory_review_remarks(inventory_result),
+                    )
+                    logger.info("[multi-agent] Created review order %s", saved_order.id)
+                    result["review_order_id"] = saved_order.id
+            except Exception:
+                logger.exception("[multi-agent] Failed to save review order")
+        elif not needs_confirmation:
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
+                    asyncio.create_task(self._run_learning(saved_order, message))
+                    logger.info("[multi-agent] Created order %s", saved_order.id)
+                    result["order_id"] = saved_order.id
+            except Exception:
+                logger.exception("[multi-agent] Failed to save order")
+
+        # ── 配送予定日推定 ────────────────────────────────────────────────────
+        delivery_estimate_text: str | None = None
+        if not needs_confirmation:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+
+        # ── Chain Step 4: Communication Agent ─────────────────────────────────
+        processing_note = _build_processing_note(needs_confirmation, inventory_needs_review)
+        response_text = await self._communication_agent_reply(
+            message=message,
+            line_user_id=line_user_id,
+            source=source,
+            conversation_history=conversation_history,
+            pending_order_draft=pending_order_draft,
+            intake_text=intake_text,
+            exception_text=exception_text,
+            inventory_text=inventory_text,
+            processing_note=processing_note,
+            delivery_estimate=delivery_estimate_text,
+        )
+        result["response"] = response_text
+
+        # ── 返信送信 ──────────────────────────────────────────────────────────
+        if response_callback:
+            await response_callback(response_text)
+        else:
+            await self._send_line_message(response_text, reply_token, line_user_id)
+
+        if needs_confirmation:
+            result["session_status"] = "awaiting_reply"
+            result["pending_order_draft"] = _build_draft_from_intake(intake_draft)
+
+        return result
+
+    async def _communication_agent_reply(
+        self,
+        message: str,
+        line_user_id: str,
+        source: OrderSource,
+        conversation_history: list[MessageHistory] | None = None,
+        pending_order_draft: dict | None = None,
+        intake_text: str | None = None,
+        exception_text: str | None = None,
+        inventory_text: str | None = None,
+        processing_note: str | None = None,
+        delivery_estimate: str | None = None,
+    ) -> str:
+        """Communication Agentで返信メッセージを生成する. 失敗時は既存のOrchestratorにフォールバック."""
+        try:
+            comm_agent = self._make_communication_agent()
+
+            context_parts = [f"元のメッセージ: {message}", f"チャネル: {source.value}"]
+            memory_context = _format_memory_context(conversation_history, pending_order_draft).strip()
+            if memory_context:
+                context_parts.append(memory_context)
+            if intake_text:
+                context_parts.append(f"[Intake Agent結果]\n{intake_text}")
+            if exception_text:
+                context_parts.append(f"[Exception Agent結果]\n{exception_text}")
+            if inventory_text:
+                context_parts.append(f"[Inventory Agent結果]\n{inventory_text}")
+            if delivery_estimate:
+                context_parts.append(f"[配送予定]\n{delivery_estimate}")
+            if processing_note:
+                context_parts.append(f"[処理ステータス]\n{processing_note}")
+
+            if source == OrderSource.PHONE:
+                channel_instruction = "電話で読み上げるため、簡潔で自然な話し言葉にしてください。\n"
+            elif source == OrderSource.EMAIL:
+                channel_instruction = "メール返信本文を生成してください。丁寧で簡潔な日本語にしてください。\n"
+            else:
+                channel_instruction = "LINEメッセージとして簡潔に返信してください。\n"
+
+            comm_prompt = (
+                f"以下の処理結果を踏まえて、顧客への返信メッセージを生成してください。\n"
+                f"{channel_instruction}"
+                f"会話履歴がある場合は、前回の返信内容と矛盾しない自然な返信にしてください。\n"
+                f"返信メッセージのみを出力してください（JSON不要）。\n\n" + "\n\n".join(context_parts)
+            )
+            response_text = await self._invoke_agent(comm_agent, comm_prompt)
+            logger.info("[multi-agent] Communication Agent reply generated")
+
+            return _enforce_response_policy(
+                response_text,
+                needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
+                inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+            )
+        except Exception:
+            logger.exception("[multi-agent] Communication Agent failed; falling back to orchestrator")
+            return await self._generate_final_response(
+                message=message,
+                line_user_id=line_user_id,
+                intake_text=intake_text,
+                exception_text=exception_text,
+                inventory_text=inventory_text,
+                source=source,
+                conversation_history=conversation_history,
+                pending_order_draft=pending_order_draft,
+                processing_note=processing_note,
+                delivery_estimate=delivery_estimate,
+            )
 
     async def process_email(
         self,
