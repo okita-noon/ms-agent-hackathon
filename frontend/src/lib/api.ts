@@ -19,7 +19,7 @@ async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   });
   if (resp.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
-    window.location.href = `${window.location.origin}/dashboard/`;
+    window.location.href = `${window.location.origin}/`;
   }
   return resp;
 }
