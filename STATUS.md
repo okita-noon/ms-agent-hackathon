@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-22（休眠顧客販促営業・到着予定日推定を追加）
+> 最終更新: 2026-05-23（ログイン後のダッシュボード起動時間を改善）
 
 ## 実装済み
 
@@ -57,6 +57,7 @@
   - プロフィールドロップダウン（ログアウト）
   - API未接続時のデモデータフォールバック
   - ログイン画面用の濃色ロゴを追加し、白背景でも `foogent` が読めるように改善
+  - 保存済みJWTから即時にログイン状態を復元し、`/api/auth/me` 検証をバックグラウンド化。ページ単位の遅延ロードとMicrosoft SSOライブラリの動的読み込みでログイン後の起動待ちを短縮
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
@@ -96,7 +97,7 @@
 
 1. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
 2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
-3. **Container Apps のスケール設定**: 現在 min=0, max=5。アイドル時は0にスケールインするため初回リクエストにコールドスタート（数秒）がかかる
+3. **Container Apps のスケール設定**: 審査期間中の体感速度を優先し、APIは min=1, max=5 で常時1台を維持する。アイドル時コストは増えるが、ログイン後初回API・Webhookのコールドスタートを避ける
 4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある
 5. **`infra/modules/functions.bicep`**: Azure Functions は不使用（VM quota制約で断念）。ファイルは残存しているが `main.bicep` からの参照は削除済み
 
