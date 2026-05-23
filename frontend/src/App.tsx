@@ -1,10 +1,9 @@
-import { Suspense, lazy, useEffect, type ReactNode } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 import {
   Routes,
   Route,
   Navigate,
   NavLink,
-  useNavigate,
 } from "react-router-dom";
 import Header from "./components/Header";
 import LoadingState from "./components/LoadingState";
@@ -118,16 +117,9 @@ function PageFallback() {
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate("/login", { replace: true });
-    }
-  }, [isLoading, user, navigate]);
 
   if (isLoading) return <LoadingScreen />;
-  if (!user) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }
@@ -160,16 +152,9 @@ function DashboardLayout() {
 
 function LoginRoute() {
   const { user, isLoading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isLoading && user) {
-      navigate("/orders", { replace: true });
-    }
-  }, [isLoading, user, navigate]);
 
   if (isLoading) return <LoadingScreen />;
-  if (user) return <LoadingScreen />;
+  if (user) return <Navigate to="/orders" replace />;
 
   return (
     <Suspense fallback={<LoadingScreen />}>

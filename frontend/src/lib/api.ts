@@ -19,7 +19,7 @@ async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   });
   if (resp.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
-    window.location.href = `${window.location.origin}/`;
+    window.dispatchEvent(new Event("auth:token-expired"));
   }
   return resp;
 }
