@@ -1,7 +1,7 @@
 ---
 created: 2026-05-23
-Updated: 2026-05-23 11:38
-visibility: PUBLIC
+Updated: 2026-05-24 01:20
+visibility: 不明
 ---
 
 # GIT_STATUS
@@ -245,8 +245,43 @@ visibility: PUBLIC
 | 231 |      | 3aa7dee |      | 2026-0523 01:21  | fix: ログイン後にloginページへリダイレクトされ...  |[x]|[x]|
 | 232 |      | a30762b |      | 2026-0523 01:21  | fix: ログイン後にloginへリダイレクトされる問題...  |[x]|[x]|
 | 233 |      | 3d1548e |      | 2026-0523 01:24  | Learning Service の非同期実行をOrchestratorに統... |[x]|[x]|
-| 234 |      | 0b99ab7 | feat | 2026-0523 11:28  | OrchestratorにマルチAgent連鎖パイプラインを追加... |[x]|[x]|
-| 235 |      | 4619edf | main | 2026-0523 11:37  | Merge pull request #97 from okita-noon/feature/... |[x]|[x]|
+| 234 |      | 0b99ab7 |      | 2026-0523 11:28  | OrchestratorにマルチAgent連鎖パイプラインを追加... |[x]|[x]|
+| 235 |      | 4619edf |      | 2026-0523 11:37  | Merge pull request #97 from okita-noon/feature/... |[x]|[x]|
+| 236 |      | c54779e |      | 2026-0523 12:27  | Improve dashboard startup latency                  |[x]|[x]|
+| 237 |      | f9390d9 |      | 2026-0523 12:31  | Merge origin/main into startup latency PR          |[x]|[x]|
+| 238 |      | 28b8e60 |      | 2026-0523 12:39  | Improve foogent dashboard startup latency (#98)    |[x]|[x]|
+| 239 |      | 1932219 |      | 2026-0523 14:01  | feat: Zenn記事を追加・更新（foogent紹介）          |[x]|[x]|
+| 240 |      | 9c06c77 |      | 2026-0523 14:06  | fix: 401リダイレクト先を廃止済みの /dashboard/ ... |[x]|[x]|
+| 241 |      | 80ba6a7 |      | 2026-0523 14:08  | fix: 401リダイレクト先を廃止済みの /dashboard/ ... |[x]|[x]|
+| 242 |      | 8af88a3 |      | 2026-0523 14:19  | fix: SSO ポップアップが閉じない問題を修正 + テ...  |[x]|[x]|
+| 243 |      | ace9743 |      | 2026-0523 14:22  | merge: resolve comment conflict in main.tsx        |[x]|[x]|
+| 244 |      | 6856417 |      | 2026-0523 14:27  | メール送信をSMTPメインに切り替え（Graph APIフォ... |[x]|[x]|
+| 245 |      | f2f9c4f |      | 2026-0523 14:28  | fix: remove hardcoded Linux chromium path and s... |[x]|[x]|
+| 246 |      | ca9d5ed |      | 2026-0523 14:32  | Merge pull request #102 from okita-noon/fix/smt... |[x]|[x]|
+| 247 |      | 3b292ba |      | 2026-0523 14:35  | fix: Microsoft SSOをポップアップからリダイレク...  |[x]|[x]|
+| 248 |      | 4991857 |      | 2026-0523 14:37  | fix: update test assertion for redirectUri trai... |[x]|[x]|
+| 249 |      | 9bb7db0 |      | 2026-0523 14:38  | fix: SSO ポップアップが閉じずログイン画面に戻る... |[x]|[x]|
+| 250 |      | 3bc920f |      | 2026-0523 14:45  | fix: Microsoft SSOをポップアップからリダイレク...  |[x]|[x]|
+| 251 |      | 7bee17d |      | 2026-0523 15:24  | fix: ログイン後 login↔dashboard 無限ループを修正  |[x]|[x]|
+| 252 |      | 176103f |      | 2026-0523 15:25  | fix: ログイン後 login↔dashboard 無限ループを修... |[x]|[x]|
+| 253 |      | ab4c18e |      | 2026-0523 16:59  | docs: Zenn掲載用foogent紹介記事の下書きを追加（... |[x]|[x]|
+| 254 |      | 63c264f |      | 2026-0523 19:19  | fix: 認証チェックを AuthenticatedRouter に一本...  |[x]|[x]|
+| 255 |      | a00486f |      | 2026-0523 19:39  | merge: origin/main を取り込み App.tsx のコンフ...  |[x]|[x]|
+| 256 |      | 1611d92 |      | 2026-0523 21:00  | fix: ログイン後の /login ↔ /dashboard 無限ルー... |[x]|[x]|
+| 257 |      | 1e080e6 |      | 2026-0523 21:08  | fix: Microsoft SSO リダイレクト戻り時のログイン... |[x]|[x]|
+| 258 |      | 475fd3c |      | 2026-0523 21:11  | fix: Microsoft SSO リダイレクト戻り時のログイン... |[x]|[x]|
+| 259 |      | 0c2326e |      | 2026-0523 21:22  | fix: ログイン成功時のフラッシュを解消（Login側...  |[x]|[x]|
+| 260 |      | 7e1a6b5 |      | 2026-0523 21:30  | fix: ログイン中に isLoading=true にしてフラッシ... |[x]|[x]|
+| 261 |      | de4e915 |      | 2026-0523 21:34  | fix: ログイン中に isLoading=true にしてフラッシ... |[x]|[x]|
+| 262 |      | e2ab076 |      | 2026-0523 12:48  | fix: SSOリダイレクト後にログイン画面が一瞬表示...  |[x]|[x]|
+| 263 |      | 0061a1b |      | 2026-0523 22:08  | fix: SSOリダイレクト後にログイン画面が一瞬表示...  |[x]|[x]|
+| 264 |      | 469a27e | feat | 2026-0524 00:09  | feat: メール返信をビジネスメール形式に整形、デ...  |[x]|[x]|
+| 265 |      | ad63135 |      | 2026-0523 15:18  | fix: ログアウト後に /orders へ戻ってしまう問題...  |[x]|[x]|
+| 266 |      | 1f1f30e |      | 2026-0524 00:21  | Merge pull request #111 from okita-noon/feature... |[x]|[x]|
+| 267 |      | 3271a69 |      | 2026-0523 15:26  | merge: origin/main との競合を解消                  |[x]|[x]|
+| 268 |      | deb700d |      | 2026-0524 00:28  | fix: SSO ログイン後のフラッシュ解消とログアウト... |[x]|[x]|
+| 269 |      | 1d234e0 | feat | 2026-0524 01:03  | メールテンプレート外部化・設定JSON分離・NDRフィ... |[x]|[x]|
+| 270 |      | 08b2624 | main | 2026-0524 01:04  | Merge pull request #113 from okita-noon/feature... |[x]|[x]|
 
 
 ## 未コミット
