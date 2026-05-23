@@ -18,10 +18,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [initialAuth] = useState(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     const storedUser = stored ? readUserFromToken(stored) : null;
+    // Microsoft loginRedirect から戻ってきた直後は URL に code= が残る。
+    // useEffect 内の handleRedirectPromise が完了するまでローディング状態にして
+    // ログイン画面が一瞬表示される（フラッシュ）を防ぐ。
+    const hasMsalRedirect =
+      /[?&]code=/.test(window.location.search) ||
+      /[#&](code|error)=/.test(window.location.hash);
     return {
       token: storedUser ? stored : null,
       user: storedUser,
-      isLoading: Boolean(stored && !storedUser),
+      // ユーザーが未確定 かつ (未検証トークンあり OR MSALリダイレクト中) → 読み込み中
+      isLoading: !storedUser && Boolean(stored || hasMsalRedirect),
       stored,
     };
   });
@@ -41,19 +48,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   }, []);
 
-  // Microsoft 認証から戻ってきた直後にリダイレクト結果を処理する
+  // Microsoft loginRedirect から戻ってきた直後にリダイレクト結果を処理する
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const { msalReady, getRedirectResult } = await import("./msalConfig");
-      await msalReady;
-      if (cancelled) return;
-
-      const redirectResult = getRedirectResult();
-      if (!redirectResult?.idToken) return;
-
       try {
+        const { msalReady, getRedirectResult } = await import("./msalConfig");
+        await msalReady;
+        if (cancelled) return;
+
+        const redirectResult = getRedirectResult();
+        if (!redirectResult?.idToken) return;
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30_000);
         const res = await fetch(`${API_BASE}/api/auth/microsoft`, {
@@ -77,6 +84,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       } catch (err) {
         console.error("Microsoft auth callback failed:", err);
+      } finally {
+        // リダイレクト処理完了後にローディングを解除（成功・失敗どちらでも）
+        if (!cancelled) setIsLoading(false);
       }
     })();
 
@@ -85,16 +95,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [saveToken]);
 
-  // ストレージ済み JWT を /api/auth/me で検証
-  useEffect(() => {
-    function handleTokenExpired() {
-      setToken(null);
-      setUser(null);
-    }
-    window.addEventListener("auth:token-expired", handleTokenExpired);
-    return () => window.removeEventListener("auth:token-expired", handleTokenExpired);
-  }, []);
-
+  // 401 イベントでトークン期限切れを検知してログアウト
   useEffect(() => {
     function handleTokenExpired() {
       setToken(null);
