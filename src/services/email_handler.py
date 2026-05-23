@@ -1,6 +1,6 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-23 23:35
+Updated: 2026-05-24 01:03
 """
 
 from __future__ import annotations
@@ -230,14 +230,21 @@ class EmailIngestionService:
         logger.info("Processing email notification for %s via %s", message_id, recipient_address)
         raw_message = await self.fetch_message(message_id)
 
-        # 自己送信・システムメールをスキップ（無限ループ防止）
+        # 自己送信・システムメール・NDRをスキップ（無限ループ防止）
         sender_address = (raw_message.get("from", {}) or {}).get("address", "").lower()
         if sender_address and (
             sender_address == recipient_address.lower()
             or "microsoftexchange" in sender_address
             or sender_address.endswith("@noreply.microsoft.com")
+            or sender_address.startswith("postmaster@")
+            or sender_address.startswith("mailer-daemon@")
         ):
             logger.info("Skipping self/system message from %s", sender_address)
+            return
+
+        subject = (raw_message.get("subject") or "").lower()
+        if any(kw in subject for kw in ("undeliverable", "配信不能", "delivery failure", "returned mail")):
+            logger.info("Skipping NDR message: subject=%s", raw_message.get("subject", ""))
             return
 
         inbound = await self.to_inbound_message(raw_message, self._ctx.tenant_id)

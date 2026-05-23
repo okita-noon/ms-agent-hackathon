@@ -1,0 +1,11 @@
+${customer_name}様
+
+いつもお世話になっております。
+${company_name}様のご注文を承りました。
+
+${order_items}
+
+${delivery_estimate}
+
+何かご不明な点がございましたら、お気軽にご連絡ください。
+よろしくお願いいたします。

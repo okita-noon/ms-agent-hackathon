@@ -1,7 +1,7 @@
 """配送日数推定サービス.
 
 Created: 2026-05-22
-Updated: 2026-05-22 21:25
+Updated: 2026-05-24 01:03
 """
 
 from __future__ import annotations
@@ -102,14 +102,11 @@ def estimate(
         delivery = _advance_business_days(base, days, closed_weekdays, extra_holidays)
         return delivery, delivery
 
-    min_days, max_days = _ROUTE_DELIVERY_DAYS.get(route, _DEFAULT_DELIVERY_DAYS) if route else _DEFAULT_DELIVERY_DAYS
-    min_date = _advance_business_days(base, min_days, closed_weekdays, extra_holidays)
-    max_date = _advance_business_days(base, max_days, closed_weekdays, extra_holidays)
-    return min_date, max_date
+    min_days, _max_days = _ROUTE_DELIVERY_DAYS.get(route, _DEFAULT_DELIVERY_DAYS) if route else _DEFAULT_DELIVERY_DAYS
+    delivery = _advance_business_days(base, min_days, closed_weekdays, extra_holidays)
+    return delivery, delivery
 
 
 def format_estimate(min_date: date, max_date: date) -> str:
     """到着予定日を表示用文字列にフォーマットする."""
-    if min_date == max_date:
-        return f"{min_date.month}月{min_date.day}日頃のお届け予定"
-    return f"{min_date.month}月{min_date.day}日〜{max_date.month}月{max_date.day}日頃のお届け予定"
+    return f"{min_date.month}月{min_date.day}日配送予定"

@@ -199,7 +199,7 @@ class CommunicationPlugin:
         url = f"https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail"
         payload = {
             "message": {
-                "subject": subject if subject.startswith("RE:") else f"RE: {subject}",
+                "subject": subject if subject.upper().startswith("RE:") else f"RE: {subject}",
                 "body": {"contentType": "Text", "content": body},
                 "toRecipients": [{"emailAddress": {"address": to_address}}],
             },
@@ -233,7 +233,7 @@ class CommunicationPlugin:
             msg = EmailMessage()
             msg["From"] = from_address
             msg["To"] = to_address
-            msg["Subject"] = subject if subject.startswith("RE:") else f"RE: {subject}"
+            msg["Subject"] = subject if subject.upper().startswith("RE:") else f"RE: {subject}"
             msg.set_content(body)
 
             with smtplib.SMTP(host, port, timeout=20) as smtp:
