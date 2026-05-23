@@ -1,52 +1,33 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useState,
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  msalInstance,
-  msalReady,
-  loginScopes,
-} from "./msalConfig";
+import { readUserFromToken, type AuthUser } from "./token";
+import { AuthContext } from "./context";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "foogent_token";
-
-interface AuthUser {
-  user_id: string;
-  tenant_id: string;
-  email: string;
-  display_name: string;
-}
-
-interface AuthContextType {
-  user: AuthUser | null;
-  token: string | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithMicrosoft: () => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export function useAuth(): AuthContextType {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-}
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [initialAuth] = useState(() => {
+    const stored = localStorage.getItem(TOKEN_KEY);
+    const storedUser = stored ? readUserFromToken(stored) : null;
+    return {
+      token: storedUser ? stored : null,
+      user: storedUser,
+      isLoading: Boolean(stored && !storedUser),
+      stored,
+    };
+  });
+  const [user, setUser] = useState<AuthUser | null>(initialAuth.user);
+  const [token, setToken] = useState<string | null>(initialAuth.token);
+  const [isLoading, setIsLoading] = useState(initialAuth.isLoading);
 
   const saveToken = useCallback((t: string, u: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, t);
@@ -61,20 +42,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
+    let active = true;
+    const stored = initialAuth.stored;
     if (!stored) {
-      setIsLoading(false);
-      return;
+      return undefined;
     }
+
+    const cachedUser = initialAuth.user;
 
     fetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${stored}` },
     })
       .then((res) => {
-        if (!res.ok) throw new Error("invalid");
+        if (res.status === 401 || res.status === 403) throw new Error("invalid");
+        if (!res.ok) throw new Error("transient");
         return res.json();
       })
       .then((data) => {
+        if (!active) return;
         setToken(stored);
         setUser({
           user_id: data.user_id,
@@ -83,11 +68,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
           display_name: data.display_name,
         });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (cachedUser && err instanceof Error && err.message === "transient") return;
         localStorage.removeItem(TOKEN_KEY);
+        if (!active) return;
+        setToken(null);
+        setUser(null);
       })
-      .finally(() => setIsLoading(false));
-  }, []);
+      .finally(() => {
+        if (active && !cachedUser) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialAuth.stored, initialAuth.user]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -113,6 +108,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const loginWithMicrosoft = useCallback(async () => {
     try {
+      const { msalInstance, msalReady, loginScopes } = await import(
+        "./msalConfig"
+      );
       await msalReady;
       const result = await msalInstance.loginPopup({
         scopes: loginScopes,
@@ -156,7 +154,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (msg.includes("interaction_in_progress")) {
           sessionStorage.clear();
           throw new Error(
-            "ブラウザの状態をリセットしました。もう一度お試しください。"
+            "ブラウザの状態をリセットしました。もう一度お試しください。",
+            { cause: err }
           );
         }
       }
