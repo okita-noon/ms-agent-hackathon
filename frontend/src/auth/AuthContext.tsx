@@ -42,6 +42,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
+    function handleTokenExpired() {
+      setToken(null);
+      setUser(null);
+    }
+    window.addEventListener("auth:token-expired", handleTokenExpired);
+    return () => window.removeEventListener("auth:token-expired", handleTokenExpired);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     const stored = initialAuth.stored;
     if (!stored) {
@@ -69,7 +78,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       })
       .catch((err: unknown) => {
-        if (cachedUser && err instanceof Error && err.message === "transient") return;
+        const isAuthRejected = err instanceof Error && err.message === "invalid";
+        if (cachedUser && !isAuthRejected) return;
         localStorage.removeItem(TOKEN_KEY);
         if (!active) return;
         setToken(null);
