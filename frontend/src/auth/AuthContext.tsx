@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -18,6 +19,11 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const navigate = useNavigate();
+  // useNavigate は locationPathname に依存するため再レンダリングごとに参照が変わる。
+  // effect の依存配列に含めると SSO 後の navigate で effect が再実行され、
+  // 残存する _redirectResult で誤再ログインが起きる。ref で最新値を保持して解決する。
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const [initialAuth] = useState(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     const storedUser = stored ? readUserFromToken(stored) : null;
@@ -62,11 +68,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     (async () => {
       try {
-        const { msalReady, getRedirectResult } = await import("./msalConfig");
+        const { msalReady, consumeRedirectResult } = await import("./msalConfig");
         await msalReady;
         if (cancelled) return;
 
-        const redirectResult = getRedirectResult();
+        // consumeRedirectResult は結果を返すと同時に内部状態を消去する。
+        // これにより effect が再実行されても誤再ログインが起きない。
+        const redirectResult = consumeRedirectResult();
         if (!redirectResult?.idToken) return;
 
         const controller = new AbortController();
@@ -91,7 +99,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           display_name: data.display_name,
         });
         // ログイン画面が再表示されずに直接 /orders へ遷移する
-        navigate("/orders", { replace: true });
+        // navigateRef を使うことで依存配列に navigate を含めずに済み、
+        // navigate の参照変化による effect 再実行を防ぐ
+        navigateRef.current("/orders", { replace: true });
       } catch (err) {
         console.error("Microsoft auth callback failed:", err);
       } finally {
@@ -104,7 +114,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [saveToken, navigate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveToken]);
 
   // 401 イベントでトークン期限切れを検知してログアウト
   useEffect(() => {
