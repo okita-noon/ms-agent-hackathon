@@ -41,6 +41,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   }, []);
 
+  // Microsoft 認証から戻ってきた直後にリダイレクト結果を処理する
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { msalReady, getRedirectResult } = await import("./msalConfig");
+      await msalReady;
+      if (cancelled) return;
+
+      const redirectResult = getRedirectResult();
+      if (!redirectResult?.idToken) return;
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30_000);
+        const res = await fetch(`${API_BASE}/api/auth/microsoft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id_token: redirectResult.idToken }),
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
+
+        if (!res.ok) {
+          console.error("Microsoft auth callback rejected by server:", res.status);
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        saveToken(data.access_token, {
+          user_id: "",
+          tenant_id: data.tenant_id,
+          email: data.email,
+          display_name: data.display_name,
+        });
+      } catch (err) {
+        console.error("Microsoft auth callback failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [saveToken]);
+
+  // ストレージ済み JWT を /api/auth/me で検証
   useEffect(() => {
     let active = true;
     const stored = initialAuth.stored;
@@ -112,46 +157,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         "./msalConfig"
       );
       await msalReady;
-      const result = await msalInstance.loginPopup({
+      // loginRedirect doesn't return — the page navigates away to Microsoft
+      // and comes back via the redirect callback handled in the useEffect above.
+      await msalInstance.loginRedirect({
         scopes: loginScopes,
-      });
-
-      if (!result.idToken) {
-        throw new Error("Microsoft login failed: no id_token");
-      }
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30_000);
-      const res = await fetch(`${API_BASE}/api/auth/microsoft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_token: result.idToken }),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeout));
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Microsoftログインに失敗しました");
-      }
-      const data = await res.json();
-      saveToken(data.access_token, {
-        user_id: "",
-        tenant_id: data.tenant_id,
-        email: data.email,
-        display_name: data.display_name,
       });
     } catch (err: unknown) {
       if (err instanceof Error) {
-        const msg = err.message;
-        // Silent: user cancelled or popup closed before completing login
-        if (
-          msg.includes("user_cancelled") ||
-          msg.includes("popup_window_error") ||
-          msg.includes("monitor_window_timeout") ||
-          msg.includes("hash_not_found")
-        ) {
-          return;
-        }
-        if (msg.includes("interaction_in_progress")) {
+        if (err.message.includes("interaction_in_progress")) {
           sessionStorage.clear();
           throw new Error(
             "ブラウザの状態をリセットしました。もう一度お試しください。",
@@ -161,7 +174,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       throw err;
     }
-  }, [saveToken]);
+  }, []);
 
   return (
     <AuthContext.Provider
