@@ -5,14 +5,14 @@ import "./index.css";
 import App from "./App.tsx";
 
 const isPopup = window.opener && window.opener !== window;
+const hasMsalResponse = /[#&](code|error)=/.test(window.location.hash);
 
-if (isPopup) {
+if (isPopup || hasMsalResponse) {
   document.title = "サインイン中…";
   // msalReady runs handleRedirectPromise() to process the auth code and
   // postMessage the result back to the parent's loginPopup() call.
-  // If MSAL fails (network error, state mismatch), the popup stays open and
-  // the parent hangs forever. Force-close after 1s so the parent detects
-  // popup.closed and rejects with user_cancelled instead of hanging.
+  // Also handles the case where window.opener is lost but the URL hash
+  // contains an MSAL auth response (code= or error=).
   import("./auth/msalConfig.ts").then(({ msalReady }) => {
     msalReady.finally(() => setTimeout(() => window.close(), 1_000));
   });
