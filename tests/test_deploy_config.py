@@ -37,10 +37,10 @@ def test_deploy_yml_404_document_is_root_index() -> None:
 
 
 def test_msal_redirect_uri_is_origin() -> None:
-    """MSAL redirectUri must be window.location.origin (no path suffix)."""
+    """MSAL redirectUri must be window.location.origin + '/' (trailing slash required by Entra)."""
     text = _read(MSAL_CONFIG)
-    assert "window.location.origin," in text or "window.location.origin\n" in text, (
-        "msalConfig.ts redirectUri should be window.location.origin with no path"
+    assert 'window.location.origin + "/"' in text, (
+        "msalConfig.ts redirectUri should be window.location.origin + '/' (trailing slash required by Entra app registration)"
     )
     assert "/dashboard" not in text.split("redirectUri")[1].split("\n")[0], "redirectUri must not contain /dashboard"
 
