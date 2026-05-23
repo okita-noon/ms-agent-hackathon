@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
 export default function Login() {
   const { login, loginWithMicrosoft } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -15,6 +17,10 @@ export default function Login() {
     setPwLoading(true);
     try {
       await login(email, password);
+      // setUser と同じタイミングで URL を /orders に変更することで、
+      // AuthenticatedRouter が /login → <Navigate> → null → /orders という
+      // 中間ステップを踏まずにダッシュボードを直接レンダリングできる
+      navigate("/orders", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
