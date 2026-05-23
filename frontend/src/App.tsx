@@ -10,11 +10,12 @@ import LoadingState from "./components/LoadingState";
 import { AuthProvider } from "./auth/AuthContext";
 import { useAuth } from "./auth/useAuth";
 
+const Login = lazy(() => import("./pages/Login"));
+
 const Orders = lazy(() => import("./pages/Orders"));
 const Customers = lazy(() => import("./pages/Customers"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Analytics = lazy(() => import("./pages/Analytics"));
-const Login = lazy(() => import("./pages/Login"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
@@ -115,61 +116,70 @@ function PageFallback() {
   );
 }
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
-
-  return <>{children}</>;
-}
-
 function DashboardLayout() {
   return (
-    <RequireAuth>
-      <div className="min-h-screen bg-surface flex flex-col">
-        <Header />
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto px-6 lg:px-8 py-6">
-            <div className="max-w-6xl">
-              <Suspense fallback={<PageFallback />}>
-                <Routes>
-                  <Route path="orders" element={<Orders />} />
-                  <Route path="inventory" element={<Inventory />} />
-                  <Route path="customers" element={<Customers />} />
-                  <Route path="analytics" element={<Analytics />} />
-                  <Route path="*" element={<Navigate to="/orders" replace />} />
-                </Routes>
-              </Suspense>
-            </div>
-          </main>
-        </div>
+    <div className="min-h-screen bg-surface flex flex-col">
+      <Header />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto px-6 lg:px-8 py-6">
+          <div className="max-w-6xl">
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="orders" element={<Orders />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="customers" element={<Customers />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="*" element={<Navigate to="/orders" replace />} />
+              </Routes>
+            </Suspense>
+          </div>
+        </main>
       </div>
-    </RequireAuth>
+    </div>
   );
 }
 
-function LoginRoute() {
+/**
+ * 認証状態に基づいてルートツリーを切り替える唯一のコンポーネント。
+ * LoginRoute / RequireAuth という二重ガードをなくし、
+ * user が truthy かどうかを1箇所で判定することで
+ * concurrent rendering 下でのループを防ぐ。
+ */
+function AuthenticatedRouter() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) return <LoadingScreen />;
-  if (user) return <Navigate to="/orders" replace />;
 
+  // 未認証: パスに関わらずログインフォームを表示
+  if (!user) {
+    return (
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={<LoadingScreen />}>
+              <Login />
+            </Suspense>
+          }
+        />
+      </Routes>
+    );
+  }
+
+  // 認証済み: /login に来たら /orders へ。その他はダッシュボード
   return (
-    <Suspense fallback={<LoadingScreen />}>
-      <Login />
-    </Suspense>
+    <Routes>
+      <Route path="login" element={<Navigate to="/orders" replace />} />
+      <Route path="/*" element={<DashboardLayout />} />
+    </Routes>
   );
 }
 
 function AppRoutes() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="login" element={<LoginRoute />} />
-        <Route path="/*" element={<DashboardLayout />} />
-      </Routes>
+      <AuthenticatedRouter />
     </AuthProvider>
   );
 }

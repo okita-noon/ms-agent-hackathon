@@ -96,6 +96,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
+    function handleTokenExpired() {
+      setToken(null);
+      setUser(null);
+    }
+    window.addEventListener("auth:token-expired", handleTokenExpired);
+    return () => window.removeEventListener("auth:token-expired", handleTokenExpired);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     const stored = initialAuth.stored;
     if (!stored) {
