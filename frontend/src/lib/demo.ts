@@ -59,8 +59,8 @@ export function getDemoMessages(orderId: string): Message[] {
 
 export function getDemoCustomers(): Customer[] {
   return [
-    { id: "C-001", tenant_id: "T-001", name: "株式会社テスト", short_name: "テスト社", line_user_id: undefined, phone: "03-1234-5678", email: "test@example.com", delivery_lead_time: "翌日", active: true },
-    { id: "C-002", tenant_id: "T-001", name: "株式会社サンプル", short_name: "サンプル社", line_user_id: "U1234567890abcdef", phone: "06-9876-5432", email: undefined, delivery_lead_time: "中1日", active: true },
-    { id: "C-003", tenant_id: "T-001", name: "有限会社デモ", short_name: "デモ社", line_user_id: undefined, phone: undefined, email: "demo@example.com", delivery_lead_time: "当日", active: true },
+    { id: "C-001", tenant_id: "T-001", name: "ビストロ青葉", short_name: "青葉", line_user_id: undefined, phone: "03-1234-5678", email: "test@example.com", delivery_lead_time: "翌日", active: true },
+    { id: "C-002", tenant_id: "T-001", name: "炭火焼鳥とり善", short_name: "とり善", line_user_id: "U1234567890abcdef", phone: "06-9876-5432", email: undefined, delivery_lead_time: "中1日", active: true },
+    { id: "C-003", tenant_id: "T-001", name: "洋食キッチンつばめ", short_name: "つばめ", line_user_id: undefined, phone: undefined, email: "demo@example.com", delivery_lead_time: "当日", active: true },
   ];
 }

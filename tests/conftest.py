@@ -75,8 +75,8 @@ def sample_customer() -> Customer:
     return Customer(
         id="C-001",
         tenant_id="T-TEST",
-        name="株式会社テスト",
-        short_name="テスト社",
+        name="ビストロ青葉",
+        short_name="青葉",
         line_user_id="U1234567890",
         email="test@example.com",
         phone="03-1234-5678",

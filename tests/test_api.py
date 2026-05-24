@@ -189,7 +189,7 @@ class TestListOrders:
             order_date=date(2026, 5, 20),
             delivery_date=date(2026, 5, 20),
             customer_id="C-001",
-            customer_name="テスト社",
+            customer_name="ビストロ青葉",
             source=OrderSource.LINE,
             status="要対応",
         )
@@ -235,7 +235,7 @@ class TestOrderMessages:
             tenant_id="T-001",
             order_date=date(2026, 5, 18),
             customer_id="C-001",
-            customer_name="テスト社",
+            customer_name="ビストロ青葉",
             source=OrderSource.LINE,
             session_id="sess-1",
         )

@@ -24,7 +24,7 @@ class TestOrderModel:
             tenant_id="T-001",
             order_date=date(2026, 5, 16),
             customer_id="C-001",
-            customer_name="テスト社",
+            customer_name="青葉",
             source=OrderSource.LINE,
             items=[
                 OrderItem(
@@ -94,7 +94,7 @@ class TestOrderModel:
 class TestCustomerModel:
     def test_create_customer(self, sample_customer):
         assert sample_customer.id == "C-001"
-        assert sample_customer.name == "株式会社テスト"
+        assert sample_customer.name == "ビストロ青葉"
         assert sample_customer.active is True
 
     def test_customer_without_optional_fields(self):

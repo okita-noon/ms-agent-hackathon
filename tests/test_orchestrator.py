@@ -69,7 +69,7 @@ class TestBuildDraftFromIntake:
     def test_valid_draft(self):
         intake = {
             "customer_id": "C-001",
-            "customer_name": "テスト社",
+            "customer_name": "ビストロ青葉",
             "items": [
                 {
                     "product_id": "P-001",
@@ -185,7 +185,7 @@ class TestPhoneOrderWithInventory:
         )
         intake_draft = {
             "customer_id": "C-001",
-            "customer_name": "テスト社",
+            "customer_name": "ビストロ青葉",
             "items": [
                 {
                     "product_id": "P-001",
@@ -223,7 +223,7 @@ class TestPhoneOrderWithInventory:
         )
         intake_draft = {
             "customer_id": "C-001",
-            "customer_name": "テスト社",
+            "customer_name": "ビストロ青葉",
             "items": [
                 {
                     "product_id": "P-001",
@@ -349,7 +349,7 @@ class TestProcessOrderMessageSendsOnce:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [
                     {
                         "product_id": "P-001",
@@ -409,7 +409,7 @@ class TestProcessOrderMessageSendsOnce:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [
                     {
                         "product_id": "P-001",
@@ -464,7 +464,7 @@ class TestProcessOrderMessageSendsOnce:
 
         pending_draft = {
             "customer_id": "C-001",
-            "customer_name": "テスト社",
+            "customer_name": "ビストロ青葉",
             "items": [
                 {
                     "product_id": "P-001",
@@ -509,7 +509,7 @@ class TestProcessOrderMessageSendsOnce:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
                 "needs_confirmation": False,
             }
@@ -558,7 +558,7 @@ class TestProcessOrderMessageSendsOnce:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
                 "needs_confirmation": False,
             }
@@ -615,7 +615,7 @@ class TestEndToEndMessageFlow:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [
                     {
                         "product_id": "P-001",
@@ -709,7 +709,7 @@ class TestLearningIntegration:
             uid="ORD-LEARN-001",
             tenant_id="T-TEST",
             customer_id="C-001",
-            customer_name="テスト社",
+            customer_name="ビストロ青葉",
             order_date=date.today(),
             source=OrderSource.LINE,
             items=[
@@ -766,7 +766,7 @@ class TestLearningIntegration:
 
         pending_draft = {
             "customer_id": "C-001",
-            "customer_name": "テスト社",
+            "customer_name": "ビストロ青葉",
             "items": [
                 {"product_id": "P-001", "product_name": "りんご", "quantity": 5, "unit": "箱"},
             ],
@@ -798,7 +798,7 @@ class TestLearningIntegration:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 1, "unit": "個"}],
                 "needs_confirmation": False,
             }
@@ -843,7 +843,7 @@ class TestLearningIntegration:
         intake_json = json.dumps(
             {
                 "customer_id": "C-001",
-                "customer_name": "テスト社",
+                "customer_name": "ビストロ青葉",
                 "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 10, "unit": "箱"}],
                 "needs_confirmation": False,
             }
