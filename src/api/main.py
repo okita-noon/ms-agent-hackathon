@@ -383,6 +383,42 @@ async def phone_demo_message(
     return result
 
 
+# ── Phone debug endpoints (JWT protected) ─────────────────────────────────────
+
+
+@app.post("/api/phone-debug/message")
+async def phone_debug_message(
+    payload: PhoneDemoMessageRequest,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Dashboard debug endpoint: inject a phone utterance without ACS/EventGrid auth."""
+    handler = _get_phone_handler()
+    result = await handler.process_demo_message(
+        message=payload.message,
+        caller_number=payload.caller_number,
+        called_number=payload.called_number,
+        call_connection_id=payload.call_connection_id,
+    )
+    if payload.disconnect:
+        disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
+        result["disconnect"] = disconnect_result
+    return result
+
+
+@app.post("/api/phone-debug/disconnect")
+async def phone_debug_disconnect(
+    payload: dict,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Disconnect a demo phone call by call_connection_id."""
+    call_connection_id = payload.get("call_connection_id", "")
+    if not call_connection_id:
+        raise HTTPException(status_code=400, detail="call_connection_id is required")
+    handler = _get_phone_handler()
+    result = await handler.disconnect_demo_call(call_connection_id)
+    return result or {"status": "disconnected", "call_connection_id": call_connection_id}
+
+
 # ── Protected business endpoints ──────────────────────────────────────────────
 
 
