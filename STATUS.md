@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-23（ログイン後のダッシュボード起動時間を改善）
+> 最終更新: 2026-05-23（電話同期AI応答と在庫確認を追加）
 
 ## 実装済み
 
@@ -23,6 +23,7 @@
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
 - [x] 電話 Webhook ハンドラ（ACS Call Automation・音声認識・TTS応答）
 - [x] 電話番号取得前のデモ受注API（`POST /api/phone-demo/message`、音声認識済みテキストをPhoneチャネル処理へ注入）
+- [x] Phone Order Agent による電話同期応答（注文抽出 + `IInventoryService.check` の同期在庫確認 + 20秒タイムアウト時フォールバック + 非同期正式検証）
 - [x] 電話/LINEの在庫問い合わせ応答（受注・引当を行わず `IInventoryService.check` で回答）
 - [x] チャネル×ユーザー単位の非同期ロック（並行処理の安全性）
 - [x] Learning Service（パターン記録・プロファイル更新）
@@ -55,6 +56,7 @@
   - 顧客一覧（常設編集ボタン・納品グループ列）
   - 顧客編集モーダル（納品グループ選択追加）
   - プロフィールドロップダウン（ログアウト）
+  - プロフィールアイコンの表示名フォールバックと、デモユーザー表示名補正SQLを追加
   - API未接続時のデモデータフォールバック
   - ログイン画面用の濃色ロゴを追加し、白背景でも `foogent` が読めるように改善
   - 保存済みJWTから即時にログイン状態を復元し、`/api/auth/me` 検証をバックグラウンド化。ページ単位の遅延ロードとMicrosoft SSOライブラリの動的読み込みでログイン後の起動待ちを短縮
@@ -97,7 +99,7 @@
 
 1. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
 2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
-3. **Container Apps のスケール設定**: 審査期間中の体感速度を優先し、APIは min=1, max=5 で常時1台を維持する。アイドル時コストは増えるが、ログイン後初回API・Webhookのコールドスタートを避ける
+3. **Container Apps のスケール設定**: APIは min=1, max=5 で常時1台を維持するよう設定済み（2026-05-24適用）。アイドル課金は月$5〜10程度だが、コールドスタートを完全に回避できる
 4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある
 5. **`infra/modules/functions.bicep`**: Azure Functions は不使用（VM quota制約で断念）。ファイルは残存しているが `main.bicep` からの参照は削除済み
 

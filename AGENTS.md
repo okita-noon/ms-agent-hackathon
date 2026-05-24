@@ -71,6 +71,13 @@
 **基盤**
 `COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
 
+**電話同期応答**
+| 変数名 | 必須 | 説明 |
+|---|---|---|
+| `PHONE_SYNC_AI_ENABLED` | 任意 | `true` で電話中に Phone Order Agent + 同期在庫確認で返答（既定 `true`） |
+| `PHONE_SYNC_AI_TIMEOUT_SECONDS` | 任意 | 電話中の同期AI応答の最大待機秒数（既定 `20`） |
+| `PHONE_BACKGROUND_VALIDATION_ENABLED` | 任意 | 同期返答後に既存マルチAgentで正式検証・登録を非同期実行（既定 `true`） |
+
 **Dashboard Agent**（詳細は `docs/multi-agent-design.md` の「ダッシュボード連携」節）
 | 変数名 | 必須 | 説明 |
 |---|---|---|
@@ -237,7 +244,7 @@ src/
 │   └── context.py                # TenantContext（テナント単位の依存注入コンテナ）
 ├── services/
 │   ├── line_handler.py           # LINE Webhook処理（署名検証・セッション管理）
-│   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation）
+│   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation、同期AI在庫確認、非同期正式検証）
 │   ├── email_handler.py          # Email Webhook処理（正規化・セッション管理）
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
