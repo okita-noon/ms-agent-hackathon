@@ -302,7 +302,6 @@ export default function Orders() {
                     </button>
                   </th>
                   <th className="px-5 py-3">顧客名</th>
-                  <th className="px-5 py-3">チャネル</th>
                   <th className="px-5 py-3">商品（温度帯）</th>
                   <th className="px-5 py-3">ステータス</th>
                   <th className="px-5 py-3">配送情報（予定）</th>
@@ -317,20 +316,11 @@ export default function Orders() {
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
                         <div className="text-gray-700 font-medium">{formatDate(o.order_date)}</div>
-                        <div className="mt-0.5 text-[11px] text-gray-400">{formatTime(o.order_date)}</div>
+                        <div className="mt-0.5 text-xs text-gray-500 font-medium">{formatTime(o.order_date)}</div>
+                        <div className="mt-1.5"><ChannelBadge source={o.source} /></div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 shrink-0 rounded-full bg-gray-100 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                          </div>
-                          <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <ChannelBadge source={o.source} />
+                        <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
                       </td>
                       <td className="px-5 py-3.5 max-w-xs">
                         <div>
