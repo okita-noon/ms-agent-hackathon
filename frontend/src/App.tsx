@@ -20,7 +20,7 @@ const PhoneDebug = lazy(() => import("./pages/PhoneDebug"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   {
     to: "/orders",
     label: "受注",
@@ -58,6 +58,9 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
+];
+
+const DEV_NAV_ITEMS: NavItem[] = [
   {
     to: "/phone-debug",
     label: "電話DB",
@@ -68,6 +71,10 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
 ];
+
+const NAV_ITEMS = import.meta.env.DEV
+  ? [...BASE_NAV_ITEMS, ...DEV_NAV_ITEMS]
+  : BASE_NAV_ITEMS;
 
 function Sidebar() {
   return (
