@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-24（メール返信テンプレート化・設定JSON分離・受注No付与）
+> 最終更新: 2026-05-24（Graph subscription整理・Dockerfileテンプレート修正・SMTP送信経路調査）
 
 ## 実装済み
 
@@ -98,7 +98,11 @@
 
 ## 既知の問題
 
-1. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
+1. **SMTP経由のメール送信がGmailでSPAM判定される場合がある**: Container Appsは `EMAIL_EXTERNAL_ROUTE_MODE=smtp_first` でSMTP優先送信済み。SMTP送信自体は成功するが、Gmailがスパム判定することがある。原因候補: subscription大量蓄積（73件→1件に整理済み）で短期間に大量通知が発生しレピュテーション低下、またはメール本文に「None様」等の不自然な表現が含まれている点
+2. **Graph webhook subscriptionの蓄積**: subscriptionを作成するだけで削除しない運用だったため73件まで蓄積し、1通のメールに対して数十回webhookが発火していた。2026-05-24に全削除→1件に整理済み。subscription更新ジョブの自動化は未実装
+3. **Dockerfileに `_templates/` のCOPY漏れ**: メールテンプレート外部化（#113）後、`COPY _templates/ _templates/` がDockerfileに含まれておらず、メール返信時にFileNotFoundErrorが発生していた。#115で修正済み
+4. **メールテンプレートの顧客名がNone表示**: 未登録メールアドレスからの注文でデモモードフォールバック（`EMAIL_DEMO_MODE=true`）が動作した場合、テンプレートに渡す顧客名がNoneのまま表示される。フォールバック顧客の名前を取得してテンプレートに渡す処理が未実装
+5. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
 2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
 3. **Container Apps のスケール設定**: 審査期間中の体感速度を優先し、APIは min=1, max=5 で常時1台を維持する。アイドル時コストは増えるが、ログイン後初回API・Webhookのコールドスタートを避ける
 4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある

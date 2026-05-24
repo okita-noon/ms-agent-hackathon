@@ -1,6 +1,6 @@
 ---
 created: 2026-05-23
-Updated: 2026-05-23 11:38
+Updated: 2026-05-24 14:56
 visibility: PUBLIC
 ---
 
@@ -248,6 +248,11 @@ visibility: PUBLIC
 | 234 |      | 0b99ab7 | feat | 2026-0523 11:28  | OrchestratorにマルチAgent連鎖パイプラインを追加... |[x]|[x]|
 | 235 |      | 4619edf | main | 2026-0523 11:37  | Merge pull request #97 from okita-noon/feature/... |[x]|[x]|
 
+
+| 236 |      | 8cf8f56 | main | 2026-0524 01:11  | style: ruff format orchestrator.py                 |[x]|[x]|
+| 237 |      | 08b2624 | main | 2026-0524 01:04  | Merge pull request #113 from okita-noon/feature... |[x]|[x]|
+| 238 |      | 555bf3c | fix/ | 2026-0524 14:41  | fix: Dockerfileに_templatesフォルダのCOPYを追加    |[x]|[x]|
+| 239 |      | ace86d2 | main | 2026-0524 14:42  | Merge pull request #115 from okita-noon/fix/doc... |[x]|[x]|
 
 ## 未コミット
 

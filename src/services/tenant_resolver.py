@@ -33,7 +33,7 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
     sql_conn = os.environ.get("SQL_CONNECTION_STRING", "")
 
     tenant_names: dict[str, str] = {
-        "T-001": "丸山食品",
+        "T-001": "AINOKハッカソン食品",
         "T-002": "鈴木青果",
     }
 
