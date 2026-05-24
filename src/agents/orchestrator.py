@@ -61,13 +61,7 @@ def _build_email_signature() -> str:
     dept = cfg.get("department", "")
     tel = cfg.get("tel", "")
     email = cfg.get("email", "")
-    return (
-        "\n\n──────────────\n"
-        f"{company} {dept}\n"
-        f"TEL: {tel}\n"
-        f"Email: {email}\n"
-        "──────────────\n"
-    )
+    return f"\n\n──────────────\n{company} {dept}\nTEL: {tel}\nEmail: {email}\n──────────────\n"
 
 
 def _build_email_subject(base_subject: str | None, order_id: str | None = None) -> str:
