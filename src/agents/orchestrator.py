@@ -217,6 +217,8 @@ class OrderOrchestrator:
         conversation_history: list[MessageHistory] | None = None,
         pending_order_draft: dict | None = None,
         session_id: str | None = None,
+        known_customer_id: str | None = None,
+        known_customer_name: str | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
@@ -280,6 +282,8 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 session_id=session_id,
+                known_customer_id=known_customer_id,
+                known_customer_name=known_customer_name,
             )
         else:
             logger.info("Using single-agent pipeline")
@@ -292,6 +296,8 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 session_id=session_id,
+                known_customer_id=known_customer_id,
+                known_customer_name=known_customer_name,
             )
         result.update(agent_result)
         return result
@@ -306,13 +312,21 @@ class OrderOrchestrator:
         conversation_history: list[MessageHistory] | None,
         pending_order_draft: dict | None,
         session_id: str | None,
+        known_customer_id: str | None = None,
+        known_customer_name: str | None = None,
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent()
-        if source == OrderSource.PHONE:
+        if known_customer_id and known_customer_name:
+            lookup_instruction = (
+                f"顧客は特定済みです（customer_id={known_customer_id}, "
+                f"customer_name={known_customer_name}）。顧客検索は不要です。"
+            )
+            user_label = f"メールアドレス: {line_user_id}"
+        elif source == OrderSource.PHONE:
             lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
             user_label = f"電話番号: {line_user_id}"
         elif source == OrderSource.EMAIL:
@@ -522,11 +536,19 @@ class OrderOrchestrator:
         conversation_history: list[MessageHistory] | None,
         pending_order_draft: dict | None,
         session_id: str | None,
+        known_customer_id: str | None = None,
+        known_customer_name: str | None = None,
     ) -> dict:
         """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
         result: dict = {}
 
-        if source == OrderSource.PHONE:
+        if known_customer_id and known_customer_name:
+            lookup_instruction = (
+                f"顧客は特定済みです（customer_id={known_customer_id}, "
+                f"customer_name={known_customer_name}）。顧客検索は不要です。"
+            )
+            user_label = f"メールアドレス: {line_user_id}"
+        elif source == OrderSource.PHONE:
             lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
             user_label = f"電話番号: {line_user_id}"
         elif source == OrderSource.EMAIL:
@@ -813,6 +835,8 @@ class OrderOrchestrator:
             source=OrderSource.EMAIL,
             response_callback=capture_callback,
             pending_order_draft=session.pending_order_draft,
+            known_customer_id=inbound.customer_id,
+            known_customer_name=inbound.customer_name,
         )
 
         if captured_body:

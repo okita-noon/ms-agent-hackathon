@@ -203,6 +203,7 @@ class InboundMessage(BaseModel):
     channel: Literal["line", "phone", "email"]
     channel_user_id: str
     customer_id: str | None = None
+    customer_name: str | None = None
     subject: str | None = None
     text: str
     raw_text: str | None = None

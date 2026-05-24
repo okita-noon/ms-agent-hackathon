@@ -1,6 +1,6 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-24 01:03
+Updated: 2026-05-24 15:32
 """
 
 from __future__ import annotations
@@ -257,6 +257,7 @@ class EmailIngestionService:
             customer = await customer_repo.find_by_email(self._ctx.tenant_id, inbound.channel_user_id)
             if customer:
                 inbound.customer_id = customer.id
+                inbound.customer_name = customer.name
 
         demo_mode = os.environ.get("EMAIL_DEMO_MODE", "false").strip().lower() == "true"
         if not customer and demo_mode:
@@ -269,8 +270,12 @@ class EmailIngestionService:
                     customer = customers[0]
             if customer:
                 inbound.customer_id = customer.id
+                inbound.customer_name = customer.name
                 logger.info(
-                    "Demo mode: unregistered email %s mapped to customer %s", inbound.channel_user_id, customer.id
+                    "Demo mode: unregistered email %s mapped to customer %s (%s)",
+                    inbound.channel_user_id,
+                    customer.id,
+                    customer.name,
                 )
 
         session = None
