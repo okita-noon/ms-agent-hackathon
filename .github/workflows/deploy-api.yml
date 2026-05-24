@@ -45,7 +45,8 @@ jobs:
           az containerapp update \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image "${{ env.IMAGE_TAG }}"
+            --image "${{ env.IMAGE_TAG }}" \
+            --min-replicas 1
 
       - name: Verify deployment
         run: |
