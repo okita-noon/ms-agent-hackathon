@@ -1,29 +1,40 @@
 import {
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { readUserFromToken, type AuthUser } from "./token";
 import { AuthContext } from "./context";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "foogent_token";
+const SSO_PENDING_KEY = "sso_redirect_pending";
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const navigate = useNavigate();
+  // useNavigate は locationPathname に依存するため再レンダリングごとに参照が変わる。
+  // effect の依存配列に含めると SSO 後の navigate で effect が再実行され、
+  // 残存する _redirectResult で誤再ログインが起きる。ref で最新値を保持して解決する。
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const [initialAuth] = useState(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     const storedUser = stored ? readUserFromToken(stored) : null;
     // Microsoft loginRedirect から戻ってきた直後は URL に code= が残る。
-    // useEffect 内の handleRedirectPromise が完了するまでローディング状態にして
-    // ログイン画面が一瞬表示される（フラッシュ）を防ぐ。
+    // sessionStorage フラグ（loginRedirect 前にセット）も合わせてチェックすることで
+    // URL だけでは検知できないケースでもローディング状態を維持し、
+    // ログイン画面の一瞬表示（フラッシュ）を防ぐ。
     const hasMsalRedirect =
       /[?&]code=/.test(window.location.search) ||
-      /[#&](code|error)=/.test(window.location.hash);
+      /[#&](code|error)=/.test(window.location.hash) ||
+      sessionStorage.getItem(SSO_PENDING_KEY) === "1";
     return {
       token: storedUser ? stored : null,
       user: storedUser,
@@ -57,11 +68,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     (async () => {
       try {
-        const { msalReady, getRedirectResult } = await import("./msalConfig");
+        const { msalReady, consumeRedirectResult } = await import("./msalConfig");
         await msalReady;
         if (cancelled) return;
 
-        const redirectResult = getRedirectResult();
+        // consumeRedirectResult は結果を返すと同時に内部状態を消去する。
+        // これにより effect が再実行されても誤再ログインが起きない。
+        const redirectResult = consumeRedirectResult();
         if (!redirectResult?.idToken) return;
 
         const controller = new AbortController();
@@ -85,10 +98,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           email: data.email,
           display_name: data.display_name,
         });
+        // ログイン画面が再表示されずに直接 /orders へ遷移する
+        // navigateRef を使うことで依存配列に navigate を含めずに済み、
+        // navigate の参照変化による effect 再実行を防ぐ
+        navigateRef.current("/orders", { replace: true });
       } catch (err) {
         console.error("Microsoft auth callback failed:", err);
       } finally {
-        // リダイレクト処理完了後にローディングを解除（成功・失敗どちらでも）
+        // リダイレクト処理完了後にフラグとローディングを解除（成功・失敗どちらでも）
+        sessionStorage.removeItem(SSO_PENDING_KEY);
         if (!cancelled) setIsLoading(false);
       }
     })();
@@ -96,6 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveToken]);
 
   // 401 イベントでトークン期限切れを検知してログアウト
@@ -154,22 +173,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "ログインに失敗しました");
+      // ログイン処理中は LoadingScreen を出しておき、フォームが消えた瞬間に
+      // ログイン画面が再表示されるフラッシュを防ぐ
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "ログインに失敗しました");
+        }
+        const data = await res.json();
+        saveToken(data.access_token, {
+          user_id: "",
+          tenant_id: data.tenant_id,
+          email: data.email,
+          display_name: data.display_name,
+        });
+        // saveToken 内で setIsLoading(false) が呼ばれる
+      } catch (err) {
+        setIsLoading(false); // エラー時はローディングを解除してフォームを再表示
+        throw err;
       }
-      const data = await res.json();
-      saveToken(data.access_token, {
-        user_id: "",
-        tenant_id: data.tenant_id,
-        email: data.email,
-        display_name: data.display_name,
-      });
     },
     [saveToken]
   );
@@ -180,12 +208,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         "./msalConfig"
       );
       await msalReady;
-      // loginRedirect doesn't return — the page navigates away to Microsoft
-      // and comes back via the redirect callback handled in the useEffect above.
+      // loginRedirect はページ遷移するため戻らない。
+      // 遷移前にフラグをセットしておき、戻り時の isLoading 検知を確実にする。
+      sessionStorage.setItem(SSO_PENDING_KEY, "1");
       await msalInstance.loginRedirect({
         scopes: loginScopes,
       });
     } catch (err: unknown) {
+      sessionStorage.removeItem(SSO_PENDING_KEY);
       if (err instanceof Error) {
         if (err.message.includes("interaction_in_progress")) {
           sessionStorage.clear();

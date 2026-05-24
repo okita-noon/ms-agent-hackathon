@@ -27,6 +27,14 @@
 - `.env` や秘密情報を含むファイルは絶対にコミットしない
 - `infra/main.json` は ARM テンプレート出力なのでコミット不要
 
+### Pull Request 作成前チェック（必須）
+Pull Request を作成する前に以下を**必ず**ローカルで実行し、全てパスすることを確認する:
+1. `ruff check src/ tests/` — lint エラーがないこと
+2. `ruff format --check src/ tests/` — フォーマット違反がないこと
+3. `pytest` — テストが全て通ること
+4. `git fetch origin main && git merge origin/main --no-commit --no-ff` でコンフリクトがないこと（確認後 `git merge --abort`）
+5. `AGENTS.md` のドキュメント更新ルール表に該当する変更があれば、ドキュメントも更新済みであること
+
 ### テスト
 - `pytest` で実行
 - Connector のテストはインターフェースに対して書く（アダプタ実装に依存しない）

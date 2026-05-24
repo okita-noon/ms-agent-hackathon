@@ -203,6 +203,7 @@ class InboundMessage(BaseModel):
     channel: Literal["line", "phone", "email"]
     channel_user_id: str
     customer_id: str | None = None
+    customer_name: str | None = None
     subject: str | None = None
     text: str
     raw_text: str | None = None
@@ -276,6 +277,8 @@ LINE は短い往復が多いため TTL 2時間でよいが、メールは返信
 | Azure Communication Services Email | アプリ独自送信基盤 | 大量送信・運用分離に向く |
 
 初期実装は Graph `sendMail` を採用する。
+
+> **運用上の注意（2026-05-24確認）**: Graph API の application permission（client_credentials）で `sendMail` した場合、Gmail側でSPAM判定されることがある。これはアプリ代理送信によりSPF/DKIMの整合性がSMTP直送より弱くなるため。対策として `EMAIL_EXTERNAL_ROUTE_MODE=smtp_first` を設定し、SMTP（smtp.office365.com）を優先送信経路にする。Container Appsには `SMTP_FALLBACK_*` 環境変数の設定が必須。
 
 ### 6. ダッシュボード
 

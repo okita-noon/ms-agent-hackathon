@@ -1,11 +1,12 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-22 09:20
+Updated: 2026-05-24 16:54
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
 import threading
 import time
@@ -229,14 +230,21 @@ class EmailIngestionService:
         logger.info("Processing email notification for %s via %s", message_id, recipient_address)
         raw_message = await self.fetch_message(message_id)
 
-        # 自己送信・システムメールをスキップ（無限ループ防止）
+        # 自己送信・システムメール・NDRをスキップ（無限ループ防止）
         sender_address = (raw_message.get("from", {}) or {}).get("address", "").lower()
         if sender_address and (
             sender_address == recipient_address.lower()
             or "microsoftexchange" in sender_address
             or sender_address.endswith("@noreply.microsoft.com")
+            or sender_address.startswith("postmaster@")
+            or sender_address.startswith("mailer-daemon@")
         ):
             logger.info("Skipping self/system message from %s", sender_address)
+            return
+
+        subject = (raw_message.get("subject") or "").lower()
+        if any(kw in subject for kw in ("undeliverable", "配信不能", "delivery failure", "returned mail")):
+            logger.info("Skipping NDR message: subject=%s", raw_message.get("subject", ""))
             return
 
         inbound = await self.to_inbound_message(raw_message, self._ctx.tenant_id)
@@ -249,6 +257,26 @@ class EmailIngestionService:
             customer = await customer_repo.find_by_email(self._ctx.tenant_id, inbound.channel_user_id)
             if customer:
                 inbound.customer_id = customer.id
+                inbound.customer_name = customer.name
+
+        demo_mode = os.environ.get("EMAIL_DEMO_MODE", "false").strip().lower() == "true"
+        if not customer and demo_mode:
+            demo_customer_id = os.environ.get("EMAIL_DEMO_CUSTOMER_ID", "").strip()
+            if demo_customer_id:
+                customer = await customer_repo.get_by_id(self._ctx.tenant_id, demo_customer_id)
+            if not customer:
+                customers = await customer_repo.list_all(self._ctx.tenant_id)
+                if customers:
+                    customer = customers[0]
+            if customer:
+                inbound.customer_id = customer.id
+                inbound.customer_name = customer.name
+                logger.info(
+                    "Demo mode: unregistered email %s mapped to customer %s (%s)",
+                    inbound.channel_user_id,
+                    customer.id,
+                    customer.name,
+                )
 
         session = None
         if inbound.conversation_id:

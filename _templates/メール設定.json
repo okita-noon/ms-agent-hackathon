@@ -1,0 +1,12 @@
+{
+  "signature": {
+    "company_name": "AINOKハッカソン食品株式会社",
+    "department": "受注担当係",
+    "tel": "03-XXXX-XXXX",
+    "email": "order@aibaske1103gmail.onmicrosoft.com"
+  },
+  "subject": {
+    "default": "ご注文の確認",
+    "order_confirmed_suffix": "【受注No: ${order_id}】"
+  }
+}

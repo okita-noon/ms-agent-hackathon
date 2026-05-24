@@ -25,8 +25,10 @@ export const msalInstance = new PublicClientApplication(msalConfig);
 
 // loginRedirect からの戻り時にトークンを AuthContext に渡すための受け渡し
 let _redirectResult: AuthenticationResult | null = null;
-export function getRedirectResult(): AuthenticationResult | null {
-  return _redirectResult;
+export function consumeRedirectResult(): AuthenticationResult | null {
+  const result = _redirectResult;
+  _redirectResult = null; // 取得と同時に消去し、再実行時の誤再ログインを防ぐ
+  return result;
 }
 
 export const msalReady: Promise<void> = msalInstance
