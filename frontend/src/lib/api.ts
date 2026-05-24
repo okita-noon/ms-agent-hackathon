@@ -12,16 +12,25 @@ function getHeaders(): Record<string, string> {
   return headers;
 }
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 async function authFetch(url: string, init?: RequestInit): Promise<Response> {
-  const resp = await fetch(url, {
-    ...init,
-    headers: { ...getHeaders(), ...init?.headers },
-  });
-  if (resp.status === 401) {
-    localStorage.removeItem(TOKEN_KEY);
-    window.dispatchEvent(new Event("auth:token-expired"));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: { ...getHeaders(), ...init?.headers },
+    });
+    if (resp.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.dispatchEvent(new Event("auth:token-expired"));
+    }
+    return resp;
+  } finally {
+    clearTimeout(timer);
   }
-  return resp;
 }
 
 export interface OrderItem {
