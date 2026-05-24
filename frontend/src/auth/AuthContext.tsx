@@ -154,31 +154,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      // ログイン処理中は LoadingScreen を出しておき、フォームが消えた瞬間に
-      // ログイン画面が再表示されるフラッシュを防ぐ
-      setIsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || "ログインに失敗しました");
-        }
-        const data = await res.json();
-        saveToken(data.access_token, {
-          user_id: "",
-          tenant_id: data.tenant_id,
-          email: data.email,
-          display_name: data.display_name,
-        });
-        // saveToken 内で setIsLoading(false) が呼ばれる
-      } catch (err) {
-        setIsLoading(false); // エラー時はローディングを解除してフォームを再表示
-        throw err;
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "ログインに失敗しました");
       }
+      const data = await res.json();
+      saveToken(data.access_token, {
+        user_id: "",
+        tenant_id: data.tenant_id,
+        email: data.email,
+        display_name: data.display_name,
+      });
     },
     [saveToken]
   );
