@@ -171,7 +171,7 @@
 4. **~~メールテンプレートの顧客名がNone表示~~（修正済み）**: `InboundMessage.customer_name` を追加し、デモモードフォールバック時にも顧客名を正しく設定。Intake Agentに `known_customer_id` / `known_customer_name` として渡すことで解決
 5. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
 2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
-3. **Container Apps のスケール設定**: 審査期間中の体感速度を優先し、APIは min=1, max=5 で常時1台を維持する。アイドル時コストは増えるが、ログイン後初回API・Webhookのコールドスタートを避ける
+3. **Container Apps のスケール設定**: APIは min=1, max=5 で常時1台を維持するよう設定済み（2026-05-24適用）。アイドル課金は月$5〜10程度だが、コールドスタートを完全に回避できる
 4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある
 5. **`infra/modules/functions.bicep`**: Azure Functions は不使用（VM quota制約で断念）。ファイルは残存しているが `main.bicep` からの参照は削除済み
 
