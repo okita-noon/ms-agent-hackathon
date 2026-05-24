@@ -18,6 +18,7 @@ from src.agents.definitions import (
     INTAKE_AGENT_INSTRUCTIONS,
     INVENTORY_AGENT_INSTRUCTIONS,
     ORCHESTRATOR_INSTRUCTIONS,
+    PHONE_ORDER_AGENT_INSTRUCTIONS,
 )
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundMessage
@@ -106,6 +107,16 @@ class OrderOrchestrator:
             kernel=kernel,
             name="CommunicationAgent",
             instructions=COMMUNICATION_AGENT_INSTRUCTIONS,
+        )
+
+    def _make_phone_order_agent(self) -> ChatCompletionAgent:
+        kernel = self._build_kernel(
+            (IntakePlugin(self._ctx), "intake"),
+        )
+        return ChatCompletionAgent(
+            kernel=kernel,
+            name="PhoneOrderAgent",
+            instructions=PHONE_ORDER_AGENT_INSTRUCTIONS,
         )
 
     def _make_orchestrator_agent(self) -> ChatCompletionAgent:
@@ -232,6 +243,67 @@ class OrderOrchestrator:
                 session_id=session_id,
             )
         result.update(agent_result)
+        return result
+
+    async def process_phone_order_with_inventory(
+        self,
+        message: str,
+        caller_number: str,
+        conversation_history: list[MessageHistory] | None = None,
+        pending_order_draft: dict | None = None,
+    ) -> dict:
+        """電話中の同期応答用: 1 Agentで注文抽出し、在庫はコードで確認する."""
+        memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+        if pending_order_draft:
+            prompt = (
+                "以下は電話での確認質問への回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
+                f"電話番号: {caller_number}\n"
+                f"{memory_ctx}"
+                f"顧客の回答: {message}\n"
+            )
+        else:
+            prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{memory_ctx}発話内容: {message}\n"
+
+        phone_agent = self._make_phone_order_agent()
+        intake_text = await self._invoke_agent(phone_agent, prompt)
+        intake_draft = self._extract_json(intake_text) or {}
+        draft = _build_draft_from_intake(intake_draft)
+
+        if not draft:
+            response = _format_phone_inventory_response(
+                items=[],
+                needs_confirmation=True,
+                confirmation_message=intake_draft.get("confirmation_message")
+                or "すみません、ご注文の商品と数量をもう一度お願いいたします。",
+            )
+            return {
+                "response": response,
+                "phone_sync_status": "needs_confirmation",
+                "intake_text": intake_text,
+                "pending_order_draft": None,
+                "session_status": "awaiting_reply",
+            }
+
+        inventory_results = await _check_draft_inventory(self._ctx, draft)
+        needs_confirmation = bool(intake_draft.get("needs_confirmation")) or any(
+            item.get("needs_confirmation") for item in inventory_results
+        )
+        response = _format_phone_inventory_response(
+            items=inventory_results,
+            needs_confirmation=needs_confirmation,
+            confirmation_message=intake_draft.get("confirmation_message"),
+        )
+
+        result = {
+            "response": response,
+            "phone_sync_status": "inventory_checked",
+            "intake_draft": intake_draft,
+            "pending_order_draft": draft,
+            "inventory": inventory_results,
+            "order_accepted": not needs_confirmation,
+        }
+        if needs_confirmation:
+            result["session_status"] = "awaiting_reply"
         return result
 
     async def _run_single_agent(
@@ -975,6 +1047,97 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),
     }
+
+
+async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
+    inventory = ctx.get_connector("IInventoryService")
+    checked_items: list[dict] = []
+    for item in draft.get("items", []) or []:
+        product_id = item.get("product_id")
+        quantity = item.get("quantity")
+        product_name = item.get("product_name") or product_id or "商品"
+        unit = item.get("unit") or ""
+
+        if not product_id or quantity is None:
+            checked_items.append(
+                {
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "required_qty": quantity,
+                    "unit": unit,
+                    "available_qty": None,
+                    "is_sufficient": False,
+                    "needs_confirmation": True,
+                    "message": "商品または数量を確認できませんでした",
+                }
+            )
+            continue
+
+        try:
+            required_qty = float(quantity)
+            status = await inventory.check(ctx.tenant_id, product_id, required_qty)
+            checked_items.append(
+                {
+                    "product_id": product_id,
+                    "product_name": status.product_name or product_name,
+                    "required_qty": required_qty,
+                    "unit": status.unit or unit,
+                    "available_qty": status.available_qty,
+                    "is_sufficient": status.is_sufficient,
+                    "needs_confirmation": not status.is_sufficient,
+                }
+            )
+        except Exception:
+            logger.exception("Phone inventory check failed for product %s", product_id)
+            checked_items.append(
+                {
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "required_qty": quantity,
+                    "unit": unit,
+                    "available_qty": None,
+                    "is_sufficient": False,
+                    "needs_confirmation": True,
+                    "message": "在庫確認でエラーが発生しました",
+                }
+            )
+    return checked_items
+
+
+def _format_phone_inventory_response(
+    items: list[dict],
+    needs_confirmation: bool,
+    confirmation_message: str | None = None,
+) -> str:
+    if confirmation_message:
+        return confirmation_message
+
+    if not items:
+        return "すみません、ご注文の商品と数量をもう一度お願いいたします。"
+
+    item_phrases = [
+        f"{item.get('product_name', '商品')}{_format_qty(item.get('required_qty'))}{item.get('unit') or ''}"
+        for item in items
+    ]
+    order_summary = "、".join(item_phrases)
+    insufficient = [item for item in items if not item.get("is_sufficient")]
+
+    if insufficient:
+        shortage_names = "、".join(item.get("product_name", "商品") for item in insufficient)
+        return f"確認です。{order_summary}ですね。{shortage_names}は在庫確認が必要なため、担当者が確認します。"
+
+    if needs_confirmation:
+        return f"確認です。{order_summary}でよろしいですか。"
+
+    return f"{order_summary}ですね。在庫は確認できました。ご注文を受け付けます。"
+
+
+def _format_qty(value: object) -> str:
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else str(value)
+    return str(value or "")
 
 
 def _inventory_requires_operator_review(inventory_result: dict | None) -> bool:
