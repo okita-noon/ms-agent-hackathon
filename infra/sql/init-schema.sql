@@ -115,7 +115,8 @@ INSERT INTO customers (customer_id, tenant_id, name, short_name, default_route, 
     (N'C-007', N'T-001', N'株式会社G', N'G社', N'関東便',   N'自社便',     N'翌日'),
     (N'C-008', N'T-001', N'株式会社H', N'H社', N'関西便',   N'芦川便',     N'中1日'),
     (N'C-009', N'T-001', N'株式会社I', N'I社', N'中国便',   N'自社便',     N'当日'),
-    (N'C-010', N'T-001', N'株式会社J', N'J社', N'四国便',   N'自社便',     N'中2日');
+    (N'C-010', N'T-001', N'株式会社J', N'J社', N'四国便',   N'自社便',     N'中2日'),
+    (N'C-011', N'T-001', N'株式会社Zennハッカソン', N'Zenn社', N'北関東便', N'自社便', N'翌日');
 
 -- 商品
 INSERT INTO products (product_id, tenant_id, name, default_unit, temperature_zone, is_variable_weight, price_per_unit) VALUES

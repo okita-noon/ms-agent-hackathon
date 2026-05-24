@@ -1,7 +1,7 @@
 ---
 created: 2026-05-23
-Updated: 2026-05-24 01:20
-visibility: 不明
+Updated: 2026-05-24 16:55
+visibility: PUBLIC
 ---
 
 # GIT_STATUS
@@ -283,6 +283,11 @@ visibility: 不明
 | 269 |      | 1d234e0 | feat | 2026-0524 01:03  | メールテンプレート外部化・設定JSON分離・NDRフィ... |[x]|[x]|
 | 270 |      | 08b2624 | main | 2026-0524 01:04  | Merge pull request #113 from okita-noon/feature... |[x]|[x]|
 
+
+| 236 |      | 8cf8f56 | main | 2026-0524 01:11  | style: ruff format orchestrator.py                 |[x]|[x]|
+| 237 |      | 08b2624 | main | 2026-0524 01:04  | Merge pull request #113 from okita-noon/feature... |[x]|[x]|
+| 238 |      | 555bf3c | fix/ | 2026-0524 14:41  | fix: Dockerfileに_templatesフォルダのCOPYを追加    |[x]|[x]|
+| 239 |      | ace86d2 | main | 2026-0524 14:42  | Merge pull request #115 from okita-noon/fix/doc... |[x]|[x]|
 
 ## 未コミット
 

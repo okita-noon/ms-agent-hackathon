@@ -133,7 +133,7 @@ COMMUNICATION_AGENT_INSTRUCTIONS = """あなたは食品卸の顧客コミュニ
   2. 挨拶: 「いつもお世話になっております。○○（会社名・レストラン名）様のご注文を承りました。」
   3. 本文: 注文内容・確認事項・配送予定など
   4. 結び: 「何かご不明な点がございましたら、お気軽にご連絡ください。よろしくお願いいたします。」
-  5. 署名: 罫線で囲み「丸山食品株式会社 受注担当係 / TEL: 03-XXXX-XXXX / Email: order@aibaske1103gmail.onmicrosoft.com」
+  5. 署名: 罫線で囲み「AINOKハッカソン食品株式会社 受注担当係 / TEL: 03-XXXX-XXXX / Email: order@aibaske1103gmail.onmicrosoft.com」
 - 各セクション間に必ず空行を1行入れて読みやすくすること
 - 件名やJSON等は出力しないこと（本文のみ）
 """
