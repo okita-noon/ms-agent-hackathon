@@ -263,6 +263,37 @@ class TestProcessNotificationHistory:
         # 受注が会話履歴と同じ session に紐づくよう session_id が渡される
         assert service._orchestrator.process_email.call_args.args[1].id == saved[0].session_id
 
+    @pytest.mark.asyncio
+    async def test_history_failure_does_not_block_processing(self, service, mock_tenant_ctx):
+        raw_message = {
+            "id": "email-hist-msg-002",
+            "subject": "ご注文",
+            "body": "バナナ20kgお願いします",
+            "from": {"name": "佐藤", "address": "sato@example.com"},
+            "conversationId": "conv-hist-2",
+            "receivedDateTime": "2026-05-25T02:00:00Z",
+            "replyToMessageId": None,
+            "attachments": [],
+        }
+
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.find_by_email.return_value = None
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_by_conversation_id.return_value = None
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+        history_repo.create_message.side_effect = RuntimeError("cosmos down")
+
+        service._orchestrator = AsyncMock()
+        service._orchestrator.process_email.return_value = {"response": "OK", "order_id": "ORD-2"}
+
+        with patch.object(service, "fetch_message", new_callable=AsyncMock, return_value=raw_message):
+            # 履歴保存が失敗しても受注処理は継続する（例外を送出しない）
+            await service.process_notification("email-hist-msg-002", "shop@example.com")
+
+        service._orchestrator.process_email.assert_awaited_once()
+
 
 # ── _EmailDedup テスト ────────────────────────────────────────────────────────
 

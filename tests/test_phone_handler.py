@@ -8,6 +8,7 @@ from src.services.phone_handler import (
     GOODBYE_MESSAGE,
     GREETING_MESSAGE,
     MAX_TURNS,
+    PHONE_SYNC_FALLBACK_MESSAGE,
     RETRY_MESSAGE,
     CallState,
     PhoneCallHandler,
@@ -276,6 +277,60 @@ class TestHandleRecognizeCompleted:
         assert saved[0].channel == "phone"
         assert saved[0].text == "りんご10箱"
         assert "在庫は確認できました" in saved[1].text
+
+    @pytest.mark.asyncio
+    async def test_saves_fallback_history_on_timeout(self, mock_tenant_ctx):
+        handler = _make_handler()
+        _register_call_state(handler, mock_tenant_ctx)
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_phone_order_with_inventory.side_effect = TimeoutError()
+
+        with (
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
+            patch.object(handler, "_play_tts", new_callable=AsyncMock),
+        ):
+            result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+
+        assert result["status"] == "phone_sync_timeout"
+        saved = [c.args[0] for c in history_repo.create_message.call_args_list]
+        assert [m.role for m in saved] == ["user", "assistant"]
+        assert saved[1].text == PHONE_SYNC_FALLBACK_MESSAGE
+
+    @pytest.mark.asyncio
+    async def test_saves_fallback_history_on_agent_error(self, mock_tenant_ctx):
+        handler = _make_handler()
+        _register_call_state(handler, mock_tenant_ctx)
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_phone_order_with_inventory.side_effect = RuntimeError("LLM down")
+
+        with (
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
+            patch.object(handler, "_play_tts", new_callable=AsyncMock),
+        ):
+            result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+
+        assert result["error"] == "agent_failed"
+        saved = [c.args[0] for c in history_repo.create_message.call_args_list]
+        assert [m.role for m in saved] == ["user", "assistant"]
+        assert "担当者が確認" in saved[1].text
 
     @pytest.mark.asyncio
     async def test_retries_on_empty_speech(self, mock_tenant_ctx):
