@@ -59,6 +59,7 @@ export interface Order {
   remarks?: string;
   memo?: string;
   session_id?: string;
+  created_at?: string;
   updated_at?: string;
 }
 
@@ -68,6 +69,7 @@ export interface OrderFilters {
   q?: string;
   limit?: number;
   offset?: number;
+  date_field?: "delivery_date" | "order_date";
 }
 
 export interface OrdersResponse {
@@ -115,7 +117,8 @@ export async function fetchOrders(
   date: string,
   filters: OrderFilters = {}
 ): Promise<OrdersResponse> {
-  const params = new URLSearchParams({ delivery_date: date });
+  const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
+  const params = new URLSearchParams({ [paramKey]: date });
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
   if (filters.q?.trim()) params.set("q", filters.q.trim());
