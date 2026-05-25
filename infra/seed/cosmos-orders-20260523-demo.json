@@ -7,7 +7,7 @@
     "preparation_date": "2026-05-23",
     "delivery_date": "2026-05-23",
     "customer_id": "C-004",
-    "customer_name": "株式会社D",
+    "customer_name": "鮨処みなと",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -31,7 +31,7 @@
     "preparation_date": "2026-05-23",
     "delivery_date": "2026-05-23",
     "customer_id": "C-009",
-    "customer_name": "株式会社I",
+    "customer_name": "和食処こまち",
     "source": "Phone",
     "system": "Phone",
     "items": [
@@ -54,7 +54,7 @@
     "preparation_date": "2026-05-23",
     "delivery_date": "2026-05-23",
     "customer_id": "C-001",
-    "customer_name": "株式会社A",
+    "customer_name": "ビストロ青葉",
     "source": "Email",
     "system": "Email",
     "items": [
@@ -78,7 +78,7 @@
     "preparation_date": "2026-05-23",
     "delivery_date": "2026-05-24",
     "customer_id": "C-007",
-    "customer_name": "株式会社G",
+    "customer_name": "イタリア食堂イルソーレ",
     "source": "Web",
     "system": "ECサイト",
     "items": [
@@ -101,7 +101,7 @@
     "preparation_date": "2026-05-23",
     "delivery_date": "2026-05-24",
     "customer_id": "C-003",
-    "customer_name": "株式会社C",
+    "customer_name": "洋食キッチンつばめ",
     "source": "FAX",
     "system": "FAX",
     "items": [
@@ -123,7 +123,7 @@
     "preparation_date": "2026-05-24",
     "delivery_date": "2026-05-24",
     "customer_id": "C-002",
-    "customer_name": "株式会社B",
+    "customer_name": "炭火焼鳥とり善",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -146,7 +146,7 @@
     "preparation_date": "2026-05-24",
     "delivery_date": "2026-05-25",
     "customer_id": "C-006",
-    "customer_name": "株式会社F",
+    "customer_name": "中華食堂龍華",
     "source": "Phone",
     "system": "Phone",
     "items": [
@@ -170,7 +170,7 @@
     "preparation_date": "2026-05-24",
     "delivery_date": "2026-05-25",
     "customer_id": "C-010",
-    "customer_name": "株式会社J",
+    "customer_name": "ベーカリー麦の庭",
     "source": "Email",
     "system": "Email",
     "items": [
@@ -194,7 +194,7 @@
     "preparation_date": "2026-05-25",
     "delivery_date": "2026-05-26",
     "customer_id": "C-008",
-    "customer_name": "株式会社H",
+    "customer_name": "レストラン花水木",
     "source": "手入力",
     "system": "手入力",
     "items": [
@@ -216,7 +216,7 @@
     "preparation_date": "2026-05-25",
     "delivery_date": "2026-05-25",
     "customer_id": "C-001",
-    "customer_name": "株式会社A",
+    "customer_name": "ビストロ青葉",
     "source": "Web",
     "system": "ECサイト",
     "items": [
@@ -239,7 +239,7 @@
     "preparation_date": "2026-05-25",
     "delivery_date": "2026-05-26",
     "customer_id": "C-005",
-    "customer_name": "株式会社E",
+    "customer_name": "カフェ森ノ音",
     "source": "FAX",
     "system": "FAX",
     "items": [
@@ -263,7 +263,7 @@
     "preparation_date": "2026-05-25",
     "delivery_date": "2026-05-27",
     "customer_id": "C-003",
-    "customer_name": "株式会社C",
+    "customer_name": "洋食キッチンつばめ",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -286,7 +286,7 @@
     "preparation_date": "2026-05-25",
     "delivery_date": "2026-05-25",
     "customer_id": "C-009",
-    "customer_name": "株式会社I",
+    "customer_name": "和食処こまち",
     "source": "Phone",
     "system": "Phone",
     "items": [
@@ -309,7 +309,7 @@
     "preparation_date": "2026-05-26",
     "delivery_date": "2026-05-26",
     "customer_id": "C-007",
-    "customer_name": "株式会社G",
+    "customer_name": "イタリア食堂イルソーレ",
     "source": "Email",
     "system": "Email",
     "items": [
@@ -331,7 +331,7 @@
     "preparation_date": "2026-05-26",
     "delivery_date": "2026-05-27",
     "customer_id": "C-004",
-    "customer_name": "株式会社D",
+    "customer_name": "鮨処みなと",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -355,7 +355,7 @@
     "preparation_date": "2026-05-26",
     "delivery_date": "2026-05-28",
     "customer_id": "C-006",
-    "customer_name": "株式会社F",
+    "customer_name": "中華食堂龍華",
     "source": "FAX",
     "system": "FAX",
     "items": [
@@ -378,7 +378,7 @@
     "preparation_date": "2026-05-26",
     "delivery_date": "2026-05-26",
     "customer_id": "C-008",
-    "customer_name": "株式会社H",
+    "customer_name": "レストラン花水木",
     "source": "Web",
     "system": "ECサイト",
     "items": [
@@ -400,7 +400,7 @@
     "preparation_date": "2026-05-27",
     "delivery_date": "2026-05-27",
     "customer_id": "C-010",
-    "customer_name": "株式会社J",
+    "customer_name": "ベーカリー麦の庭",
     "source": "Phone",
     "system": "Phone",
     "items": [
@@ -424,7 +424,7 @@
     "preparation_date": "2026-05-27",
     "delivery_date": "2026-05-29",
     "customer_id": "C-002",
-    "customer_name": "株式会社B",
+    "customer_name": "炭火焼鳥とり善",
     "source": "Email",
     "system": "Email",
     "items": [
@@ -447,7 +447,7 @@
     "preparation_date": "2026-05-27",
     "delivery_date": "2026-05-28",
     "customer_id": "C-005",
-    "customer_name": "株式会社E",
+    "customer_name": "カフェ森ノ音",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -471,7 +471,7 @@
     "preparation_date": "2026-05-27",
     "delivery_date": "2026-05-27",
     "customer_id": "C-001",
-    "customer_name": "株式会社A",
+    "customer_name": "ビストロ青葉",
     "source": "手入力",
     "system": "手入力",
     "items": [

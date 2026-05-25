@@ -21,7 +21,7 @@ def _make_tenant(
 ) -> TenantConfig:
     return TenantConfig(
         tenant_id="T-TEST",
-        name="テスト社",
+        name="ビストロ青葉",
         order_cutoff_hour=cutoff,
         closed_weekdays=closed if closed is not None else [6],
         extra_holidays=holidays or [],

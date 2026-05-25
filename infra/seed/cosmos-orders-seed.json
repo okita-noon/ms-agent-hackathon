@@ -6,7 +6,7 @@
     "preparation_date": "2025-07-15",
     "delivery_date": "2025-07-16",
     "customer_id": "C-001",
-    "customer_name": "株式会社A",
+    "customer_name": "ビストロ青葉",
     "source": "Web",
     "system": "ECサイト",
     "items": [
@@ -33,7 +33,7 @@
     "preparation_date": "2025-07-15",
     "delivery_date": "2025-07-16",
     "customer_id": "C-002",
-    "customer_name": "株式会社B",
+    "customer_name": "炭火焼鳥とり善",
     "source": "FAX",
     "system": "FAX",
     "items": [
@@ -60,7 +60,7 @@
     "preparation_date": "2025-07-16",
     "delivery_date": "2025-07-17",
     "customer_id": "C-003",
-    "customer_name": "株式会社C",
+    "customer_name": "洋食キッチンつばめ",
     "source": "LINE",
     "system": "LINE",
     "items": [
@@ -89,7 +89,7 @@
     "preparation_date": "2025-07-16",
     "delivery_date": "2025-07-17",
     "customer_id": "C-005",
-    "customer_name": "株式会社E",
+    "customer_name": "カフェ森ノ音",
     "source": "FAX",
     "system": "FAX",
     "items": [
@@ -118,7 +118,7 @@
     "preparation_date": "2025-07-16",
     "delivery_date": "2025-07-17",
     "customer_id": "C-006",
-    "customer_name": "株式会社F",
+    "customer_name": "中華食堂龍華",
     "source": "LINE",
     "system": "LINE",
     "items": [
