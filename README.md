@@ -39,6 +39,7 @@
 - `docs/mvp-scope.md` - MVP / デモ対象範囲
 - `docs/email-channel-design.md` - メール連携設計
 - `docs/line-conversation-memory.md` - LINE 会話継続設計
+- `docs/line-order-branching.md` - LINE受発注の分岐・会話テンプレ・要件整理
 - `docs/dashboard-agent-design.md` - ダッシュボード Agent 設計
 - `docs/auth-setup.md` - 認証セットアップ
 - `docs/deployment-split.md` - デプロイ分割設計
@@ -96,6 +97,7 @@ ms-agent-hackathon/
 │   ├── data-flow.md                        # データフロー
 │   ├── email-channel-design.md             # メール連携設計
 │   ├── line-conversation-memory.md         # LINE 会話継続設計
+│   ├── line-order-branching.md             # LINE受発注の分岐・会話テンプレ・要件整理
 │   ├── multi-agent-design.md               # Agent 役割分担と連携
 │   ├── mvp-scope.md                        # デモ対象スコープ
 │   ├── phone-testing.md                    # 電話チャネル検証メモ
@@ -150,6 +152,7 @@ ms-agent-hackathon/
 │   ├── test_dormant_customer_service.py    # 休眠顧客サービスのテスト
 │   └── test_tenant_resolver.py             # テナント解決のテスト
 ├── _templates/                             # メッセージテンプレート・設定ファイル
+│   ├── line/                               # LINE返信テンプレート
 │   ├── メール設定.json                    # メール件名ルール・署名情報
 │   ├── メール返信_受注確定.txt            # 受注確定メールの本文テンプレート
 │   ├── メール返信_異常時.txt              # 異常時メールの本文テンプレート
@@ -193,6 +196,11 @@ ms-agent-hackathon/
 - `メール返信_異常時.txt` — 確認質問・異常警告時の本文テンプレート
 - テンプレート内で使える変数: `${customer_name}`, `${company_name}`, `${order_items}`, `${delivery_estimate}`, `${body}`
 - 署名はテンプレートに含めない（`メール設定.json` から自動付加）
+
+#### LINE返信テンプレート
+- `_templates/line/` に LINE の定型返信テンプレートを配置する
+- LINE は受注Noを表示せず、現在注文への追加・変更・取消を会話文脈で扱う
+- 受注確定 / 注文更新 / 全体キャンセル / 現在注文なし / ロック済み変更 などの文種ごとにテンプレートを分ける
 
 #### メール設定
 - `メール設定.json` — 署名情報（会社名・部署・TEL・Email）と件名ルール（受注No付与サフィックス等）を一元管理

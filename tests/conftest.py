@@ -64,6 +64,15 @@ def mock_tenant_ctx(tenant_config) -> TenantContext:
             if name == "IMessageHistoryRepository":
                 ctx._connectors[name].list_recent_messages.return_value = []
                 ctx._connectors[name].create_message.side_effect = lambda message: message
+            elif name == "ICustomerRepository":
+                ctx._connectors[name].find_by_identifier.return_value = None
+                ctx._connectors[name].find_by_email.return_value = None
+                ctx._connectors[name].find_by_line_user_id.return_value = None
+                ctx._connectors[name].get_by_id.return_value = None
+                ctx._connectors[name].list_all.return_value = []
+            elif name == "IOrderRepository":
+                ctx._connectors[name].find_by_id.return_value = None
+                ctx._connectors[name].list_by_customer.return_value = []
         return ctx._connectors[name]
 
     ctx.get_connector = _get_connector

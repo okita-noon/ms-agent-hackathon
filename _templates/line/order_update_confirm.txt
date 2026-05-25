@@ -1,0 +1,4 @@
+承知いたしました。
+現在のご注文を更新いたしました。
+${order_items}
+${delivery_estimate_line}

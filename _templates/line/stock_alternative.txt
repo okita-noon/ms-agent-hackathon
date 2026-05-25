@@ -1,0 +1,2 @@
+${product_name}が現在欠品です。
+${alternative_name}であればご用意可能です。代替で進めてもよろしいでしょうか。
