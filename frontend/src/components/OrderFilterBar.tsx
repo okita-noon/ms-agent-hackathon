@@ -5,18 +5,10 @@ interface Props {
   onSearchChange: (v: string) => void;
   filterStatus: string;
   onStatusChange: (v: string) => void;
-  sortKey: string;
-  onSortChange: (v: string) => void;
   onReset: () => void;
 }
 
 const statusOptions = ["すべて", ...Object.keys(STATUS_COLORS)];
-const sortOptions = [
-  { value: "order_date_desc", label: "受注日時：新しい順" },
-  { value: "order_date_asc", label: "受注日時：古い順" },
-  { value: "customer_name", label: "顧客名" },
-  { value: "status", label: "ステータス" },
-];
 
 const selectCls =
   "w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-200 cursor-pointer";
@@ -43,14 +35,6 @@ export default function OrderFilterBar(props: Props) {
         <label className="block text-[11px] font-medium text-gray-400 mb-1">ステータス</label>
         <select value={props.filterStatus} onChange={(e) => props.onStatusChange(e.target.value)} className={selectCls}>
           {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-
-      {/* Sort */}
-      <div className="min-w-[180px]">
-        <label className="block text-[11px] font-medium text-gray-400 mb-1">並び順</label>
-        <select value={props.sortKey} onChange={(e) => props.onSortChange(e.target.value)} className={selectCls}>
-          {sortOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 

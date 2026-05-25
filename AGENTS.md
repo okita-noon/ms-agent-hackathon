@@ -99,6 +99,7 @@
 | `REGISTRATION_ENABLED` | 任意 | `true` でセルフ登録解放（デフォルト無効） |
 | `REGISTRATION_INVITE_TOKEN` | 登録有効時必須 | `X-Invite-Token` ヘッダで照合する招待トークン |
 | `EVENTGRID_WEBHOOK_KEY` | Phone 使用時必須 | EventGrid サブスクリプション URL の `?code=...` または `X-EventGrid-Webhook-Key` ヘッダで送られる共有鍵 |
+| `LINE_FALLBACK_CUSTOMER_ID` | 任意 | LINE 未登録ユーザーからのメッセージ受信時にマップするフォールバック顧客 ID（未設定時は顧客一覧の先頭を使用） |
 
 ## APIエンドポイント
 

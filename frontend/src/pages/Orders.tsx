@@ -322,8 +322,6 @@ export default function Orders() {
           onSearchChange={(v) => { setQuery(v); setOffset(0); }}
           filterStatus={filterStatusUI}
           onStatusChange={(v) => { setStatusFilter(v === "すべて" ? "" : v); setOffset(0); }}
-          sortKey={sortKey}
-          onSortChange={setSortKey}
           onReset={resetFilters}
         />
 
@@ -363,17 +361,42 @@ export default function Orders() {
                       </svg>
                     </button>
                   </th>
-                  <th className="px-5 py-3">顧客名</th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => setSortKey(sortKey === "customer_name" ? "order_date_desc" : "customer_name")}
+                    >
+                      顧客名
+                      {sortKey === "customer_name" && (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </th>
                   <th className="px-5 py-3">商品（温度帯）</th>
-                  <th className="px-5 py-3">ステータス</th>
-                  <th className="px-5 py-3">配送情報（予定）</th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
+                      onClick={() => setSortKey(sortKey === "status" ? "order_date_desc" : "status")}
+                    >
+                      ステータス
+                      {sortKey === "status" && (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3">配送日</th>
                   <th className="px-5 py-3">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {displayOrders.map((o) => {
                   const items = o.items || [];
-                  const zones = [...new Set(items.map((i) => i.temperature_zone))];
                   return (
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
@@ -385,32 +408,26 @@ export default function Orders() {
                         <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
                       </td>
                       <td className="px-5 py-3.5 max-w-xs">
-                        <div>
+                        <div className="flex flex-col gap-1">
                           {items.map((item, idx) => (
-                            <span key={idx}>
-                              {idx > 0 && "、"}
+                            <div key={idx} className="flex items-center gap-1.5">
                               <span className="font-semibold text-gray-900">{item.product_name}</span>
-                              <span className="text-gray-500 ml-0.5">{item.quantity}{item.unit}</span>
-                            </span>
+                              <span className="text-gray-500 text-sm">{item.quantity}{item.unit}</span>
+                              <TempBadge zone={item.temperature_zone} />
+                            </div>
                           ))}
-                        </div>
-                        <div className="flex gap-1 mt-1">
-                          {zones.map((z) => <TempBadge key={z} zone={z} />)}
                         </div>
                       </td>
                       <td className="px-5 py-3.5"><StatusBadge status={o.status} /></td>
-                      <td className="px-5 py-3.5 text-xs leading-relaxed">
-                        <div className="text-gray-600">{o.delivery_carrier || "-"} / {o.delivery_route || ""}</div>
+                      <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
+                        <div className="text-gray-700 font-medium">{formatDate(o.delivery_date)}</div>
                         {o.delivery_time_slot && (
-                          <div className="flex items-center gap-1 mt-0.5 text-brand-600 font-medium">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            {o.delivery_time_slot}
-                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500 font-medium">{o.delivery_time_slot}</div>
                         )}
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-gray-400 text-xs truncate max-w-[120px]">{o.remarks || "-"}</span>
+                          <span className="text-gray-400 text-xs truncate max-w-[80px]">{o.remarks || "-"}</span>
                           <svg className="w-4 h-4 shrink-0 text-gray-300 group-hover:text-gray-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
