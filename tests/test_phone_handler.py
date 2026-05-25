@@ -14,14 +14,17 @@ from src.services.phone_handler import (
 )
 
 
-def _make_handler() -> PhoneCallHandler:
-    return PhoneCallHandler(
+def _make_handler(sync_ai: bool = True) -> PhoneCallHandler:
+    handler = PhoneCallHandler(
         callback_base_url="https://test.example.com",
         azure_openai_endpoint="https://test.openai.azure.com/",
         azure_openai_key="test-key",
         speech_service_key="test-speech-key",
         speech_service_endpoint="https://test.speech.azure.com/",
     )
+    handler._phone_sync_ai_enabled = sync_ai
+    handler._phone_background_validation_enabled = False
+    return handler
 
 
 def _make_incoming_call_event(
@@ -157,7 +160,7 @@ class TestHandleCallConnected:
 
 class TestHandleRecognizeCompleted:
     @pytest.mark.asyncio
-    async def test_processes_speech_through_orchestrator(self, mock_tenant_ctx):
+    async def test_processes_speech_through_phone_sync_orchestrator(self, mock_tenant_ctx):
         handler = _make_handler()
         state = _register_call_state(handler, mock_tenant_ctx)
 
@@ -166,9 +169,10 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_order_message.return_value = {
-            "response": "りんご10箱、承りました。",
-            "order_id": "ORD-001",
+        mock_orchestrator.process_phone_order_with_inventory.return_value = {
+            "response": "りんご10箱、在庫は確認できました。",
+            "order_accepted": True,
+            "phone_sync_status": "inventory_checked",
         }
 
         with (
@@ -181,15 +185,14 @@ class TestHandleRecognizeCompleted:
             result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
 
         assert result["status"] == "processed"
-        assert result["order_id"] == "ORD-001"
-        assert result["response"] == "りんご10箱、承りました。"
+        assert result["phone_sync_status"] == "inventory_checked"
+        assert result["response"] == "りんご10箱、在庫は確認できました。"
         assert state.turn_count == 1
         assert state.order_confirmed is True
 
-        call_kwargs = mock_orchestrator.process_order_message.call_args
+        call_kwargs = mock_orchestrator.process_phone_order_with_inventory.call_args
         assert call_kwargs.kwargs["message"] == "りんご10箱"
-        assert call_kwargs.kwargs["source"].value == "Phone"
-        assert call_kwargs.kwargs["response_callback"] is not None
+        assert call_kwargs.kwargs["caller_number"] == "+81312345678"
 
     @pytest.mark.asyncio
     async def test_creates_session_on_first_turn(self, mock_tenant_ctx):
@@ -201,7 +204,7 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_order_message.return_value = {"response": "OK"}
+        mock_orchestrator.process_phone_order_with_inventory.return_value = {"response": "OK", "order_accepted": True}
 
         with (
             patch(
@@ -227,7 +230,7 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_order_message.side_effect = RuntimeError("LLM down")
+        mock_orchestrator.process_phone_order_with_inventory.side_effect = RuntimeError("LLM down")
 
         with (
             patch(
@@ -344,7 +347,7 @@ class TestOrchestratorCallback:
     @pytest.mark.asyncio
     async def test_response_callback_captures_text(self, mock_tenant_ctx):
         """Verify the orchestrator uses response_callback instead of LINE send."""
-        handler = _make_handler()
+        handler = _make_handler(sync_ai=False)
         _register_call_state(handler, mock_tenant_ctx)
 
         session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
@@ -386,9 +389,10 @@ class TestDemoPhoneMessage:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_order_message.return_value = {
-            "response": "りんご10箱、承りました。",
-            "order_id": "ORD-DEMO",
+        mock_orchestrator.process_phone_order_with_inventory.return_value = {
+            "response": "りんご10箱、在庫は確認できました。",
+            "order_accepted": True,
+            "phone_sync_status": "inventory_checked",
         }
 
         with (
@@ -409,7 +413,6 @@ class TestDemoPhoneMessage:
             )
 
         assert result["demo_mode"] is True
-        assert result["order_id"] == "ORD-DEMO"
-        assert result["response"] == "りんご10箱、承りました。"
+        assert result["response"] == "りんご10箱、在庫は確認できました。"
         assert handler._calls[result["call_connection_id"]].audio_enabled is False
         mock_client.assert_not_called()

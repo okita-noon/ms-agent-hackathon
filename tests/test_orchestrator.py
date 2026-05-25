@@ -171,6 +171,83 @@ class TestInventoryInquiry:
         mock_invoke.assert_not_called()
 
 
+class TestPhoneOrderWithInventory:
+    @pytest.mark.asyncio
+    async def test_checks_inventory_after_phone_order_agent_extracts_items(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=12,
+            unit="箱",
+            is_sufficient=True,
+        )
+        intake_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 10,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = json.dumps(intake_draft, ensure_ascii=False)
+            result = await orch.process_phone_order_with_inventory(
+                message="りんご10箱",
+                caller_number="+81312345678",
+            )
+
+        assert result["phone_sync_status"] == "inventory_checked"
+        assert result["order_accepted"] is True
+        assert "在庫は確認できました" in result["response"]
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
+
+    @pytest.mark.asyncio
+    async def test_asks_confirmation_when_inventory_is_short(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=3,
+            unit="箱",
+            is_sufficient=False,
+        )
+        intake_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 10,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = json.dumps(intake_draft, ensure_ascii=False)
+            result = await orch.process_phone_order_with_inventory(
+                message="りんご10箱",
+                caller_number="+81312345678",
+            )
+
+        assert result["session_status"] == "awaiting_reply"
+        assert result["order_accepted"] is False
+        assert "担当者が確認" in result["response"]
+
+
 class TestResponsePolicy:
     def test_allows_confirmation_phrase_for_accepted_order(self):
         response = "ご注文承りました。りんご1個で確定しました。"
