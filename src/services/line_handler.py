@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import logging
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -162,6 +163,8 @@ class LineWebhookHandler:
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
 
+        known_customer_id, known_customer_name = await self._resolve_customer(user_id)
+
         conversation_history = await self._list_recent_history(history_repo, user_id)
         await self._save_history_message(
             history_repo,
@@ -188,6 +191,8 @@ class LineWebhookHandler:
                 conversation_history=conversation_history,
                 pending_order_draft=session.pending_order_draft,
                 session_id=session.id,
+                known_customer_id=known_customer_id,
+                known_customer_name=known_customer_name,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
@@ -244,6 +249,36 @@ class LineWebhookHandler:
             "user_id": user_id,
             "result": result,
         }
+
+    async def _resolve_customer(self, line_user_id: str) -> tuple[str | None, str | None]:
+        """LINE User ID から顧客を解決する。未登録の場合はフォールバック顧客を返す。"""
+        try:
+            customer_repo = self._ctx.get_connector("ICustomerRepository")
+            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
+            if customer:
+                return customer.id, customer.name
+
+            fallback_id = os.environ.get("LINE_FALLBACK_CUSTOMER_ID", "").strip()
+            if fallback_id:
+                customer = await customer_repo.get_by_id(self._ctx.tenant_id, fallback_id)
+            if not customer:
+                customers = await customer_repo.list_all(self._ctx.tenant_id)
+                if customers:
+                    customer = customers[0]
+
+            if customer:
+                logger.info(
+                    "Unregistered LINE user %s mapped to fallback customer %s (%s)",
+                    line_user_id,
+                    customer.id,
+                    customer.name,
+                )
+                return customer.id, customer.name
+        except Exception:
+            logger.exception(
+                "Customer resolution failed for LINE user %s; proceeding without known_customer", line_user_id
+            )
+        return None, None
 
     def _get_message_history_repo(self):
         try:
