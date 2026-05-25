@@ -65,8 +65,10 @@ class CosmosOrderRepository:
         q: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        date_field: str = "delivery_date",
     ) -> tuple[list[Order], int]:
-        where = ["c.tenant_id = @tid", "c.delivery_date = @d"]
+        safe_field = "order_date" if date_field == "order_date" else "delivery_date"
+        where = ["c.tenant_id = @tid", f"c.{safe_field} = @d"]
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},

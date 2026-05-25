@@ -18,8 +18,14 @@ import httpx
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundAttachment, InboundMessage
+from src.models.message_history import MessageHistory
 from src.models.session import OrderSession
 from src.plugins.communication_plugin import CommunicationPlugin
+from src.services.message_history_logger import (
+    build_message_history_id,
+    get_message_history_repo,
+    save_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +374,40 @@ class EmailIngestionService:
                 reply_to_message_id=reply_to_message_id,
             )
 
+        history_repo = get_message_history_repo(self._ctx)
+        await save_message(
+            history_repo,
+            MessageHistory(
+                id=build_message_history_id("user", session.id, inbound.external_message_id),
+                tenant_id=self._ctx.tenant_id,
+                session_id=session.id,
+                channel="email",
+                channel_user_id=inbound.channel_user_id,
+                role="user",
+                text=inbound.text,
+                message_id=inbound.external_message_id,
+                created_at=inbound.received_at,
+                metadata={"subject": inbound.subject} if inbound.subject else {},
+            ),
+        )
+
         result = await self._orchestrator.process_email(inbound, session, reply_callback)
+
+        response_text = result.get("response")
+        if response_text:
+            await save_message(
+                history_repo,
+                MessageHistory(
+                    id=build_message_history_id("assistant", session.id, inbound.external_message_id),
+                    tenant_id=self._ctx.tenant_id,
+                    session_id=session.id,
+                    channel="email",
+                    channel_user_id=inbound.channel_user_id,
+                    role="assistant",
+                    text=response_text,
+                    metadata={"order_id": result.get("order_id")},
+                ),
+            )
 
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"

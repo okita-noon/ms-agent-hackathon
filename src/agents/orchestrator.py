@@ -1087,6 +1087,7 @@ class OrderOrchestrator:
             source=OrderSource.EMAIL,
             response_callback=capture_callback,
             pending_order_draft=session.pending_order_draft,
+            session_id=session.id,
             known_customer_id=inbound.customer_id,
             known_customer_name=inbound.customer_name,
         )

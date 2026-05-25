@@ -20,6 +20,18 @@ import DashboardAgentPanel from "../components/DashboardAgentPanel";
 
 const PAGE_SIZE = 50;
 
+type DateField = "delivery_date" | "order_date";
+
+function today(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function offsetDate(base: string, days: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
 function formatDate(value?: string): string {
   if (!value) return "-";
   return value.slice(0, 10);
@@ -33,14 +45,13 @@ function formatTime(value?: string): string {
 }
 
 export default function Orders() {
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => today());
+  const [dateField, setDateField] = useState<DateField>("delivery_date");
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
-  const [tempZoneFilter, setTempZoneFilter] = useState("");
   const [sortKey, setSortKey] = useState("order_date_desc");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
@@ -58,10 +69,10 @@ export default function Orders() {
     try {
       const resp = await fetchOrders(date, {
         status: statusFilter || undefined,
-        source: sourceFilter || undefined,
         q: query || undefined,
         limit: PAGE_SIZE,
         offset,
+        date_field: dateField,
       });
       setOrders(resp.orders);
       setTotalOrders(resp.total);
@@ -69,20 +80,19 @@ export default function Orders() {
       const demoOrders = getDemoOrders().filter((order) => {
         const normalizedQuery = query.trim().toLowerCase();
         const matchesStatus = !statusFilter || order.status === statusFilter;
-        const matchesSource = !sourceFilter || order.source === sourceFilter;
         const matchesQuery =
           !normalizedQuery ||
           order.customer_name.toLowerCase().includes(normalizedQuery) ||
           order.customer_id.toLowerCase().includes(normalizedQuery) ||
           order.items.some((item) => item.product_name.toLowerCase().includes(normalizedQuery));
-        return matchesStatus && matchesSource && matchesQuery;
+        return matchesStatus && matchesQuery;
       });
       setOrders(demoOrders.slice(offset, offset + PAGE_SIZE));
       setTotalOrders(demoOrders.length);
     } finally {
       setLoading(false);
     }
-  }, [date, statusFilter, sourceFilter, query, offset]);
+  }, [date, dateField, statusFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -122,12 +132,8 @@ export default function Orders() {
     void Promise.resolve().then(loadAgentExceptions);
   }, [loadAgentExceptions]);
 
-  // Client-side temp zone filter + sort (server doesn't support these)
   const displayOrders = useMemo(() => {
-    let result = [...orders];
-    if (tempZoneFilter) {
-      result = result.filter((o) => o.items.some((i) => i.temperature_zone === tempZoneFilter));
-    }
+    const result = [...orders];
     result.sort((a, b) => {
       switch (sortKey) {
         case "order_date_desc": return (b.order_date || "").localeCompare(a.order_date || "");
@@ -138,30 +144,36 @@ export default function Orders() {
       }
     });
     return result;
-  }, [orders, tempZoneFilter, sortKey]);
+  }, [orders, sortKey]);
 
   const acceptedOrderCount = orders.filter((o) =>
     ACCEPTED_ORDER_STATUSES.has(normalizeStatus(o.status))
   ).length;
   const reviewOrderCount = orders.length - acceptedOrderCount;
-  const hasFilters = Boolean(statusFilter || sourceFilter || query.trim() || tempZoneFilter);
+  const hasFilters = Boolean(statusFilter || query.trim());
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
   const page = Math.floor(offset / PAGE_SIZE) + 1;
 
   function resetFilters() {
     setStatusFilter("");
-    setSourceFilter("");
     setQuery("");
-    setTempZoneFilter("");
     setSortKey("order_date_desc");
     setOffset(0);
   }
 
-  // Adapter: OrderFilterBar uses "すべて" convention, server uses ""
+  function changeDate(newDate: string) {
+    setDate(newDate);
+    setOffset(0);
+  }
+
+  function changeDateField(field: DateField) {
+    setDateField(field);
+    setOffset(0);
+  }
+
   const filterStatusUI = statusFilter || "すべて";
-  const filterChannelUI = sourceFilter || "すべて";
-  const filterTempZoneUI = tempZoneFilter || "すべて";
+  const todayStr = today();
 
   return (
     <>
@@ -202,16 +214,70 @@ export default function Orders() {
               Dashboard Agent
             </button>
           )}
-          <label className="text-xs font-medium text-gray-500">配送日</label>
+
+          {/* Date field toggle */}
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => changeDateField("delivery_date")}
+              className={`px-3 py-2 transition-colors ${
+                dateField === "delivery_date"
+                  ? "bg-brand-600 text-white"
+                  : "text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              配送日
+            </button>
+            <button
+              type="button"
+              onClick={() => changeDateField("order_date")}
+              className={`px-3 py-2 border-l border-gray-200 transition-colors ${
+                dateField === "order_date"
+                  ? "bg-brand-600 text-white"
+                  : "text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              受注日
+            </button>
+          </div>
+
+          {/* Quick date buttons */}
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => changeDate(offsetDate(date, -1))}
+              className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              前日
+            </button>
+            <button
+              type="button"
+              onClick={() => changeDate(todayStr)}
+              className={`px-3 py-2 border-l border-gray-200 transition-colors ${
+                date === todayStr
+                  ? "bg-brand-50 text-brand-700 font-semibold"
+                  : "text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              本日
+            </button>
+            <button
+              type="button"
+              onClick={() => changeDate(offsetDate(date, 1))}
+              className="px-3 py-2 border-l border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              翌日
+            </button>
+          </div>
+
+          {/* Date picker */}
           <input
             type="date"
             value={date}
-            onChange={(e) => {
-              setDate(e.target.value);
-              setOffset(0);
-            }}
+            onChange={(e) => changeDate(e.target.value)}
             className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
           />
+
           <button
             onClick={() => {
               load();
@@ -256,10 +322,6 @@ export default function Orders() {
           onSearchChange={(v) => { setQuery(v); setOffset(0); }}
           filterStatus={filterStatusUI}
           onStatusChange={(v) => { setStatusFilter(v === "すべて" ? "" : v); setOffset(0); }}
-          filterChannel={filterChannelUI}
-          onChannelChange={(v) => { setSourceFilter(v === "すべて" ? "" : v); setOffset(0); }}
-          filterTempZone={filterTempZoneUI}
-          onTempZoneChange={(v) => { setTempZoneFilter(v === "すべて" ? "" : v); }}
           sortKey={sortKey}
           onSortChange={setSortKey}
           onReset={resetFilters}
@@ -316,7 +378,7 @@ export default function Orders() {
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
                         <div className="text-gray-700 font-medium">{formatDate(o.order_date)}</div>
-                        <div className="mt-0.5 text-xs text-gray-500 font-medium">{formatTime(o.order_date)}</div>
+                        <div className="mt-0.5 text-xs text-gray-500 font-medium">{formatTime(o.created_at || o.updated_at)}</div>
                         <div className="mt-1.5"><ChannelBadge source={o.source} /></div>
                       </td>
                       <td className="px-5 py-3.5">

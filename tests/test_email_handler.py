@@ -5,6 +5,8 @@ Updated: 2026-05-25 10:01
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from src.services.email_handler import (
@@ -204,6 +206,93 @@ class TestFilterAttachments:
         filenames = [a.filename for a in result]
         assert "order.pdf" in filenames
         assert "photo.jpg" in filenames
+
+
+# ── process_notification 会話履歴テスト ───────────────────────────────────────
+
+
+class TestProcessNotificationHistory:
+    """メール受信時に会話履歴が保存されることを検証する"""
+
+    @pytest.fixture
+    def service(self, mock_tenant_ctx):
+        return EmailIngestionService(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+    @pytest.mark.asyncio
+    async def test_saves_user_and_assistant_history(self, service, mock_tenant_ctx):
+        raw_message = {
+            "id": "email-hist-msg-001",
+            "subject": "ご注文",
+            "body": "りんご10箱お願いします",
+            "from": {"name": "田中", "address": "tanaka@example.com"},
+            "conversationId": "conv-hist-1",
+            "receivedDateTime": "2026-05-25T01:00:00Z",
+            "replyToMessageId": None,
+            "attachments": [],
+        }
+
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.find_by_email.return_value = None
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_by_conversation_id.return_value = None
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+
+        service._orchestrator = AsyncMock()
+        service._orchestrator.process_email.return_value = {
+            "response": "ご注文を承りました。",
+            "order_id": "ORD-1",
+        }
+
+        with patch.object(service, "fetch_message", new_callable=AsyncMock, return_value=raw_message):
+            await service.process_notification("email-hist-msg-001", "shop@example.com")
+
+        assert history_repo.create_message.call_count == 2
+        saved = [c.args[0] for c in history_repo.create_message.call_args_list]
+        assert saved[0].role == "user"
+        assert saved[0].channel == "email"
+        assert "りんご10箱" in saved[0].text
+        assert saved[1].role == "assistant"
+        assert saved[1].text == "ご注文を承りました。"
+        assert saved[1].metadata.get("order_id") == "ORD-1"
+        # 受注が会話履歴と同じ session に紐づくよう session_id が渡される
+        assert service._orchestrator.process_email.call_args.args[1].id == saved[0].session_id
+
+    @pytest.mark.asyncio
+    async def test_history_failure_does_not_block_processing(self, service, mock_tenant_ctx):
+        raw_message = {
+            "id": "email-hist-msg-002",
+            "subject": "ご注文",
+            "body": "バナナ20kgお願いします",
+            "from": {"name": "佐藤", "address": "sato@example.com"},
+            "conversationId": "conv-hist-2",
+            "receivedDateTime": "2026-05-25T02:00:00Z",
+            "replyToMessageId": None,
+            "attachments": [],
+        }
+
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.find_by_email.return_value = None
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_by_conversation_id.return_value = None
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
+        history_repo.create_message.side_effect = RuntimeError("cosmos down")
+
+        service._orchestrator = AsyncMock()
+        service._orchestrator.process_email.return_value = {"response": "OK", "order_id": "ORD-2"}
+
+        with patch.object(service, "fetch_message", new_callable=AsyncMock, return_value=raw_message):
+            # 履歴保存が失敗しても受注処理は継続する（例外を送出しない）
+            await service.process_notification("email-hist-msg-002", "shop@example.com")
+
+        service._orchestrator.process_email.assert_awaited_once()
 
 
 # ── _EmailDedup テスト ────────────────────────────────────────────────────────
