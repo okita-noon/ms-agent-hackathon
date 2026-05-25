@@ -179,6 +179,21 @@ class LineWebhookHandler:
             ),
         )
 
+        known_customer_id: str | None = None
+        known_customer_name: str | None = None
+        try:
+            customer_repo = self._ctx.get_connector("ICustomerRepository")
+            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
+            if not customer:
+                customer = await customer_repo.get_by_id(self._ctx.tenant_id, "C-001")
+                if customer:
+                    logger.info("Unregistered LINE user %s mapped to fallback customer %s", user_id, customer.id)
+            if customer:
+                known_customer_id = customer.id
+                known_customer_name = customer.name
+        except Exception:
+            logger.exception("Customer lookup failed for LINE user %s; continuing without customer", user_id)
+
         try:
             result = await self._orchestrator.process_order_message(
                 message=text,
@@ -188,6 +203,8 @@ class LineWebhookHandler:
                 conversation_history=conversation_history,
                 pending_order_draft=session.pending_order_draft,
                 session_id=session.id,
+                known_customer_id=known_customer_id,
+                known_customer_name=known_customer_name,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)

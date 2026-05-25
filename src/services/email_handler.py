@@ -317,11 +317,9 @@ class EmailIngestionService:
                 inbound.customer_id = customer.id
                 inbound.customer_name = customer.name
 
-        demo_mode = os.environ.get("EMAIL_DEMO_MODE", "false").strip().lower() == "true"
-        if not customer and demo_mode:
-            demo_customer_id = os.environ.get("EMAIL_DEMO_CUSTOMER_ID", "").strip()
-            if demo_customer_id:
-                customer = await customer_repo.get_by_id(self._ctx.tenant_id, demo_customer_id)
+        if not customer:
+            fallback_customer_id = os.environ.get("EMAIL_DEMO_CUSTOMER_ID", "C-001").strip() or "C-001"
+            customer = await customer_repo.get_by_id(self._ctx.tenant_id, fallback_customer_id)
             if not customer:
                 customers = await customer_repo.list_all(self._ctx.tenant_id)
                 if customers:
@@ -330,7 +328,7 @@ class EmailIngestionService:
                 inbound.customer_id = customer.id
                 inbound.customer_name = customer.name
                 logger.info(
-                    "Demo mode: unregistered email %s mapped to customer %s (%s)",
+                    "Unregistered email %s mapped to fallback customer %s (%s)",
                     inbound.channel_user_id,
                     customer.id,
                     customer.name,

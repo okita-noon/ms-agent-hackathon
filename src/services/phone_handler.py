@@ -60,6 +60,8 @@ class CallState:
     last_order_id: str | None = None
     transcript_parts: list[str] = field(default_factory=list)
     audio_enabled: bool = True
+    customer_id: str | None = None
+    customer_name: str | None = None
 
 
 class PhoneCallHandler:
@@ -251,6 +253,24 @@ class PhoneCallHandler:
         state.session = session
         await self._save_call_message(state, "user", transcribed_text)
 
+        if not state.customer_id:
+            try:
+                customer_repo = state.tenant_ctx.get_connector("ICustomerRepository")
+                customer = await customer_repo.find_by_identifier(state.tenant_ctx.tenant_id, state.caller_number)
+                if not customer:
+                    customer = await customer_repo.get_by_id(state.tenant_ctx.tenant_id, "C-001")
+                    if customer:
+                        logger.info(
+                            "Unregistered caller %s mapped to fallback customer %s",
+                            state.caller_number,
+                            customer.id,
+                        )
+                if customer:
+                    state.customer_id = customer.id
+                    state.customer_name = customer.name
+            except Exception:
+                logger.exception("Customer lookup failed for caller %s", state.caller_number)
+
         orchestrator = OrderOrchestrator(
             tenant_ctx=state.tenant_ctx,
             azure_openai_endpoint=self._openai_endpoint,
@@ -265,6 +285,8 @@ class PhoneCallHandler:
                         message=transcribed_text,
                         caller_number=state.caller_number,
                         pending_order_draft=session.pending_order_draft if session else None,
+                        known_customer_id=state.customer_id,
+                        known_customer_name=state.customer_name,
                     ),
                     timeout=self._phone_sync_ai_timeout_seconds,
                 )
@@ -277,7 +299,14 @@ class PhoneCallHandler:
                         )
                     )
             else:
-                result = await self._process_phone_order_full_sync(orchestrator, state, transcribed_text, session)
+                result = await self._process_phone_order_full_sync(
+                    orchestrator,
+                    state,
+                    transcribed_text,
+                    session,
+                    known_customer_id=state.customer_id,
+                    known_customer_name=state.customer_name,
+                )
         except TimeoutError:
             logger.warning(
                 "Phone sync AI timed out for call %s after %.1fs",
@@ -339,6 +368,8 @@ class PhoneCallHandler:
         state: CallState,
         message: str,
         session: OrderSession,
+        known_customer_id: str | None = None,
+        known_customer_name: str | None = None,
     ) -> dict:
         response_text_holder: list[str] = []
 
@@ -353,6 +384,8 @@ class PhoneCallHandler:
             response_callback=capture_response,
             pending_order_draft=session.pending_order_draft,
             session_id=session.id,
+            known_customer_id=known_customer_id,
+            known_customer_name=known_customer_name,
         )
         if response_text_holder and not result.get("response"):
             result["response"] = response_text_holder[0]
@@ -383,6 +416,8 @@ class PhoneCallHandler:
                 response_callback=ignore_customer_response,
                 pending_order_draft=pending_order_draft,
                 session_id=state.session.id if state.session else None,
+                known_customer_id=state.customer_id,
+                known_customer_name=state.customer_name,
             )
             if result.get("order_id"):
                 state.last_order_id = result["order_id"]
