@@ -1,22 +1,16 @@
-import { STATUS_COLORS, SOURCE_BADGE_CONFIG } from "../lib/constants";
+import { STATUS_COLORS } from "../lib/constants";
 
 interface Props {
   searchQuery: string;
   onSearchChange: (v: string) => void;
   filterStatus: string;
   onStatusChange: (v: string) => void;
-  filterChannel: string;
-  onChannelChange: (v: string) => void;
-  filterTempZone: string;
-  onTempZoneChange: (v: string) => void;
   sortKey: string;
   onSortChange: (v: string) => void;
   onReset: () => void;
 }
 
 const statusOptions = ["すべて", ...Object.keys(STATUS_COLORS)];
-const channelOptions = ["すべて", ...Object.keys(SOURCE_BADGE_CONFIG)];
-const tempZoneOptions = ["すべて", "冷凍", "冷蔵", "常温"];
 const sortOptions = [
   { value: "order_date_desc", label: "受注日時：新しい順" },
   { value: "order_date_asc", label: "受注日時：古い順" },
@@ -49,22 +43,6 @@ export default function OrderFilterBar(props: Props) {
         <label className="block text-[11px] font-medium text-gray-400 mb-1">ステータス</label>
         <select value={props.filterStatus} onChange={(e) => props.onStatusChange(e.target.value)} className={selectCls}>
           {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-
-      {/* Channel */}
-      <div className="min-w-[120px]">
-        <label className="block text-[11px] font-medium text-gray-400 mb-1">チャネル</label>
-        <select value={props.filterChannel} onChange={(e) => props.onChannelChange(e.target.value)} className={selectCls}>
-          {channelOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-
-      {/* Temperature */}
-      <div className="min-w-[120px]">
-        <label className="block text-[11px] font-medium text-gray-400 mb-1">温度帯</label>
-        <select value={props.filterTempZone} onChange={(e) => props.onTempZoneChange(e.target.value)} className={selectCls}>
-          {tempZoneOptions.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 

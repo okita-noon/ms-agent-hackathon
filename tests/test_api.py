@@ -217,6 +217,7 @@ class TestListOrders:
             q="メロン",
             limit=25,
             offset=50,
+            date_field="delivery_date",
         )
         assert result["total"] == 123
         assert result["limit"] == 25

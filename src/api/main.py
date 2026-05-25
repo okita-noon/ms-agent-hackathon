@@ -471,6 +471,7 @@ async def phone_debug_disconnect(
 async def list_orders(
     tenant_id: str = Depends(get_tenant_id),
     delivery_date: str | None = None,
+    order_date: str | None = None,
     status: str | None = None,
     source: str | None = None,
     q: str | None = None,
@@ -480,10 +481,15 @@ async def list_orders(
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
 
-    if delivery_date:
+    if order_date:
+        target = date.fromisoformat(order_date)
+        date_field = "order_date"
+    elif delivery_date:
         target = date.fromisoformat(delivery_date)
+        date_field = "delivery_date"
     else:
         target = date.today()
+        date_field = "delivery_date"
 
     orders, total = await repo.list_orders(
         tenant_id,
@@ -493,6 +499,7 @@ async def list_orders(
         q=q,
         limit=limit,
         offset=offset,
+        date_field=date_field,
     )
     return {
         "orders": [o.model_dump(mode="json") for o in orders],
