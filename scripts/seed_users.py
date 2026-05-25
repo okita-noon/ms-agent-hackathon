@@ -28,10 +28,27 @@ DEMO_USERS = [
     ("U-004", "T-002", "staff@suzuki.example.com", "鈴木 次郎", "local"),
 ]
 
-SQL = """
-IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = ?)
+UPSERT_SQL = """
+IF EXISTS (SELECT 1 FROM users WHERE user_id = ?)
+BEGIN
+    UPDATE users
+       SET tenant_id = ?,
+           email = ?,
+           password_hash = COALESCE(password_hash, ?),
+           display_name = CASE
+               WHEN display_name IS NULL OR LTRIM(RTRIM(display_name)) IN ('', '?') THEN ?
+               ELSE display_name
+           END,
+           auth_provider = ?,
+           active = 1,
+           updated_at = SYSUTCDATETIME()
+     WHERE user_id = ?
+END
+ELSE
+BEGIN
     INSERT INTO users (user_id, tenant_id, email, password_hash, display_name, auth_provider)
-    VALUES (?, ?, ?, ?, ?, ?);
+    VALUES (?, ?, ?, ?, ?, ?)
+END;
 """
 
 
@@ -74,8 +91,25 @@ def main() -> None:
 
     cursor = conn.cursor()
     for user_id, tenant_id, email, name, provider in DEMO_USERS:
-        cursor.execute(SQL, (user_id, user_id, tenant_id, email, hashed, name, provider))
-        print(f"  {'inserted' if cursor.rowcount else 'skipped'}: {email} ({user_id})")
+        cursor.execute(
+            UPSERT_SQL,
+            (
+                user_id,
+                tenant_id,
+                email,
+                hashed,
+                name,
+                provider,
+                user_id,
+                user_id,
+                tenant_id,
+                email,
+                hashed,
+                name,
+                provider,
+            ),
+        )
+        print(f"  upserted: {email} ({user_id})")
 
     conn.commit()
     conn.close()

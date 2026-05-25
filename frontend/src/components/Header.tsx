@@ -2,11 +2,29 @@ import { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
+function isMissingDisplayName(value: string | undefined): boolean {
+  const normalized = value?.trim();
+  return !normalized || /^[?？]+$/.test(normalized);
+}
+
+function getProfileLabel(user: NonNullable<ReturnType<typeof useAuth>["user"]>): string {
+  if (!isMissingDisplayName(user.display_name)) return user.display_name.trim();
+  return user.email || user.user_id || "ユーザー";
+}
+
+function getProfileInitial(user: NonNullable<ReturnType<typeof useAuth>["user"]>): string {
+  const label = getProfileLabel(user).trim();
+  const firstAlphaNumeric = label.match(/[A-Za-z0-9]/)?.[0];
+  return (firstAlphaNumeric || Array.from(label)[0] || "U").toUpperCase();
+}
+
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const profileLabel = user ? getProfileLabel(user) : "";
+  const profileInitial = user ? getProfileInitial(user) : "U";
 
   // Close menu on outside click
   useEffect(() => {
@@ -37,7 +55,7 @@ export default function Header() {
                 aria-label="ユーザーメニュー"
               >
                 <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white ring-2 ring-brand-400/30">
-                  {user.display_name?.charAt(0)?.toUpperCase() || "U"}
+                  {profileInitial}
                 </div>
               </button>
 
@@ -45,7 +63,7 @@ export default function Header() {
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {user.display_name}
+                      {profileLabel}
                     </p>
                     <p className="text-xs text-gray-500 truncate mt-0.5">
                       {user.email}

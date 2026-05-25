@@ -7,6 +7,7 @@
 | Agent | 責務 | 使用ツール（Semantic Kernel Plugin） | 判断の例 |
 |---|---|---|---|
 | **Orchestrator** | 意図分類・実行計画・Agent間調整 | `classify_intent`, `plan_execution`, `aggregate_results` | 「これは注文だ。Intake→Inventory→Commsの順で処理」 |
+| **Phone Order** | 電話中の低レイテンシ注文抽出・復唱 | `lookup_customer`, `normalize_product`, `resolve_with_pattern` | 「電話なので1回のAgent呼び出しで注文ドラフトを作り、在庫確認はコードで同期実行」 |
 | **Intake** | 自然言語→構造化データ変換 | `parse_order`, `lookup_customer`, `normalize_product`, `validate_order_draft`, `resolve_with_pattern` | 「"ツナ缶100g"→過去パターンで"ツナ缶1個"と自動解釈」 |
 | **Inventory** | 在庫照合・欠品対応 | `check_inventory`, `find_alternatives`, `predict_demand` | 「在庫残10kg, 要求20kg→代替品キュウリ在庫あり」 |
 | **Communication** | チャネル別返信生成・送信 | `generate_reply`, `send_line`, `send_email`, `send_sms` | 「LINEで来たからLINEで返す。丁寧語で」 |
@@ -17,6 +18,22 @@
 | コンポーネント | 責務 | 関数 | 備考 |
 |---|---|---|---|
 | **Learning Service** | 発注パターン学習・統計更新 | `record_pattern`, `update_pattern_confidence`, `build_customer_profile`, `generate_expression_embedding` | Container Apps 内のバックグラウンドタスクとして実装。注文確定イベントで非同期起動。LLM推論不要のためAgentにしない（コスト・速度の最適化） |
+
+## 電話同期応答フロー
+
+電話チャネルは、通話中の沈黙を短くしつつ在庫確認まで返答するため、通常の4 Agent直列実行とは別に同期応答用の経路を持つ。
+
+```
+Azure AI Speech 文字起こし
+  → Phone Order Agent（顧客特定・商品正規化・注文ドラフト化）
+  → IInventoryService.check（アプリケーションコードで同期在庫確認）
+  → TTS: 「りんご10箱ですね。在庫は確認できました。ご注文を受け付けます」
+  → 既存 Orchestrator / Intake / Exception / Inventory / Communication（非同期で正式検証・登録）
+```
+
+Phone Order Agent は在庫判断や引当をLLMに任せない。LLMは注文抽出に集中し、在庫確認は Connector 経由の決定的な処理として実行する。
+これにより電話1ターンあたりのLLM呼び出しを原則1回に抑え、既定20秒以内の応答を目標にする。
+タイムアウト時は受付済みメッセージを返し、裏で既存マルチAgent処理を継続する。
 
 ## Agent 間フロー（具体例）
 

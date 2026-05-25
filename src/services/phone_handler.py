@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -24,6 +26,19 @@ GREETING_MESSAGE = "お電話ありがとうございます。ご注文内容を
 GOODBYE_MESSAGE = "ご注文ありがとうございました。失礼いたします。"
 RETRY_MESSAGE = "すみません、聞き取れませんでした。もう一度お願いいたします。"
 TTS_VOICE = "ja-JP-NanamiNeural"
+PHONE_SYNC_AI_TIMEOUT_SECONDS = 20.0
+PHONE_SYNC_FALLBACK_MESSAGE = "ご注文内容を確認しています。受付は完了していますので、確認でき次第登録いたします。"
+
+
+def _get_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%s; using %.1f", name, raw, default)
+        return default
 
 
 @dataclass
@@ -57,6 +72,14 @@ class PhoneCallHandler:
         self._openai_deployment_name = azure_openai_deployment_name
         self._speech_key = speech_service_key
         self._speech_endpoint = speech_service_endpoint
+        self._phone_sync_ai_enabled = os.getenv("PHONE_SYNC_AI_ENABLED", "true").lower() == "true"
+        self._phone_background_validation_enabled = (
+            os.getenv("PHONE_BACKGROUND_VALIDATION_ENABLED", "true").lower() == "true"
+        )
+        self._phone_sync_ai_timeout_seconds = _get_float_env(
+            "PHONE_SYNC_AI_TIMEOUT_SECONDS",
+            PHONE_SYNC_AI_TIMEOUT_SECONDS,
+        )
         self._calls: dict[str, CallState] = {}
         self._acs_clients: dict[str, CallAutomationClient] = {}
 
@@ -228,20 +251,47 @@ class PhoneCallHandler:
             deployment_name=self._openai_deployment_name,
         )
 
-        response_text_holder: list[str] = []
-
-        async def capture_response(text: str) -> None:
-            response_text_holder.append(text)
-
         try:
-            result = await orchestrator.process_order_message(
-                message=transcribed_text,
-                line_user_id=state.caller_number,
-                reply_token=None,
-                source=OrderSource.PHONE,
-                response_callback=capture_response,
-                session_id=session.id if session else None,
+            if self._phone_sync_ai_enabled:
+                result = await asyncio.wait_for(
+                    orchestrator.process_phone_order_with_inventory(
+                        message=transcribed_text,
+                        caller_number=state.caller_number,
+                        pending_order_draft=session.pending_order_draft if session else None,
+                    ),
+                    timeout=self._phone_sync_ai_timeout_seconds,
+                )
+                if self._phone_background_validation_enabled and result.get("order_accepted"):
+                    asyncio.create_task(
+                        self._process_phone_order_background(
+                            state=state,
+                            message=transcribed_text,
+                            pending_order_draft=session.pending_order_draft if session else None,
+                        )
+                    )
+            else:
+                result = await self._process_phone_order_full_sync(orchestrator, state, transcribed_text, session)
+        except TimeoutError:
+            logger.warning(
+                "Phone sync AI timed out for call %s after %.1fs",
+                call_connection_id,
+                self._phone_sync_ai_timeout_seconds,
             )
+            if self._phone_background_validation_enabled:
+                asyncio.create_task(
+                    self._process_phone_order_background(
+                        state=state,
+                        message=transcribed_text,
+                        pending_order_draft=session.pending_order_draft if session else None,
+                    )
+                )
+            await self._play_tts(state, PHONE_SYNC_FALLBACK_MESSAGE)
+            state.order_confirmed = True
+            return {
+                "call_connection_id": call_connection_id,
+                "status": "phone_sync_timeout",
+                "response": PHONE_SYNC_FALLBACK_MESSAGE,
+            }
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)
             await self._play_tts(state, "ご注文を受け付けました。担当者が確認いたします。")
@@ -249,14 +299,17 @@ class PhoneCallHandler:
             return {"call_connection_id": call_connection_id, "error": "agent_failed"}
 
         order_id = result.get("order_id")
-        if order_id:
+        if order_id or result.get("order_accepted"):
             state.order_confirmed = True
             state.last_order_id = order_id
 
         if result.get("session_status") == "awaiting_reply":
             state.order_confirmed = False
+            session.status = "awaiting_reply"
+            session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
+            await state.tenant_ctx.get_connector("ISessionRepository").update_session(session)
 
-        response_text = response_text_holder[0] if response_text_holder else result.get("response", "")
+        response_text = result.get("response", "")
         if response_text:
             await self._play_tts(state, response_text)
 
@@ -266,7 +319,69 @@ class PhoneCallHandler:
             "order_id": order_id,
             "response": response_text,
             "session_status": result.get("session_status"),
+            "phone_sync_status": result.get("phone_sync_status"),
         }
+
+    async def _process_phone_order_full_sync(
+        self,
+        orchestrator: OrderOrchestrator,
+        state: CallState,
+        message: str,
+        session: OrderSession,
+    ) -> dict:
+        response_text_holder: list[str] = []
+
+        async def capture_response(text: str) -> None:
+            response_text_holder.append(text)
+
+        result = await orchestrator.process_order_message(
+            message=message,
+            line_user_id=state.caller_number,
+            reply_token=None,
+            source=OrderSource.PHONE,
+            response_callback=capture_response,
+            pending_order_draft=session.pending_order_draft,
+            session_id=session.id,
+        )
+        if response_text_holder and not result.get("response"):
+            result["response"] = response_text_holder[0]
+        return result
+
+    async def _process_phone_order_background(
+        self,
+        state: CallState,
+        message: str,
+        pending_order_draft: dict | None,
+    ) -> None:
+        try:
+            orchestrator = OrderOrchestrator(
+                tenant_ctx=state.tenant_ctx,
+                azure_openai_endpoint=self._openai_endpoint,
+                azure_openai_key=self._openai_key,
+                deployment_name=self._openai_deployment_name,
+            )
+
+            async def ignore_customer_response(_: str) -> None:
+                return None
+
+            result = await orchestrator.process_order_message(
+                message=message,
+                line_user_id=state.caller_number,
+                reply_token=None,
+                source=OrderSource.PHONE,
+                response_callback=ignore_customer_response,
+                pending_order_draft=pending_order_draft,
+                session_id=state.session.id if state.session else None,
+            )
+            if result.get("order_id"):
+                state.last_order_id = result["order_id"]
+            logger.info(
+                "Background phone validation completed for call %s: %s",
+                state.call_connection_id,
+                result,
+            )
+        except Exception:
+            logger.exception("Background phone validation failed for call %s", state.call_connection_id)
 
     async def _handle_recognize_failed(self, event: dict) -> dict | None:
         data = event.get("data", {})
