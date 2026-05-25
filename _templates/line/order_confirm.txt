@@ -1,0 +1,4 @@
+いつもお世話になっております。
+ご注文を承りました。
+${order_items}
+${delivery_estimate_line}

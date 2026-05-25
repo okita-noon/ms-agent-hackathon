@@ -12,10 +12,10 @@ import httpx
 
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
-from src.services.channel_locks import get_channel_user_lock
 from src.models.message_history import MessageHistory
-from src.models.order import OrderSource
+from src.models.order import Order, OrderSource, OrderStatus
 from src.models.session import OrderSession
+from src.services.channel_locks import get_channel_user_lock
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +162,13 @@ class LineWebhookHandler:
             session = await session_repo.create_session(session)
             logger.info("Created new session %s for user %s", session.id, user_id)
 
+        current_order = await self._resolve_current_order(user_id, session)
+        if current_order:
+            session.customer_id = current_order.customer_id
+            session.current_order_id = current_order.id
+            session.current_order_snapshot = _build_current_order_snapshot(current_order)
+            session.current_order_editable = _is_order_editable(current_order)
+
         conversation_history = await self._list_recent_history(history_repo, user_id)
         await self._save_history_message(
             history_repo,
@@ -188,6 +195,7 @@ class LineWebhookHandler:
                 conversation_history=conversation_history,
                 pending_order_draft=session.pending_order_draft,
                 session_id=session.id,
+                current_order=current_order,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
@@ -232,11 +240,26 @@ class LineWebhookHandler:
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
+            session.pending_action_type = result.get("pending_action_type") or session.pending_action_type
+            session.customer_id = result.get("customer_id") or session.customer_id
+            session.current_order_id = result.get("current_order_id") or session.current_order_id
+            session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
+            session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
             session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
         elif result.get("order_id"):
             session.status = "completed"
             session.pending_order_draft = None
+            session.pending_action_type = None
+            session.customer_id = result.get("customer_id") or session.customer_id
+            if result.get("current_order_cleared"):
+                session.current_order_id = None
+                session.current_order_snapshot = None
+                session.current_order_editable = False
+            else:
+                session.current_order_id = result.get("current_order_id") or session.current_order_id
+                session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
+                session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
             await session_repo.update_session(session)
 
         return {
@@ -298,6 +321,21 @@ class LineWebhookHandler:
             logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
             return False
 
+    async def _resolve_current_order(self, user_id: str, session: OrderSession) -> Order | None:
+        customer_id = session.customer_id
+        customer_repo = self._ctx.get_connector("ICustomerRepository")
+        if not customer_id:
+            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
+            if customer:
+                customer_id = customer.id
+
+        if not customer_id:
+            return None
+
+        order_repo = self._ctx.get_connector("IOrderRepository")
+        orders = await order_repo.list_by_customer(customer_id, limit=10)
+        return _pick_current_order(orders)
+
 
 def _line_timestamp_to_datetime(timestamp: int | None) -> datetime | None:
     if timestamp is None:
@@ -313,3 +351,35 @@ def _build_message_history_id(
 ) -> str:
     source_id = webhook_event_id or message_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     return f"hist-{session_id}-{role}-{source_id}"
+
+
+def _pick_current_order(orders: list[Order]) -> Order | None:
+    open_statuses = {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW, OrderStatus.SHIPPING}
+    candidates = [order for order in orders if order.status in open_statuses]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda order: order.updated_at, reverse=True)[0]
+
+
+def _is_order_editable(order: Order) -> bool:
+    return order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+
+
+def _build_current_order_snapshot(order: Order) -> dict:
+    return {
+        "id": order.id,
+        "customer_id": order.customer_id,
+        "customer_name": order.customer_name,
+        "status": order.status.value,
+        "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+        "delivery_time_slot": order.delivery_time_slot,
+        "items": [
+            {
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+            }
+            for item in order.items
+        ],
+    }

@@ -138,10 +138,12 @@
 | `docs/data-flow.md` | チャネル別データフロー・セッション管理・スケール戦略 |
 | `docs/mvp-scope.md` | MVPスコープ・ユーザー体験シナリオ・非機能要件 |
 | `docs/business-domain.md` | 業務ドメイン定義（温度帯・配送体系・不定貫・ピッキング分割） |
+| `docs/line-order-branching.md` | LINE受発注の主要分岐、会話テンプレート、要件整理 |
 
 ## ドキュメント更新ルール（必須）
 
 アプリケーションを変更したら、**同じ PR 内で**関連ドキュメントも必ず更新すること。
+業務フローや会話分岐の前提を整理した場合は、`docs/line-order-branching.md` も更新対象に含めること。
 
 | 変更内容 | 更新対象ドキュメント |
 |---|---|
@@ -247,6 +249,7 @@ src/
 │   ├── phone_handler.py          # 電話 Webhook処理（ACS Call Automation、同期AI在庫確認、非同期正式検証）
 │   ├── email_handler.py          # Email Webhook処理（正規化・セッション管理）
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
+│   ├── line_template_renderer.py # LINE返信テンプレート描画
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
 │   ├── dashboard_agent.py        # Dashboard Agent サービス（Exception Triage / Resolution プレビュー）
 │   └── tenant_resolver.py        # テナント解決（LINE/電話→テナント紐付け）
