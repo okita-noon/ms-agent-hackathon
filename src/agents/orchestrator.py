@@ -78,6 +78,11 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
     return subject
 
 
+def _insert_order_id(response_text: str, order_id: str) -> str:
+    """LINE・電話の返信テキスト末尾に受注Noを付与する。"""
+    return f"{response_text}\n\n受注No: {order_id}"
+
+
 def _build_email_from_template(
     template_name: str,
     intake_draft: dict,
@@ -263,6 +268,8 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 delivery_estimate=affirm_delivery_estimate,
             )
+            if source != OrderSource.EMAIL:
+                response_text = _insert_order_id(response_text, saved_order.id)
             result["response"] = response_text
             result["order_id"] = saved_order.id
             if response_callback:
@@ -584,6 +591,8 @@ class OrderOrchestrator:
                 processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
                 delivery_estimate=delivery_estimate_text,
             )
+        if source != OrderSource.EMAIL and saved_order:
+            response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── Step 6: Send response ─────────────────────────────────────────────
@@ -807,6 +816,8 @@ class OrderOrchestrator:
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
             )
+        if source != OrderSource.EMAIL and saved_order:
+            response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── 返信送信 ──────────────────────────────────────────────────────────
