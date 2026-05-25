@@ -72,7 +72,7 @@ const DEV_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-const NAV_ITEMS = import.meta.env.DEV
+const NAV_ITEMS = (import.meta.env.DEV || localStorage.getItem("debug_nav") === "1")
   ? [...BASE_NAV_ITEMS, ...DEV_NAV_ITEMS]
   : BASE_NAV_ITEMS;
 
