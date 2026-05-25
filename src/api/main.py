@@ -40,6 +40,9 @@ PhoneCallHandler: Any | None = None
 GRAPH_SUBSCRIPTION_EXPIRY_HOURS = 48
 GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS = 3600
 
+# モジュールレベルでsubscription IDを保持（lifecycle event時の再作成に使用）
+_active_subscription_id: str | None = None
+
 
 async def _create_graph_subscription() -> str | None:
     """Graph APIのSubscriptionを作成し、メール受信通知を有効にする"""
@@ -87,7 +90,8 @@ async def _create_graph_subscription() -> str | None:
 
 
 async def _renew_graph_subscription(subscription_id: str) -> None:
-    """Subscriptionの自動更新ループ"""
+    """Subscriptionの自動更新ループ。更新失敗時は再作成を試みる"""
+    consecutive_failures = 0
     while True:
         renew_interval = GRAPH_SUBSCRIPTION_EXPIRY_HOURS * 3600 - GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS
         await asyncio.sleep(renew_interval)
@@ -110,20 +114,50 @@ async def _renew_graph_subscription(subscription_id: str) -> None:
                 )
                 if resp.status_code == 200:
                     logger.info("Graph Subscription 更新完了: id=%s expiry=%s", subscription_id, expiry.isoformat())
+                    consecutive_failures = 0
+                elif resp.status_code == 404:
+                    logger.warning("Graph Subscription が存在しない（404）。再作成を試行")
+                    await _recreate_graph_subscription()
+                    return
                 else:
+                    consecutive_failures += 1
                     logger.error("Graph Subscription 更新失敗: %s %s", resp.status_code, resp.text)
+                    if consecutive_failures >= 3:
+                        logger.warning("連続3回更新失敗。Subscription再作成を試行")
+                        await _recreate_graph_subscription()
+                        return
         except Exception:
+            consecutive_failures += 1
             logger.exception("Graph Subscription 更新エラー")
+            if consecutive_failures >= 3:
+                logger.warning("連続3回更新エラー。Subscription再作成を試行")
+                await _recreate_graph_subscription()
+                return
+
+
+async def _recreate_graph_subscription() -> None:
+    """Subscription削除・失効時に再作成する"""
+    global _active_subscription_id  # noqa: PLW0603
+    logger.info("Graph Subscription 再作成を開始")
+    sub_id = await _create_graph_subscription()
+    if sub_id:
+        _active_subscription_id = sub_id
+        asyncio.create_task(_renew_graph_subscription(sub_id))
+        logger.info("Graph Subscription 再作成完了: id=%s", sub_id)
+    else:
+        logger.error("Graph Subscription 再作成に失敗")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _active_subscription_id  # noqa: PLW0603
     register_all_adapters()
     logger.info("Adapter registry initialized")
 
     renew_task = None
     sub_id = await _create_graph_subscription()
     if sub_id:
+        _active_subscription_id = sub_id
         renew_task = asyncio.create_task(_renew_graph_subscription(sub_id))
 
     yield
@@ -251,6 +285,17 @@ async def email_webhook(
     if not notifications:
         logger.warning("Email webhook: clientState不一致または通知なし")
         return Response(status_code=202)
+
+    # lifecycle notification対応（subscriptionRemoved / missed）
+    for notification in notifications:
+        lifecycle_event = notification.get("lifecycleNotification") or notification.get("lifecycleEvent")
+        if lifecycle_event:
+            event_type = lifecycle_event if isinstance(lifecycle_event, str) else str(lifecycle_event)
+            logger.warning("Graph lifecycle notification受信: %s", event_type)
+            if event_type in ("subscriptionRemoved", "missed"):
+                background_tasks.add_task(_recreate_graph_subscription)
+            return Response(status_code=202)
+
     default_recipient = os.environ.get("GRAPH_MAILBOX_ADDRESS", "order@example.com")
     azure_openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
     azure_openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
