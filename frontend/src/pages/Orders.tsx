@@ -397,7 +397,6 @@ export default function Orders() {
               <tbody className="divide-y divide-gray-50">
                 {displayOrders.map((o) => {
                   const items = o.items || [];
-                  const zones = [...new Set(items.map((i) => i.temperature_zone))];
                   return (
                     <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
