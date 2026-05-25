@@ -32,6 +32,7 @@
 - [x] FastAPI アプリ（REST API 10エンドポイント）
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
+- [x] 会話履歴を全チャネルで保存（`src/services/message_history_logger.py` で共通化）。従来 LINE のみだった `message-history` への保存を**メール・電話**にも拡張。メールは受注を会話セッションに紐付ける `session_id` も付与し、ダッシュボードの受注詳細でメール／電話のやり取りも表示可能に
 - [x] 受注ステータス分離（未処理 / 要対応 の自動判定）
 - [x] LINE返信ポリシー（会社名呼びかけ・汎用締め文の抑制、配達日/配達時間の確認）
 - [x] Dashboard Agent サービス（Exception Triage：Z-score 数量異常 / 単位異常 / 在庫不足 / 要対応）
