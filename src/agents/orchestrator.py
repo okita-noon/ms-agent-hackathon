@@ -34,6 +34,11 @@ from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
 from src.plugins.inventory_plugin import InventoryPlugin
+from src.services.line_template_renderer import (
+    build_delivery_estimate_line,
+    format_line_order_items,
+    render_line_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +83,11 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
     return subject
 
 
+def _insert_order_id(response_text: str, order_id: str) -> str:
+    """LINE・電話の返信テキスト末尾に受注Noを付与する。"""
+    return f"{response_text}\n\n受注No: {order_id}"
+
+
 def _build_email_from_template(
     template_name: str,
     intake_draft: dict,
@@ -98,6 +108,21 @@ def _build_email_from_template(
         body=body or "",
     )
     return email_body + _build_email_signature()
+
+
+def _build_line_from_template(
+    template_name: str,
+    *,
+    items: list[dict] | list[OrderItem] | None = None,
+    delivery_estimate: str | None = None,
+    body: str | None = None,
+) -> str:
+    return render_line_template(
+        template_name,
+        order_items=format_line_order_items(items),
+        delivery_estimate_line=build_delivery_estimate_line(delivery_estimate),
+        body=body or "",
+    )
 
 
 class OrderOrchestrator:
@@ -230,18 +255,23 @@ class OrderOrchestrator:
         session_id: str | None = None,
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
+        current_order: Order | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
             "line_user_id": line_user_id,
             "reply_token": reply_token,
         }
+        line_action_type = _resolve_line_action_type(message, current_order=current_order)
+        current_order_editable = _is_order_editable(current_order)
 
         if pending_order_draft and _is_affirmative_reply(message):
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
                 source=source,
                 session_id=session_id,
+                existing_order=current_order if source == OrderSource.LINE and current_order_editable else None,
+                status=OrderStatus.ACCEPTED,
             )
             asyncio.create_task(self._run_learning(saved_order, message))
             route = _resolve_delivery_route(pending_order_draft, self._ctx)
@@ -262,9 +292,22 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 delivery_estimate=affirm_delivery_estimate,
+                current_order=current_order,
             )
+            if source == OrderSource.LINE:
+                response_text = _build_line_from_template(
+                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    items=saved_order.items,
+                    delivery_estimate=affirm_delivery_estimate,
+                )
+            elif source != OrderSource.EMAIL:
+                response_text = _insert_order_id(response_text, saved_order.id)
             result["response"] = response_text
             result["order_id"] = saved_order.id
+            result["customer_id"] = saved_order.customer_id
+            result["current_order_id"] = saved_order.id
+            result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
+            result["current_order_editable"] = _is_order_editable(saved_order)
             if response_callback:
                 await response_callback(response_text)
             else:
@@ -275,6 +318,71 @@ class OrderOrchestrator:
         if inventory_inquiry_result:
             response_text = inventory_inquiry_result["response"]
             result.update(inventory_inquiry_result)
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        if source == OrderSource.LINE and current_order:
+            if _is_full_order_cancel(message):
+                if current_order_editable:
+                    repo = self._ctx.get_connector("IOrderRepository")
+                    await repo.update_status(self._ctx.tenant_id, current_order.id, OrderStatus.CANCELLED)
+                    response_text = _build_line_from_template("order_full_cancel_confirm.txt")
+                    result.update(
+                        {
+                            "response": response_text,
+                            "order_id": current_order.id,
+                            "customer_id": current_order.customer_id,
+                            "current_order_cleared": True,
+                            "current_order_id": None,
+                            "current_order_snapshot": None,
+                            "current_order_editable": False,
+                        }
+                    )
+                    if response_callback:
+                        await response_callback(response_text)
+                    else:
+                        await self._send_line_message(response_text, reply_token, line_user_id)
+                    return result
+
+                response_text = _build_line_from_template("order_locked_need_review.txt")
+                result.update(
+                    {
+                        "response": response_text,
+                        "customer_id": current_order.customer_id,
+                        "current_order_id": current_order.id,
+                        "current_order_snapshot": _build_current_order_snapshot(current_order),
+                        "current_order_editable": False,
+                    }
+                )
+                if response_callback:
+                    await response_callback(response_text)
+                else:
+                    await self._send_line_message(response_text, reply_token, line_user_id)
+                return result
+
+            if not current_order_editable and _looks_like_order_update_request(message):
+                response_text = _build_line_from_template("order_locked_need_review.txt")
+                result.update(
+                    {
+                        "response": response_text,
+                        "customer_id": current_order.customer_id,
+                        "current_order_id": current_order.id,
+                        "current_order_snapshot": _build_current_order_snapshot(current_order),
+                        "current_order_editable": False,
+                    }
+                )
+                if response_callback:
+                    await response_callback(response_text)
+                else:
+                    await self._send_line_message(response_text, reply_token, line_user_id)
+                return result
+
+        if source == OrderSource.LINE and not current_order and _looks_like_change_only_message(message):
+            response_text = _build_line_from_template("order_no_current_order.txt")
+            result.update({"response": response_text, "pending_action_type": line_action_type})
             if response_callback:
                 await response_callback(response_text)
             else:
@@ -295,6 +403,7 @@ class OrderOrchestrator:
                 session_id=session_id,
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
+                current_order=current_order,
             )
         else:
             logger.info("Using single-agent pipeline")
@@ -309,7 +418,10 @@ class OrderOrchestrator:
                 session_id=session_id,
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
+                current_order=current_order,
             )
+        if source == OrderSource.LINE:
+            agent_result.setdefault("pending_action_type", line_action_type)
         result.update(agent_result)
         return result
 
@@ -386,6 +498,7 @@ class OrderOrchestrator:
         session_id: str | None,
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
+        current_order: Order | None = None,
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
@@ -408,7 +521,7 @@ class OrderOrchestrator:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
 
-        memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+        memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
         if pending_order_draft:
             intake_prompt = (
                 f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
@@ -418,6 +531,17 @@ class OrderOrchestrator:
                 f"顧客の回答: {message}\n\n"
                 f"まず {lookup_instruction}"
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
+            )
+        elif source == OrderSource.LINE and current_order:
+            intake_prompt = (
+                "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
+                "更新後の注文全体をJSON形式で返してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"メッセージ: {message}\n\n"
+                f"まず {lookup_instruction}"
+                "会話履歴と現在注文を踏まえて、更新後の注文全体を返してください。"
             )
         else:
             intake_prompt = (
@@ -445,6 +569,7 @@ class OrderOrchestrator:
                 source=source,
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
+                current_order=current_order,
             )
             result["response"] = response_text
             if response_callback:
@@ -503,7 +628,7 @@ class OrderOrchestrator:
 
         # ── Step 4: Save order if no confirmation needed ───────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review:
+        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
@@ -522,10 +647,20 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
-                    saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        status=OrderStatus.ACCEPTED,
+                    )
                     asyncio.create_task(self._run_learning(saved_order, message))
                     logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
+                    result["customer_id"] = saved_order.customer_id
+                    result["current_order_id"] = saved_order.id
+                    result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
+                    result["current_order_editable"] = _is_order_editable(saved_order)
             except Exception:
                 logger.exception("Failed to save order from single-agent pipeline")
 
@@ -565,6 +700,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
                 delivery_estimate=delivery_estimate_text,
+                current_order=current_order,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -583,7 +719,16 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
                 delivery_estimate=delivery_estimate_text,
+                current_order=current_order,
             )
+        if source == OrderSource.LINE and saved_order and not needs_confirmation:
+            response_text = _build_line_from_template(
+                "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                items=saved_order.items,
+                delivery_estimate=delivery_estimate_text,
+            )
+        elif source != OrderSource.EMAIL and saved_order:
+            response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── Step 6: Send response ─────────────────────────────────────────────
@@ -610,6 +755,7 @@ class OrderOrchestrator:
         session_id: str | None,
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
+        current_order: Order | None = None,
     ) -> dict:
         """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
         result: dict = {}
@@ -630,7 +776,7 @@ class OrderOrchestrator:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
 
-        memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+        memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
 
         # ── Chain Step 1: Intake Agent ─────────────────────────────────────────
         intake_agent = self._make_intake_agent()
@@ -643,6 +789,17 @@ class OrderOrchestrator:
                 f"顧客の回答: {message}\n\n"
                 f"まず {lookup_instruction}"
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
+            )
+        elif source == OrderSource.LINE and current_order:
+            intake_prompt = (
+                "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
+                "更新後の注文全体をJSON形式で返してください。\n"
+                f"チャネル: {source.value}\n"
+                f"{user_label}\n"
+                f"{memory_ctx}"
+                f"メッセージ: {message}\n\n"
+                f"まず {lookup_instruction}"
+                "会話履歴と現在注文を踏まえて、更新後の注文全体を返してください。"
             )
         else:
             intake_prompt = (
@@ -668,6 +825,7 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 intake_text=intake_text,
+                current_order=current_order,
             )
             result["response"] = response_text
             if response_callback:
@@ -725,7 +883,7 @@ class OrderOrchestrator:
 
         # ── 注文保存 ──────────────────────────────────────────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review:
+        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
@@ -744,10 +902,20 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
-                    saved_order = await self.create_order_from_draft(draft, source=source, session_id=session_id)
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        status=OrderStatus.ACCEPTED,
+                    )
                     asyncio.create_task(self._run_learning(saved_order, message))
                     logger.info("[multi-agent] Created order %s", saved_order.id)
                     result["order_id"] = saved_order.id
+                    result["customer_id"] = saved_order.customer_id
+                    result["current_order_id"] = saved_order.id
+                    result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
+                    result["current_order_editable"] = _is_order_editable(saved_order)
             except Exception:
                 logger.exception("[multi-agent] Failed to save order")
 
@@ -788,6 +956,7 @@ class OrderOrchestrator:
                 inventory_text=inventory_text,
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
+                current_order=current_order,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -806,7 +975,16 @@ class OrderOrchestrator:
                 inventory_text=inventory_text,
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
+                current_order=current_order,
             )
+        if source == OrderSource.LINE and saved_order and not needs_confirmation:
+            response_text = _build_line_from_template(
+                "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                items=saved_order.items,
+                delivery_estimate=delivery_estimate_text,
+            )
+        elif source != OrderSource.EMAIL and saved_order:
+            response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── 返信送信 ──────────────────────────────────────────────────────────
@@ -833,13 +1011,14 @@ class OrderOrchestrator:
         inventory_text: str | None = None,
         processing_note: str | None = None,
         delivery_estimate: str | None = None,
+        current_order: Order | None = None,
     ) -> str:
         """Communication Agentで返信メッセージを生成する. 失敗時は既存のOrchestratorにフォールバック."""
         try:
             comm_agent = self._make_communication_agent()
 
             context_parts = [f"元のメッセージ: {message}", f"チャネル: {source.value}"]
-            memory_context = _format_memory_context(conversation_history, pending_order_draft).strip()
+            memory_context = _format_memory_context(conversation_history, pending_order_draft, current_order).strip()
             if memory_context:
                 context_parts.append(memory_context)
             if intake_text:
@@ -887,6 +1066,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate,
+                current_order=current_order,
             )
 
     async def process_email(
@@ -907,6 +1087,7 @@ class OrderOrchestrator:
             source=OrderSource.EMAIL,
             response_callback=capture_callback,
             pending_order_draft=session.pending_order_draft,
+            session_id=session.id,
             known_customer_id=inbound.customer_id,
             known_customer_name=inbound.customer_name,
         )
@@ -934,13 +1115,14 @@ class OrderOrchestrator:
         pending_order_draft: dict | None = None,
         processing_note: str | None = None,
         delivery_estimate: str | None = None,
+        current_order: Order | None = None,
     ) -> str:
         orchestrator_agent = self._make_orchestrator_agent()
         context_parts = [
             f"元のメッセージ: {message}",
             f"LINE User ID: {line_user_id}",
         ]
-        memory_context = _format_memory_context(conversation_history, pending_order_draft).strip()
+        memory_context = _format_memory_context(conversation_history, pending_order_draft, current_order).strip()
         if memory_context:
             context_parts.append(memory_context)
         if intake_text:
@@ -1025,6 +1207,7 @@ class OrderOrchestrator:
         session_id: str | None = None,
         status: OrderStatus = OrderStatus.ACCEPTED,
         remarks: str | None = None,
+        existing_order: Order | None = None,
     ) -> Order:
         items = []
         for item_data in draft.get("items", []):
@@ -1038,22 +1221,36 @@ class OrderOrchestrator:
                 )
             )
 
-        order = Order(
-            uid="",
-            tenant_id=self._ctx.tenant_id,
-            order_date=date.today(),
-            delivery_date=draft.get("delivery_date") or date.today(),
-            customer_id=draft["customer_id"],
-            customer_name=draft.get("customer_name", ""),
-            source=source,
-            items=items,
-            delivery_route=draft.get("delivery_route"),
-            delivery_carrier=draft.get("delivery_carrier"),
-            delivery_time_slot=draft.get("delivery_time_slot"),
-            status=status,
-            remarks=remarks,
-            session_id=session_id,
-        )
+        if existing_order:
+            order = existing_order.model_copy(deep=True)
+            order.customer_id = draft["customer_id"]
+            order.customer_name = draft.get("customer_name", order.customer_name)
+            order.source = source
+            order.items = items
+            order.delivery_date = draft.get("delivery_date") or order.delivery_date or date.today()
+            order.delivery_route = draft.get("delivery_route") or order.delivery_route
+            order.delivery_carrier = draft.get("delivery_carrier") or order.delivery_carrier
+            order.delivery_time_slot = draft.get("delivery_time_slot") or order.delivery_time_slot
+            order.status = status
+            order.remarks = remarks if remarks is not None else order.remarks
+            order.session_id = session_id or order.session_id
+        else:
+            order = Order(
+                uid="",
+                tenant_id=self._ctx.tenant_id,
+                order_date=date.today(),
+                delivery_date=draft.get("delivery_date") or date.today(),
+                customer_id=draft["customer_id"],
+                customer_name=draft.get("customer_name", ""),
+                source=source,
+                items=items,
+                delivery_route=draft.get("delivery_route"),
+                delivery_carrier=draft.get("delivery_carrier"),
+                delivery_time_slot=draft.get("delivery_time_slot"),
+                status=status,
+                remarks=remarks,
+                session_id=session_id,
+            )
 
         repo = self._ctx.get_connector("IOrderRepository")
         order_id = await repo.save(order)
@@ -1562,6 +1759,7 @@ def _parse_order_items(message: str) -> list[dict]:
 def _format_memory_context(
     conversation_history: list[MessageHistory] | None,
     pending_order_draft: dict | None,
+    current_order: Order | None = None,
 ) -> str:
     parts: list[str] = []
     if conversation_history:
@@ -1575,9 +1773,92 @@ def _format_memory_context(
         parts.append("会話履歴:\n" + "\n".join(lines))
     if pending_order_draft:
         parts.append("確認待ち注文ドラフト:\n" + json.dumps(pending_order_draft, ensure_ascii=False, default=str))
+    if current_order:
+        label = "現在注文（編集可能）" if _is_order_editable(current_order) else "現在注文（ロック済み）"
+        parts.append(
+            label + ":\n" + json.dumps(_build_current_order_snapshot(current_order), ensure_ascii=False, default=str)
+        )
     if not parts:
         return ""
     return "\n\n".join(parts) + "\n\n"
+
+
+def _build_current_order_snapshot(order: Order) -> dict:
+    return {
+        "id": order.id,
+        "customer_id": order.customer_id,
+        "customer_name": order.customer_name,
+        "status": order.status.value,
+        "order_date": order.order_date,
+        "delivery_date": order.delivery_date,
+        "delivery_time_slot": order.delivery_time_slot,
+        "items": [
+            {
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "temperature_zone": item.temperature_zone.value,
+            }
+            for item in order.items
+        ],
+    }
+
+
+def _is_order_editable(order: Order | None) -> bool:
+    if not order:
+        return False
+    return order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+
+
+def _resolve_line_action_type(message: str, current_order: Order | None) -> str:
+    if _is_full_order_cancel(message):
+        return "full_cancel"
+    if _looks_like_change_only_message(message):
+        return "update" if current_order else "no_current_order"
+    if current_order and _looks_like_order_update_request(message):
+        return "update"
+    return "new_order"
+
+
+def _looks_like_order_update_request(message: str) -> bool:
+    return _looks_like_change_only_message(message) or bool(_parse_order_items(message))
+
+
+def _looks_like_change_only_message(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message)
+    keywords = (
+        "追加",
+        "変更",
+        "修正",
+        "訂正",
+        "キャンセル",
+        "取消",
+        "取り消",
+        "なしで",
+        "減ら",
+        "増や",
+        "やっぱり",
+        "さっき",
+        "先ほど",
+        "午後便",
+        "午前便",
+        "明日便",
+    )
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _is_full_order_cancel(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message)
+    keywords = (
+        "全部キャンセル",
+        "全てキャンセル",
+        "すべてキャンセル",
+        "注文キャンセル",
+        "全部なし",
+        "全キャンセル",
+    )
+    return any(keyword in normalized for keyword in keywords)
 
 
 def _is_affirmative_reply(message: str) -> bool:

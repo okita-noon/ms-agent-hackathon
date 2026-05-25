@@ -276,6 +276,47 @@ export async function previewAgentResolution(
   return (await resp.json()) as AgentResolutionResponse;
 }
 
+export interface PhoneDebugRequest {
+  message: string;
+  caller_number?: string;
+  called_number?: string;
+  call_connection_id?: string;
+  disconnect?: boolean;
+}
+
+export interface PhoneDebugResponse {
+  call_connection_id: string;
+  status?: string;
+  order_id?: string | null;
+  response?: string;
+  session_status?: string;
+  demo_mode?: boolean;
+  error?: string;
+  disconnect?: Record<string, unknown>;
+}
+
+export async function phoneDebugSendMessage(
+  req: PhoneDebugRequest
+): Promise<PhoneDebugResponse> {
+  const resp = await authFetch(`${API_BASE}/api/phone-debug/message`, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function phoneDebugDisconnect(
+  callConnectionId: string
+): Promise<PhoneDebugResponse> {
+  const resp = await authFetch(`${API_BASE}/api/phone-debug/disconnect`, {
+    method: "POST",
+    body: JSON.stringify({ call_connection_id: callConnectionId }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 export async function updateCustomer(
   customerId: string,
   fields: Partial<Customer>

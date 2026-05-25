@@ -18,6 +18,7 @@
 | [Connector層・マルチテナント](connector-design.md) | Connector層・テナント別差し替え・マルチテナント設計 |
 | [データフロー](data-flow.md) | チャネル別データフロー・セッション管理・スケール戦略 |
 | [LINE会話履歴参照設計](line-conversation-memory.md) | LINEの直近会話履歴・確認待ちドラフトをAgentに渡す設計 |
+| [LINE受発注の分岐・会話テンプレート・要件整理](line-order-branching.md) | 飲食店と食品卸のLINE受発注で起こる主要分岐、会話例、システム要件の整理 |
 | [Agent動作設計・テスト戦略](agent-behavior-testing.md) | AI返信の揺れを許容しつつ、受注確定・要対応判断を守る設計とテスト |
 | [メールチャネル設計](email-channel-design.md) | Microsoft Graph によるメール受信・返信・セッション管理・実装タスク |
 | [デプロイ分割設計](deployment-split.md) | API・Frontend・Docsを分けたチーム開発向けCI/CD構成 |

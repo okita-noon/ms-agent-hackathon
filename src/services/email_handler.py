@@ -1,6 +1,6 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-24 16:54
+Updated: 2026-05-25 09:39
 """
 
 from __future__ import annotations
@@ -18,8 +18,14 @@ import httpx
 from src.agents.orchestrator import OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundAttachment, InboundMessage
+from src.models.message_history import MessageHistory
 from src.models.session import OrderSession
 from src.plugins.communication_plugin import CommunicationPlugin
+from src.services.message_history_logger import (
+    build_message_history_id,
+    get_message_history_repo,
+    save_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,29 @@ GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 EMAIL_SESSION_TIMEOUT_HOURS = 24
 EMAIL_DEDUP_TTL_SECONDS = 3600
+
+# セキュリティ: 添付ファイル制限
+ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+ATTACHMENT_BLOCKED_EXTENSIONS = frozenset(
+    {
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".pif",
+        ".vbs",
+        ".vbe",
+        ".js",
+        ".jse",
+        ".wsf",
+        ".wsh",
+        ".msi",
+        ".dll",
+        ".ps1",
+        ".psm1",
+    }
+)
 
 
 class _EmailBodyTextExtractor(HTMLParser):
@@ -180,26 +209,55 @@ class EmailIngestionService:
                 continue
             if re.match(r"^On .+wrote:$", line, flags=re.IGNORECASE):
                 break
-            if line in {"--", "___"}:
+            if re.match(r"^-{4,}\s*Original Message\s*-{4,}$", line, flags=re.IGNORECASE):
+                break
+            if re.match(r"^From:\s+.+@", line, flags=re.IGNORECASE):
+                break
+            if line in {"--", "___"} or re.match(r"^_{3,}$", line):
+                break
+            if re.match(r"^Sent from my (iPhone|iPad|Android|Galaxy|Samsung)", line, flags=re.IGNORECASE):
                 break
             if "CONFIDENTIAL" in line.upper():
+                break
+            if re.match(r"^This email is intended only for", line, flags=re.IGNORECASE):
+                break
+            if re.match(r"^This message (and any attachments|contains)", line, flags=re.IGNORECASE):
+                break
+            if re.match(r"^(DISCLAIMER|LEGAL NOTICE|NOTICE)\s*:", line, flags=re.IGNORECASE):
                 break
             lines.append(line)
 
         normalized = "\n".join(lines)
         return re.sub(r"\n{3,}", "\n\n", normalized).strip()
 
+    def _filter_attachments(self, raw_attachments: list[dict]) -> list[InboundAttachment]:
+        """添付ファイルをサイズ・拡張子でフィルタリングする"""
+        result: list[InboundAttachment] = []
+        for item in raw_attachments:
+            filename = item.get("filename", "")
+            size_bytes = item.get("size_bytes", 0)
+            ext = ("." + filename.rsplit(".", 1)[-1]).lower() if "." in filename else ""
+
+            if size_bytes > ATTACHMENT_MAX_SIZE_BYTES:
+                logger.warning("添付ファイルがサイズ上限超過: %s (%d bytes)", filename, size_bytes)
+                continue
+            if ext in ATTACHMENT_BLOCKED_EXTENSIONS:
+                logger.warning("添付ファイルがブロック対象拡張子: %s", filename)
+                continue
+
+            result.append(
+                InboundAttachment(
+                    filename=filename,
+                    content_type=item.get("content_type", "application/octet-stream"),
+                    size_bytes=size_bytes,
+                    blob_url=item.get("blob_url"),
+                )
+            )
+        return result
+
     async def to_inbound_message(self, raw_message: dict, tenant_id: str) -> InboundMessage:
         normalized_text = await self.normalize_body(raw_message.get("body", ""))
-        attachments = [
-            InboundAttachment(
-                filename=item.get("filename", ""),
-                content_type=item.get("content_type", "application/octet-stream"),
-                size_bytes=item.get("size_bytes", 0),
-                blob_url=item.get("blob_url"),
-            )
-            for item in raw_message.get("attachments", [])
-        ]
+        attachments = self._filter_attachments(raw_message.get("attachments", []))
         sender = raw_message.get("from", {}) or {}
         received_at_raw = raw_message.get("receivedDateTime")
         if isinstance(received_at_raw, str):
@@ -316,7 +374,40 @@ class EmailIngestionService:
                 reply_to_message_id=reply_to_message_id,
             )
 
+        history_repo = get_message_history_repo(self._ctx)
+        await save_message(
+            history_repo,
+            MessageHistory(
+                id=build_message_history_id("user", session.id, inbound.external_message_id),
+                tenant_id=self._ctx.tenant_id,
+                session_id=session.id,
+                channel="email",
+                channel_user_id=inbound.channel_user_id,
+                role="user",
+                text=inbound.text,
+                message_id=inbound.external_message_id,
+                created_at=inbound.received_at,
+                metadata={"subject": inbound.subject} if inbound.subject else {},
+            ),
+        )
+
         result = await self._orchestrator.process_email(inbound, session, reply_callback)
+
+        response_text = result.get("response")
+        if response_text:
+            await save_message(
+                history_repo,
+                MessageHistory(
+                    id=build_message_history_id("assistant", session.id, inbound.external_message_id),
+                    tenant_id=self._ctx.tenant_id,
+                    session_id=session.id,
+                    channel="email",
+                    channel_user_id=inbound.channel_user_id,
+                    role="assistant",
+                    text=response_text,
+                    metadata={"order_id": result.get("order_id")},
+                ),
+            )
 
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"

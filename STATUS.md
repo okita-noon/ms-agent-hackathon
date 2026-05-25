@@ -32,6 +32,7 @@
 - [x] FastAPI アプリ（REST API 10エンドポイント）
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
+- [x] 会話履歴を全チャネルで保存（`src/services/message_history_logger.py` で共通化）。従来 LINE のみだった `message-history` への保存を**メール・電話**にも拡張。メールは受注を会話セッションに紐付ける `session_id` も付与し、ダッシュボードの受注詳細でメール／電話のやり取りも表示可能に
 - [x] 受注ステータス分離（未処理 / 要対応 の自動判定）
 - [x] LINE返信ポリシー（会社名呼びかけ・汎用締め文の抑制、配達日/配達時間の確認）
 - [x] Dashboard Agent サービス（Exception Triage：Z-score 数量異常 / 単位異常 / 在庫不足 / 要対応）
@@ -49,6 +50,8 @@
 - [x] メールデモモードの顧客名フォールバック修正（`InboundMessage.customer_name` 追加。Intake Agentに顧客情報を直接渡し、未登録メールでも「None様」ではなくフォールバック顧客名を表示）
 - [x] テナント会社名を「AINOKハッカソン食品株式会社」に統一（テナント設定・Agent定義・メール署名設定）
 - [x] デモ用顧客 C-011（株式会社Zennハッカソン）追加。未登録メールのデフォルトフォールバック先
+- [x] LINE 返信テンプレート基盤（`_templates/line/` + `line_template_renderer.py`）を追加。LINE では受注Noを表示せず、定型返信を優先
+- [x] LINE の現在注文コンテキスト（`current_order_id` / `current_order_snapshot`）をセッションとオーケストレータに追加。1顧客1オープン注文前提で追加・変更・取消へ寄せる
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）

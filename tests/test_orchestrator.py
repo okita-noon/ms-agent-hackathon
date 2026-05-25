@@ -493,6 +493,50 @@ class TestProcessOrderMessageSendsOnce:
             assert result["order_id"] == "ORD-OK"
             assert mock_send.call_count == 1
             assert saved_orders[0].session_id == "sess-confirm"
+            assert "受注No:" not in result["response"]
+
+    @pytest.mark.asyncio
+    async def test_full_cancel_updates_current_order_without_agent_call(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.update_status = AsyncMock()
+        current_order = Order(
+            uid="ORD-CURRENT",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="テスト社",
+            order_date=date.today(),
+            delivery_date=date.today(),
+            source=OrderSource.LINE,
+            status=OrderStatus.ACCEPTED,
+            items=[
+                OrderItem(
+                    product_id="P-001",
+                    product_name="りんご",
+                    quantity=1,
+                    unit="箱",
+                    temperature_zone=TemperatureZone.CHILLED,
+                )
+            ],
+        )
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="全部キャンセルでお願いします",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                current_order=current_order,
+            )
+
+            order_repo.update_status.assert_awaited_once_with("T-TEST", "ORD-CURRENT", OrderStatus.CANCELLED)
+            mock_invoke.assert_not_called()
+            mock_send.assert_awaited_once()
+            assert result["current_order_cleared"] is True
+            assert "受注No:" not in result["response"]
 
     @pytest.mark.asyncio
     async def test_inventory_shortage_saves_review_order_not_confirmed_order(self, mock_tenant_ctx):

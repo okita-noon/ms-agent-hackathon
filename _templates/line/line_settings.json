@@ -1,0 +1,66 @@
+{
+  "channel": "line",
+  "include_order_id": true,
+  "templates": {
+    "order_confirm": {
+      "file": "order_confirm.txt",
+      "variables": ["order_items", "delivery_estimate_line"],
+      "branch": "B-01"
+    },
+    "order_update_confirm": {
+      "file": "order_update_confirm.txt",
+      "variables": ["order_items", "delivery_estimate_line"],
+      "branch": "B-02/B-03"
+    },
+    "order_add_confirm": {
+      "file": "order_add_confirm.txt",
+      "variables": ["order_items", "delivery_estimate_line"],
+      "branch": "B-02"
+    },
+    "order_change_confirm": {
+      "file": "order_change_confirm.txt",
+      "variables": ["order_items", "delivery_estimate_line"],
+      "branch": "B-03"
+    },
+    "order_partial_cancel_confirm": {
+      "file": "order_partial_cancel_confirm.txt",
+      "variables": ["order_items"],
+      "branch": "B-04"
+    },
+    "order_full_cancel_confirm": {
+      "file": "order_full_cancel_confirm.txt",
+      "variables": [],
+      "branch": "B-05"
+    },
+    "order_change_clarify": {
+      "file": "order_change_clarify.txt",
+      "variables": ["body"],
+      "branch": "B-07"
+    },
+    "order_no_current_order": {
+      "file": "order_no_current_order.txt",
+      "variables": [],
+      "branch": "B-11"
+    },
+    "order_locked_need_review": {
+      "file": "order_locked_need_review.txt",
+      "variables": [],
+      "branch": "B-10"
+    },
+    "stock_alternative": {
+      "file": "stock_alternative.txt",
+      "variables": ["product_name", "alternative_name"],
+      "branch": "B-08"
+    },
+    "stock_partial_fulfillment": {
+      "file": "stock_partial_fulfillment.txt",
+      "variables": ["product_name", "available_quantity", "shortage_quantity", "next_delivery_date"],
+      "branch": "B-09"
+    },
+    "trouble_ack": {
+      "file": "trouble_ack.txt",
+      "variables": [],
+      "branch": "B-12"
+    }
+  }
+}

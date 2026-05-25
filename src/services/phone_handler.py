@@ -13,9 +13,15 @@ from azure.communication.callautomation import (
 )
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
+from src.models.message_history import MessageHistory
 from src.models.order import OrderSource
 from src.models.session import OrderSession
 from src.services.channel_locks import get_channel_user_lock
+from src.services.message_history_logger import (
+    build_message_history_id,
+    get_message_history_repo,
+    save_message,
+)
 from src.services.tenant_resolver import resolve_tenant_for_phone
 
 logger = logging.getLogger(__name__)
@@ -243,6 +249,7 @@ class PhoneCallHandler:
 
         session = await self._ensure_session(state)
         state.session = session
+        await self._save_call_message(state, "user", transcribed_text)
 
         orchestrator = OrderOrchestrator(
             tenant_ctx=state.tenant_ctx,
@@ -286,6 +293,7 @@ class PhoneCallHandler:
                     )
                 )
             await self._play_tts(state, PHONE_SYNC_FALLBACK_MESSAGE)
+            await self._save_call_message(state, "assistant", PHONE_SYNC_FALLBACK_MESSAGE)
             state.order_confirmed = True
             return {
                 "call_connection_id": call_connection_id,
@@ -294,7 +302,9 @@ class PhoneCallHandler:
             }
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)
-            await self._play_tts(state, "ご注文を受け付けました。担当者が確認いたします。")
+            fallback_message = "ご注文を受け付けました。担当者が確認いたします。"
+            await self._play_tts(state, fallback_message)
+            await self._save_call_message(state, "assistant", fallback_message)
             state.order_confirmed = True
             return {"call_connection_id": call_connection_id, "error": "agent_failed"}
 
@@ -312,6 +322,7 @@ class PhoneCallHandler:
         response_text = result.get("response", "")
         if response_text:
             await self._play_tts(state, response_text)
+            await self._save_call_message(state, "assistant", response_text)
 
         return {
             "call_connection_id": call_connection_id,
@@ -516,6 +527,24 @@ class PhoneCallHandler:
             logger.info("Hung up call %s", state.call_connection_id)
         except Exception:
             logger.exception("Failed to hang up call %s", state.call_connection_id)
+
+    async def _save_call_message(self, state: CallState, role: str, text: str) -> None:
+        session = state.session
+        if not session or not text:
+            return
+        history_repo = get_message_history_repo(state.tenant_ctx)
+        await save_message(
+            history_repo,
+            MessageHistory(
+                id=build_message_history_id(role, session.id, f"{state.call_connection_id}-{state.turn_count}"),
+                tenant_id=state.tenant_ctx.tenant_id,
+                session_id=session.id,
+                channel="phone",
+                channel_user_id=state.caller_number,
+                role=role,
+                text=text,
+            ),
+        )
 
     async def _ensure_session(self, state: CallState) -> OrderSession:
         session_repo = state.tenant_ctx.get_connector("ISessionRepository")

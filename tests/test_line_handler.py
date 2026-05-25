@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
 import time
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
+from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.services.line_handler import LineWebhookHandler, _EventDedup
 
 
@@ -248,6 +250,50 @@ class TestProcessMessage:
                 "customer_id": "C-001",
                 "items": [],
             }
+
+    @pytest.mark.asyncio
+    async def test_passes_current_order_to_orchestrator_and_persists_snapshot(self, mock_tenant_ctx, sample_customer):
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.find_by_line_user_id.return_value = sample_customer
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        current_order = Order(
+            uid="ORD-CURRENT",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="株式会社テスト",
+            order_date=date.today(),
+            delivery_date=None,
+            source=OrderSource.LINE,
+            status=OrderStatus.ACCEPTED,
+            items=[
+                OrderItem(
+                    product_id="P-001",
+                    product_name="りんご",
+                    quantity=2,
+                    unit="箱",
+                    temperature_zone=TemperatureZone.CHILLED,
+                )
+            ],
+        )
+        order_repo.list_by_customer.return_value = [current_order]
+
+        handler = LineWebhookHandler(
+            tenant_ctx=mock_tenant_ctx,
+            azure_openai_endpoint="https://test.openai.azure.com/",
+            azure_openai_key="test-key",
+        )
+
+        with patch.object(handler, "_orchestrator") as mock_orch:
+            mock_orch.process_order_message = AsyncMock(return_value={"response": "確認しました"})
+            await handler._process_message("U123", "白菜を追加で", "token-1")
+
+            _, kwargs = mock_orch.process_order_message.call_args
+            assert kwargs["current_order"].id == "ORD-CURRENT"
+            updated_session = session_repo.create_session.call_args.args[0]
+            assert updated_session.current_order_id == "ORD-CURRENT"
 
     @pytest.mark.asyncio
     async def test_history_failure_does_not_block_reply(self, mock_tenant_ctx):
