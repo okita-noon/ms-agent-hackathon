@@ -15,7 +15,6 @@ const Login = lazy(() => import("./pages/Login"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Customers = lazy(() => import("./pages/Customers"));
 const Inventory = lazy(() => import("./pages/Inventory"));
-const Analytics = lazy(() => import("./pages/Analytics"));
 const WebPhone = lazy(() => import("./pages/WebPhone"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
@@ -49,18 +48,8 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    to: "/analytics",
-    label: "分析",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-      </svg>
-    ),
-  },
-  {
     to: "/web-phone",
-    label: "Web電話",
+    label: "電話発注",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -139,7 +128,6 @@ function DashboardLayout() {
                 <Route path="orders" element={<Orders />} />
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="customers" element={<Customers />} />
-                <Route path="analytics" element={<Analytics />} />
                 <Route path="web-phone" element={<WebPhone />} />
                 <Route path="*" element={<Navigate to="/orders" replace />} />
               </Routes>

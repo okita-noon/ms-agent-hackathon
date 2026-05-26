@@ -15,7 +15,7 @@ from string import Template
 from src.connectors.context import TenantContext
 from src.models.customer import Customer
 from src.models.product import Product
-from src.utils.business_date import JST, now_jst, today_jst
+from src.utils.business_date import now_jst, today_jst
 
 logger = logging.getLogger(__name__)
 

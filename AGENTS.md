@@ -117,10 +117,10 @@
 | POST | `/api/email-webhook` | Microsoft Graph Change Notifications受信（メールチャネル） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | POST | `/api/phone-demo/message` | 電話番号取得前のデモ用。音声認識済みテキストを電話チャネルとして受注処理（EventGrid共有鍵必須） |
-| GET | `/api/speech-token` | Azure Speech SDK用の短寿命認証トークン発行（JWT認証） |
-| POST | `/api/web-phone/greeting` | Web電話：通話開始・挨拶TTS音声返却（JWT認証） |
-| POST | `/api/web-phone/message` | Web電話：テキストを電話チャネルとして注入、`with_audio=true`でTTS音声付き（JWT認証） |
-| POST | `/api/web-phone/disconnect` | Web電話：通話切断（JWT認証） |
+| GET | `/api/speech-token` | Azure Speech SDK用の短寿命認証トークン発行（Cookie認証） |
+| POST | `/api/web-phone/greeting` | 電話発注（Web）：通話開始・挨拶TTS音声返却。`customer_id` で顧客指定可（Cookie認証） |
+| POST | `/api/web-phone/message` | 電話発注（Web）：テキストを電話チャネルとして注入、`customer_id` / `with_audio=true` 対応（Cookie認証） |
+| POST | `/api/web-phone/disconnect` | 電話発注（Web）：通話切断（Cookie認証） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/events` | 受注更新の Server-Sent Events（Cookie認証） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |

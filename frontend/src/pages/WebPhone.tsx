@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import {
   fetchSpeechToken,
+  fetchCustomers,
   webPhoneGreeting,
   webPhoneSendMessage,
   webPhoneDisconnect,
+  type Customer,
   type WebPhoneResponse,
 } from "../lib/api";
 
@@ -37,8 +39,8 @@ function playBase64Audio(base64: string): Promise<void> {
 type CallPhase = "idle" | "starting" | "connected" | "listening" | "processing";
 
 export default function WebPhone() {
-  const [callerNumber, setCallerNumber] = useState(DEFAULT_CALLER);
-  const [calledNumber, setCalledNumber] = useState(DEFAULT_CALLED);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [callConnectionId, setCallConnectionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -46,7 +48,6 @@ export default function WebPhone() {
   const [expandedRaw, setExpandedRaw] = useState<number | null>(null);
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [interimText, setInterimText] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -56,6 +57,17 @@ export default function WebPhone() {
 
   const isActive = callConnectionId !== null;
   const loading = phase === "starting" || phase === "processing";
+
+  useEffect(() => {
+    fetchCustomers()
+      .then((list) => {
+        setCustomers(list);
+        if (list.length > 0 && !selectedCustomerId) {
+          setSelectedCustomerId(list[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,8 +91,9 @@ export default function WebPhone() {
     setError(null);
     try {
       const res = await webPhoneGreeting({
-        caller_number: callerNumber,
-        called_number: calledNumber,
+        caller_number: DEFAULT_CALLER,
+        called_number: DEFAULT_CALLED,
+        customer_id: selectedCustomerId,
       });
       setCallConnectionId(res.call_connection_id);
       addSystemTurn(`通話開始 — Call ID: ${res.call_connection_id}`);
@@ -176,10 +189,11 @@ export default function WebPhone() {
     try {
       const res = await webPhoneSendMessage({
         message: messageText.trim(),
-        caller_number: callerNumber,
-        called_number: calledNumber,
+        caller_number: DEFAULT_CALLER,
+        called_number: DEFAULT_CALLED,
         call_connection_id: callConnectionId ?? undefined,
         with_audio: true,
+        customer_id: selectedCustomerId,
       });
       await processResponse(res);
     } catch (e) {
@@ -235,10 +249,11 @@ export default function WebPhone() {
           try {
             const res = await webPhoneSendMessage({
               message: text,
-              caller_number: callerNumber,
-              called_number: calledNumber,
+              caller_number: DEFAULT_CALLER,
+              called_number: DEFAULT_CALLED,
               call_connection_id: callConnectionId ?? undefined,
               with_audio: true,
+              customer_id: selectedCustomerId,
             });
             await processResponse(res);
           } catch (e) {
@@ -259,7 +274,7 @@ export default function WebPhone() {
       setError(`マイク初期化エラー: ${msg}`);
       setPhase("connected");
     }
-  }, [phase, callerNumber, calledNumber, callConnectionId, ensureSpeechToken, processResponse]);
+  }, [phase, callConnectionId, selectedCustomerId, ensureSpeechToken, processResponse]);
 
   const stopListening = useCallback(() => {
     if (recognizerRef.current) {
@@ -298,56 +313,41 @@ export default function WebPhone() {
             <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
             </svg>
-            Web 電話
+            電話発注（Web）
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Azure Speech Services による音声発注デモ
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings((v) => !v)}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            設定
-          </button>
-        </div>
+        <button
+          onClick={handleReset}
+          disabled={loading}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          リセット
+        </button>
       </div>
 
-      {/* Settings panel */}
-      {showSettings && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-40">
-              <label className="block text-xs font-medium text-gray-600 mb-1">発信者番号（顧客）</label>
-              <input
-                type="text"
-                value={callerNumber}
-                onChange={(e) => setCallerNumber(e.target.value)}
-                disabled={isActive}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 font-mono disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-            <div className="flex-1 min-w-40">
-              <label className="block text-xs font-medium text-gray-600 mb-1">着信番号（自社）</label>
-              <input
-                type="text"
-                value={calledNumber}
-                onChange={(e) => setCalledNumber(e.target.value)}
-                disabled={isActive}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 font-mono disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-            <button
-              onClick={handleReset}
-              disabled={loading}
-              className="px-4 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+      {/* Customer selector */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex-1 min-w-60">
+            <label className="block text-xs font-medium text-gray-600 mb-1">顧客</label>
+            <select
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+              disabled={isActive}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              リセット
-            </button>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.short_name || c.name}（{c.id}）
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Status bar */}
       <div className="mb-3 flex items-center gap-3 text-xs">
@@ -369,6 +369,14 @@ export default function WebPhone() {
             読み上げ中
           </span>
         )}
+        {selectedCustomerId && (() => {
+          const c = customers.find((x) => x.id === selectedCustomerId);
+          return c ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+              {c.short_name || c.name}
+            </span>
+          ) : null;
+        })()}
         {callConnectionId && (
           <span className="text-gray-400 font-mono truncate max-w-xs">ID: {callConnectionId}</span>
         )}

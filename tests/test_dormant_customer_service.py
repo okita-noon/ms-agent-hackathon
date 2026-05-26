@@ -16,7 +16,6 @@ from src.models.order import Order, OrderSource, OrderStatus, TemperatureZone
 from src.models.product import Product, UnitType
 from src.services.dormant_customer_service import (
     DORMANT_THRESHOLD_DAYS,
-    JST,
     MAX_DAILY_SENDS,
     SEND_HOUR_END,
     SEND_HOUR_START,
@@ -24,6 +23,7 @@ from src.services.dormant_customer_service import (
     is_send_allowed,
     render_message,
 )
+from src.utils.business_date import JST
 
 
 def _make_customer(
