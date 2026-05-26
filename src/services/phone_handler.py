@@ -60,6 +60,7 @@ class CallState:
     last_order_id: str | None = None
     transcript_parts: list[str] = field(default_factory=list)
     audio_enabled: bool = True
+    known_customer_id: str | None = None
 
 
 class PhoneCallHandler:
@@ -119,6 +120,7 @@ class PhoneCallHandler:
         self,
         caller_number: str,
         called_number: str,
+        customer_id: str | None = None,
     ) -> str:
         """Initialise a demo CallState and return its call_connection_id."""
         call_id = f"demo-{caller_number[-8:] or 'anonymous'}"
@@ -130,6 +132,7 @@ class PhoneCallHandler:
                 called_number=called_number,
                 tenant_ctx=resolve_tenant_for_phone(called_number),
                 audio_enabled=False,
+                known_customer_id=customer_id,
             )
         return call_id
 
@@ -139,6 +142,7 @@ class PhoneCallHandler:
         caller_number: str,
         called_number: str,
         call_connection_id: str | None = None,
+        customer_id: str | None = None,
     ) -> dict:
         """Process a text turn as if it were a phone speech recognition result.
 
@@ -156,6 +160,7 @@ class PhoneCallHandler:
                 called_number=called_number,
                 tenant_ctx=resolve_tenant_for_phone(called_number),
                 audio_enabled=False,
+                known_customer_id=customer_id,
             )
             self._calls[call_id] = state
 
@@ -276,6 +281,8 @@ class PhoneCallHandler:
             deployment_name=self._openai_deployment_name,
         )
 
+        known_customer_name = await self._resolve_customer_name(state)
+
         try:
             if self._phone_sync_ai_enabled:
                 result = await asyncio.wait_for(
@@ -283,6 +290,8 @@ class PhoneCallHandler:
                         message=transcribed_text,
                         caller_number=state.caller_number,
                         pending_order_draft=session.pending_order_draft if session else None,
+                        known_customer_id=state.known_customer_id,
+                        known_customer_name=known_customer_name,
                     ),
                     timeout=self._phone_sync_ai_timeout_seconds,
                 )
@@ -371,6 +380,8 @@ class PhoneCallHandler:
             response_callback=capture_response,
             pending_order_draft=session.pending_order_draft,
             session_id=session.id,
+            known_customer_id=state.known_customer_id,
+            known_customer_name=await self._resolve_customer_name(state),
         )
         if response_text_holder and not result.get("response"):
             result["response"] = response_text_holder[0]
@@ -401,6 +412,8 @@ class PhoneCallHandler:
                 response_callback=ignore_customer_response,
                 pending_order_draft=pending_order_draft,
                 session_id=state.session.id if state.session else None,
+                known_customer_id=state.known_customer_id,
+                known_customer_name=await self._resolve_customer_name(state),
             )
             if result.get("order_id"):
                 state.last_order_id = result["order_id"]
@@ -411,6 +424,17 @@ class PhoneCallHandler:
             )
         except Exception:
             logger.exception("Background phone validation failed for call %s", state.call_connection_id)
+
+    async def _resolve_customer_name(self, state: CallState) -> str | None:
+        if not state.known_customer_id:
+            return None
+        try:
+            repo = state.tenant_ctx.get_connector("ICustomerRepository")
+            customer = await repo.get_by_id(state.tenant_ctx.tenant_id, state.known_customer_id)
+            return customer.name if customer else None
+        except Exception:
+            logger.warning("Failed to resolve customer name for %s", state.known_customer_id)
+            return None
 
     async def _handle_recognize_failed(self, event: dict) -> dict | None:
         data = event.get("data", {})

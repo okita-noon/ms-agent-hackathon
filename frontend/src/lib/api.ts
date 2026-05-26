@@ -296,6 +296,7 @@ export interface WebPhoneRequest {
   call_connection_id?: string;
   disconnect?: boolean;
   with_audio?: boolean;
+  customer_id?: string;
 }
 
 export interface WebPhoneResponse {
@@ -325,6 +326,7 @@ export async function fetchSpeechToken(): Promise<{ token: string; region: strin
 export async function webPhoneGreeting(req: {
   caller_number?: string;
   called_number?: string;
+  customer_id?: string;
 }): Promise<WebPhoneGreetingResponse> {
   const resp = await authFetch(`${API_BASE}/api/web-phone/greeting`, {
     method: "POST",

@@ -82,6 +82,38 @@ Phone Order Agent による同期応答、在庫確認、非同期の Orchestrat
 `IInventoryService.check` だけを実行して回答する。数量指定がある場合は必要数量に足りるかを答え、
 数量指定がない場合は現在の有効在庫数を返す。
 
+### 電話発注（Web）— ブラウザベースの電話チャネルデモ
+
+ダッシュボードの「電話発注」ページ（`/web-phone`）は、実際のACS電話番号を使わずにブラウザ上で電話発注フローを再現するデモ機能である。
+
+```
+ダッシュボード（ブラウザ）
+    → Azure Speech SDK (STT): マイク音声をリアルタイム文字起こし
+    → POST /api/web-phone/message（JWT認証、テキスト + customer_id）
+    → PhoneCallHandler.process_demo_message()
+       ├─ CallState を生成（caller_number はダミー固定値）
+       ├─ known_customer_id が指定されていれば ICustomerRepository で顧客名を解決
+       ├─ Phone Order Agent + IInventoryService.check（同期在庫確認）
+       └─ 非同期で Orchestrator Agent（正式検証・登録・学習）
+    → TTS音声（Base64）をレスポンスに含めてブラウザで再生
+    → Azure Speech REST API (TTS): ja-JP-NanamiNeural
+```
+
+**実際の電話チャネルとの違い**
+
+| 観点 | 実電話（`/api/phone-webhook`） | 電話発注 Web（`/api/web-phone/*`） |
+|---|---|---|
+| 音声入出力 | ACS Call Automation + Azure Speech | ブラウザ Speech SDK (STT) + REST API (TTS) |
+| 認証 | EventGrid 共有鍵 | JWT（ダッシュボードログイン） |
+| 顧客特定 | 発信者電話番号で自動判定 | UIドロップダウンで明示選択（`customer_id`） |
+| セッション管理 | 同一（`PhoneCallHandler` の `CallState`） | 同一 |
+| Agent処理 | 同一（`Phone Order Agent` → `Orchestrator`） | 同一 |
+| 在庫確認 | 同一（`IInventoryService.check`） | 同一 |
+| 受注保存 | 同一（Cosmos DB） | 同一 |
+| Learning Service | 同一（非同期パターン学習） | 同一 |
+
+技術的には音声の入出力経路だけが異なり、Agent処理・在庫確認・受注保存・学習の全フローは実際の電話チャネルと共通のコードパスを通る。ACS電話番号を取得すれば、`/api/phone-webhook` に切り替えるだけで本番電話受注が稼働する。
+
 ## LINE会話セッション管理
 
 確認質問→顧客返信の会話継続と、現在注文への更新依頼を扱うためにセッション管理が必要。

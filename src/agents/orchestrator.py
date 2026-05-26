@@ -445,18 +445,24 @@ class OrderOrchestrator:
         caller_number: str,
         conversation_history: list[MessageHistory] | None = None,
         pending_order_draft: dict | None = None,
+        known_customer_id: str | None = None,
+        known_customer_name: str | None = None,
     ) -> dict:
         """電話中の同期応答用: 1 Agentで注文抽出し、在庫はコードで確認する."""
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
+        customer_ctx = ""
+        if known_customer_id and known_customer_name:
+            customer_ctx = f"顧客は特定済みです（customer_id={known_customer_id}, 名前={known_customer_name}）。\n"
         if pending_order_draft:
             prompt = (
                 "以下は電話での確認質問への回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
                 f"電話番号: {caller_number}\n"
+                f"{customer_ctx}"
                 f"{memory_ctx}"
                 f"顧客の回答: {message}\n"
             )
         else:
-            prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{memory_ctx}発話内容: {message}\n"
+            prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{customer_ctx}{memory_ctx}発話内容: {message}\n"
 
         phone_agent = self._make_phone_order_agent()
         intake_text = await self._invoke_agent(phone_agent, prompt)

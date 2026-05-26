@@ -593,11 +593,13 @@ class PhoneDemoMessageRequest(BaseModel):
     call_connection_id: str | None = None
     disconnect: bool = False
     with_audio: bool = False
+    customer_id: str | None = None
 
 
 class WebPhoneGreetingRequest(BaseModel):
     caller_number: str = "+81312345678"
     called_number: str = "+81501234567"
+    customer_id: str | None = None
 
 
 def _get_phone_handler() -> Any:
@@ -686,6 +688,7 @@ async def phone_demo_message(
         caller_number=payload.caller_number,
         called_number=payload.called_number,
         call_connection_id=payload.call_connection_id,
+        customer_id=payload.customer_id,
     )
     if payload.disconnect:
         disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
@@ -737,6 +740,7 @@ async def web_phone_greeting(
     call_connection_id = handler.init_demo_call(
         caller_number=payload.caller_number,
         called_number=payload.called_number,
+        customer_id=payload.customer_id,
     )
 
     try:
@@ -766,6 +770,7 @@ async def web_phone_message(
         caller_number=payload.caller_number,
         called_number=payload.called_number,
         call_connection_id=payload.call_connection_id,
+        customer_id=payload.customer_id,
     )
     if payload.disconnect:
         disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
