@@ -59,7 +59,14 @@ export default function WebPhone() {
   const loading = phase === "starting" || phase === "processing";
 
   useEffect(() => {
-    fetchCustomers().then(setCustomers).catch(() => {});
+    fetchCustomers()
+      .then((list) => {
+        setCustomers(list);
+        if (list.length > 0 && !selectedCustomerId) {
+          setSelectedCustomerId(list[0].id);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -86,7 +93,7 @@ export default function WebPhone() {
       const res = await webPhoneGreeting({
         caller_number: DEFAULT_CALLER,
         called_number: DEFAULT_CALLED,
-        customer_id: selectedCustomerId || undefined,
+        customer_id: selectedCustomerId,
       });
       setCallConnectionId(res.call_connection_id);
       addSystemTurn(`通話開始 — Call ID: ${res.call_connection_id}`);
@@ -186,7 +193,7 @@ export default function WebPhone() {
         called_number: DEFAULT_CALLED,
         call_connection_id: callConnectionId ?? undefined,
         with_audio: true,
-        customer_id: selectedCustomerId || undefined,
+        customer_id: selectedCustomerId,
       });
       await processResponse(res);
     } catch (e) {
@@ -246,7 +253,7 @@ export default function WebPhone() {
               called_number: DEFAULT_CALLED,
               call_connection_id: callConnectionId ?? undefined,
               with_audio: true,
-              customer_id: selectedCustomerId || undefined,
+              customer_id: selectedCustomerId,
             });
             await processResponse(res);
           } catch (e) {
@@ -332,7 +339,6 @@ export default function WebPhone() {
               disabled={isActive}
               className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              <option value="">未指定（自動判定）</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.short_name || c.name}（{c.id}）
