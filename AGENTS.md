@@ -93,6 +93,8 @@
 | `JWT_SECRET_KEY` | ✅ | JWT 署名鍵。`secrets.token_urlsafe(48)` で生成 |
 | `JWT_ISSUER` | 任意 | デフォルト `orderai-api` |
 | `JWT_AUDIENCE` | 任意 | デフォルト `orderai-dashboard` |
+| `AUTH_COOKIE_SECURE` | 任意 | 認証 Cookie の `Secure` 属性。既定 `true`（ローカルHTTP検証時のみ `false`） |
+| `AUTH_COOKIE_SAMESITE` | 任意 | 認証 Cookie の `SameSite` 属性。静的サイト/API別ドメイン運用のため既定 `none` |
 | `AZURE_AD_ALLOWED_TENANTS` | SSO 使用時必須 | Microsoft Entra `tid` のカンマ区切り allowlist。未設定だと全 SSO ログイン拒否 |
 | `AZURE_AD_ALLOWED_DOMAINS` | 任意 | email/UPN ドメインの追加 allowlist（小文字） |
 | `ENTRA_CLIENT_ID` | SSO 使用時必須 | Entra アプリ登録のクライアント ID |
@@ -107,8 +109,9 @@
 |---|---|---|
 | GET | `/` | ダッシュボードへリダイレクト |
 | GET | `/api/health` | ヘルスチェック |
-| POST | `/api/auth/login` | ID/パスワード認証（JWT発行） |
-| POST | `/api/auth/microsoft` | Microsoft SSO認証（JWT発行） |
+| POST | `/api/auth/login` | ID/パスワード認証（HttpOnly CookieでJWT発行） |
+| POST | `/api/auth/microsoft` | Microsoft SSO認証（HttpOnly CookieでJWT発行） |
+| POST | `/api/auth/logout` | 認証 Cookie を削除 |
 | GET | `/api/auth/me` | 認証ユーザー情報取得 |
 | POST | `/api/line-webhook` | LINE Webhook受信（署名検証付き） |
 | POST | `/api/email-webhook` | Microsoft Graph Change Notifications受信（メールチャネル） |
@@ -119,6 +122,7 @@
 | POST | `/api/web-phone/message` | Web電話：テキストを電話チャネルとして注入、`with_audio=true`でTTS音声付き（JWT認証） |
 | POST | `/api/web-phone/disconnect` | Web電話：通話切断（JWT認証） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
+| GET | `/api/orders/events` | 受注更新の Server-Sent Events（Cookie認証） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |
 | GET | `/api/products?tenant_id=T-001` | 商品マスタ一覧 |
 | GET | `/api/inventory?tenant_id=T-001` | 在庫一覧（全品目） |

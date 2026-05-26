@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from src.auth.dependencies import get_current_user, get_tenant_id
 from src.auth.endpoints import auth_router
@@ -63,6 +64,11 @@ class TestJWT:
 
 
 class TestDependencies:
+    @staticmethod
+    def _make_request(method: str = "GET") -> Request:
+        scope = {"type": "http", "method": method, "headers": []}
+        return Request(scope)
+
     @pytest.mark.asyncio
     async def test_get_current_user_with_valid_token(self):
         user = UserInDB(
@@ -77,7 +83,7 @@ class TestDependencies:
         from fastapi.security import HTTPAuthorizationCredentials
 
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-        result = await get_current_user(creds)
+        result = await get_current_user(self._make_request(), creds, None)
         assert result.user_id == "U-001"
         assert result.tenant_id == "T-001"
 
@@ -86,7 +92,7 @@ class TestDependencies:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(None)
+            await get_current_user(self._make_request(), None, None)
         assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
@@ -96,7 +102,7 @@ class TestDependencies:
 
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad")
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(creds)
+            await get_current_user(self._make_request(), creds, None)
         assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio

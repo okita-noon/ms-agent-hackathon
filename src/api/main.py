@@ -21,12 +21,14 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.responses import HTMLResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.api.dashboard_agent import router as dashboard_agent_router
 from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
+from src.services.dashboard_events import dashboard_event_broker
 from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_email, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
@@ -809,6 +811,19 @@ async def list_orders(
     }
 
 
+@app.get("/api/orders/events")
+async def stream_order_events(tenant_id: str = Depends(get_tenant_id)):
+    return StreamingResponse(
+        dashboard_event_broker.subscribe(tenant_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get("/api/orders/{order_id}")
 async def get_order(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
@@ -842,6 +857,16 @@ async def update_order_memo(
         )
     memo = (payload.memo or "").strip() or None
     updated = await repo.update_memo(tenant_id, order_id, memo)
+    await dashboard_event_broker.publish(
+        "order_updated",
+        tenant_id,
+        {
+            "order_id": updated.id,
+            "reason": "memo_updated",
+            "delivery_date": updated.delivery_date.isoformat() if updated.delivery_date else None,
+            "order_date": updated.order_date.isoformat(),
+        },
+    )
     return updated.model_dump(mode="json")
 
 

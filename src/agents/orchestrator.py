@@ -34,6 +34,7 @@ from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
 from src.plugins.intake_plugin import IntakePlugin
 from src.plugins.inventory_plugin import InventoryPlugin
+from src.services.dashboard_events import dashboard_event_broker
 from src.services.line_template_renderer import (
     build_delivery_estimate_line,
     format_line_order_items,
@@ -329,6 +330,19 @@ class OrderOrchestrator:
                 if current_order_editable:
                     repo = self._ctx.get_connector("IOrderRepository")
                     await repo.update_status(self._ctx.tenant_id, current_order.id, OrderStatus.CANCELLED)
+                    await dashboard_event_broker.publish(
+                        "order_updated",
+                        self._ctx.tenant_id,
+                        {
+                            "order_id": current_order.id,
+                            "status": OrderStatus.CANCELLED.value,
+                            "reason": "status_updated",
+                            "delivery_date": current_order.delivery_date.isoformat()
+                            if current_order.delivery_date
+                            else None,
+                            "order_date": current_order.order_date.isoformat(),
+                        },
+                    )
                     response_text = _build_line_from_template("order_full_cancel_confirm.txt")
                     result.update(
                         {
@@ -1253,8 +1267,22 @@ class OrderOrchestrator:
             )
 
         repo = self._ctx.get_connector("IOrderRepository")
+        is_existing_order = existing_order is not None
         order_id = await repo.save(order)
         order.id = order_id
+        await dashboard_event_broker.publish(
+            "order_updated" if is_existing_order else "order_created",
+            self._ctx.tenant_id,
+            {
+                "order_id": order.id,
+                "customer_id": order.customer_id,
+                "customer_name": order.customer_name,
+                "source": order.source.value,
+                "status": order.status.value,
+                "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+                "order_date": order.order_date.isoformat(),
+            },
+        )
         return order
 
     async def _run_learning(self, order: Order, original_message: str) -> None:

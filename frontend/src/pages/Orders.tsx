@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
+  createOrderEventSource,
   fetchAgentExceptions,
   fetchAgentFeatures,
   fetchOrders,
   type AgentExceptionCase,
   type AgentFeatures,
   type Order,
+  type OrderEventPayload,
 } from "../lib/api";
 import { getDemoOrders } from "../lib/demo";
 import { ACCEPTED_ORDER_STATUSES, normalizeStatus } from "../lib/constants";
@@ -44,6 +46,11 @@ function formatTime(value?: string): string {
   return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
 }
 
+function formatClock(value: Date | null): string {
+  if (!value) return "--:--";
+  return value.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
+}
+
 export default function Orders() {
   const [date, setDate] = useState(() => today());
   const [dateField, setDateField] = useState<DateField>("delivery_date");
@@ -59,6 +66,9 @@ export default function Orders() {
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentPanelVisible, setAgentPanelVisible] = useState(true);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
   const agentPanelOpen = triageAvailable && agentPanelVisible;
@@ -76,6 +86,7 @@ export default function Orders() {
       });
       setOrders(resp.orders);
       setTotalOrders(resp.total);
+      setLastUpdatedAt(new Date());
     } catch {
       const demoOrders = getDemoOrders().filter((order) => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -89,6 +100,7 @@ export default function Orders() {
       });
       setOrders(demoOrders.slice(offset, offset + PAGE_SIZE));
       setTotalOrders(demoOrders.length);
+      setLastUpdatedAt(new Date());
     } finally {
       setLoading(false);
     }
@@ -131,6 +143,48 @@ export default function Orders() {
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
   }, [loadAgentExceptions]);
+
+  useEffect(() => {
+    const events = createOrderEventSource();
+    setLiveStatus("connecting");
+
+    function handleConnected() {
+      setLiveStatus("live");
+    }
+
+    function handleOrderEvent(event: MessageEvent<string>) {
+      setLiveStatus("live");
+      const payload = JSON.parse(event.data || "{}") as OrderEventPayload;
+      const eventDate = dateField === "order_date" ? payload.order_date : payload.delivery_date;
+      if (eventDate && eventDate !== date) return;
+
+      if (payload.order_id) {
+        setRecentOrderIds((current) => new Set(current).add(payload.order_id || ""));
+        window.setTimeout(() => {
+          setRecentOrderIds((current) => {
+            const next = new Set(current);
+            next.delete(payload.order_id || "");
+            return next;
+          });
+        }, 6000);
+      }
+      void load();
+      void loadAgentExceptions();
+    }
+
+    events.addEventListener("connected", handleConnected);
+    events.addEventListener("order_created", handleOrderEvent);
+    events.addEventListener("order_updated", handleOrderEvent);
+    events.onerror = () => setLiveStatus("reconnecting");
+
+    return () => {
+      events.removeEventListener("connected", handleConnected);
+      events.removeEventListener("order_created", handleOrderEvent);
+      events.removeEventListener("order_updated", handleOrderEvent);
+      events.close();
+      setLiveStatus("offline");
+    };
+  }, [date, dateField, load, loadAgentExceptions]);
 
   const displayOrders = useMemo(() => {
     const result = [...orders];
@@ -286,6 +340,21 @@ export default function Orders() {
             className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
           />
 
+          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                liveStatus === "live"
+                  ? "bg-green-500 pulse-dot"
+                  : liveStatus === "reconnecting"
+                    ? "bg-amber-500"
+                    : "bg-gray-300"
+              }`}
+            />
+            <span>{liveStatus === "live" ? "ライブ" : liveStatus === "reconnecting" ? "再接続中" : "接続中"}</span>
+            <span className="text-gray-300">/</span>
+            <span>最終更新 {formatClock(lastUpdatedAt)}</span>
+          </div>
+
           <button
             onClick={() => {
               load();
@@ -388,7 +457,13 @@ export default function Orders() {
                 {displayOrders.map((o) => {
                   const items = o.items || [];
                   return (
-                    <tr key={o.uid || o.id} className="row-hover cursor-pointer group" onClick={() => setSelected(o)}>
+                    <tr
+                      key={o.uid || o.id}
+                      className={`row-hover cursor-pointer group ${
+                        recentOrderIds.has(o.uid || o.id || "") ? "bg-green-50 animate-new-order" : ""
+                      }`}
+                      onClick={() => setSelected(o)}
+                    >
                       <td className="px-5 py-3.5 whitespace-nowrap tabular-nums">
                         <div className="text-gray-700 font-medium">{formatDate(o.order_date)}</div>
                         <div className="mt-0.5 text-xs text-gray-500 font-medium">{formatTime(o.created_at || o.updated_at)}</div>
