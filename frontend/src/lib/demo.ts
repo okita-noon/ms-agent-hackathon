@@ -1,7 +1,8 @@
 import type { Order, Customer, Message } from "./api";
+import { todayJst } from "./date";
 
 export function getDemoOrders(): Order[] {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayJst();
   const ts = (h: number, m: number) => `${today}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
   return [
     { uid: "ORD-002", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "Email", items: [{ product_name: "さくらんぼ", quantity: 10, unit: "パック", temperature_zone: "冷蔵" }], delivery_carrier: "冷蔵ヤマト便", delivery_route: "東北便", delivery_time_slot: "16:00", status: "配送中", remarks: undefined, updated_at: ts(15, 5) },
@@ -13,7 +14,7 @@ export function getDemoOrders(): Order[] {
 }
 
 export function getDemoMessages(orderId: string, order?: Order): Message[] {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayJst();
   const msgs: Record<string, Message[]> = {
     "ORD-001": [
       { id: "dm-001-1", role: "user", text: "りんご10箱とバナナ20kgをお願いします。", channel: "line", created_at: `${today}T09:00:00Z` },

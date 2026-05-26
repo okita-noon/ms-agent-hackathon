@@ -9,12 +9,13 @@ import {
   SOURCE_COLORS,
   normalizeStatus,
 } from "../lib/constants";
+import { todayJst } from "../lib/date";
 import { SkeletonStatCards, SkeletonCharts } from "../components/Skeleton";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function Analytics() {
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => todayJst());
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
