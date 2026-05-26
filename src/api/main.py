@@ -34,7 +34,7 @@ from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_fo
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEFAULT_FRONTEND_URL = "https://storderaidev2.z11.web.core.windows.net/dashboard/"
+DEFAULT_FRONTEND_URL = "https://storderaidev2.z11.web.core.windows.net/"
 DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
 LineWebhookHandler: Any | None = None
 PhoneCallHandler: Any | None = None

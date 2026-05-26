@@ -163,7 +163,7 @@ API:
     → Order.session_id を取得
     → IMessageHistoryRepository.list_by_session_id() で会話取得
     → role が user/assistant のメッセージのみ返却
-    → session_id が null（手入力受注等）の場合は空配列
+    → session_id が null（ECサイト・メール受注等）の場合は空配列
 
 ダッシュボード表示:
   受注詳細モーダル内にチャット形式で表示

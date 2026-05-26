@@ -1,7 +1,7 @@
 # OrderAI Frontend
 
 React + TypeScript + Vite のダッシュボードです。
-API とは別成果物としてビルドし、Azure Storage Static Website の `/dashboard/` に配置します。
+API とは別成果物としてビルドし、Azure Storage Static Website のルートに配置します。
 
 ## Local development
 
@@ -22,6 +22,6 @@ VITE_ENTRA_TENANT_ID=<tenant-id>
 ## Deployment
 
 `.github/workflows/deploy-frontend.yml` が `frontend/**` の変更だけで起動します。
-`npm run build` を実行した後、`storderaidev2` の Static Website に `dashboard/` 配下としてアップロードします。
+`npm run build` を実行した後、`storderaidev2` の Static Website ルートにアップロードします。
 
 API URL は workflow の `VITE_API_BASE_URL`、Microsoft Entra ID 設定は GitHub Repository Variables の `VITE_ENTRA_CLIENT_ID` / `VITE_ENTRA_TENANT_ID` で渡します。

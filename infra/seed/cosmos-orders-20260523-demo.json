@@ -11,8 +11,22 @@
     "source": "LINE",
     "system": "LINE",
     "items": [
-      {"product_id": "P-001", "product_name": "りんご", "quantity": 6, "unit": "箱", "temperature_zone": "冷蔵", "is_variable_weight": false},
-      {"product_id": "P-014", "product_name": "レモン", "quantity": 20, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false}
+      {
+        "product_id": "P-001",
+        "product_name": "りんご",
+        "quantity": 6,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-014",
+        "product_name": "レモン",
+        "quantity": 20,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "九州便",
     "delivery_carrier": "自社便",
@@ -35,7 +49,14 @@
     "source": "Phone",
     "system": "Phone",
     "items": [
-      {"product_id": "P-008", "product_name": "スイカ", "quantity": 12, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false}
+      {
+        "product_id": "P-008",
+        "product_name": "スイカ",
+        "quantity": 12,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "中国便",
     "delivery_carrier": "自社便",
@@ -58,8 +79,22 @@
     "source": "Email",
     "system": "Email",
     "items": [
-      {"product_id": "P-012", "product_name": "さくらんぼ", "quantity": 8, "unit": "パック", "temperature_zone": "冷蔵", "is_variable_weight": false},
-      {"product_id": "P-017", "product_name": "ブルーベリー", "quantity": 2, "unit": "箱", "temperature_zone": "冷凍", "is_variable_weight": false}
+      {
+        "product_id": "P-012",
+        "product_name": "さくらんぼ",
+        "quantity": 8,
+        "unit": "パック",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-017",
+        "product_name": "ブルーベリー",
+        "quantity": 2,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "北関東便",
     "delivery_carrier": "冷蔵ヤマト便",
@@ -82,8 +117,22 @@
     "source": "Web",
     "system": "ECサイト",
     "items": [
-      {"product_id": "P-002", "product_name": "バナナ", "quantity": 40, "unit": "kg", "temperature_zone": "常温", "is_variable_weight": false},
-      {"product_id": "P-011", "product_name": "キウイ", "quantity": 30, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false}
+      {
+        "product_id": "P-002",
+        "product_name": "バナナ",
+        "quantity": 40,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-011",
+        "product_name": "キウイ",
+        "quantity": 30,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "関東便",
     "delivery_carrier": "自社便",
@@ -92,28 +141,6 @@
     "remarks": null,
     "created_at": "2026-05-23T02:15:00+09:00",
     "updated_at": "2026-05-23T02:15:00+09:00"
-  },
-  {
-    "id": "DEMO-20260523-005",
-    "uid": "DEMO-20260523-005",
-    "tenant_id": "T-001",
-    "order_date": "2026-05-23",
-    "preparation_date": "2026-05-23",
-    "delivery_date": "2026-05-24",
-    "customer_id": "C-003",
-    "customer_name": "洋食キッチンつばめ",
-    "source": "FAX",
-    "system": "FAX",
-    "items": [
-      {"product_id": "P-005", "product_name": "もも", "quantity": 4, "unit": "箱", "temperature_zone": "冷蔵", "unit_price": 7200, "is_variable_weight": true}
-    ],
-    "delivery_route": "中部便",
-    "delivery_carrier": "自社便",
-    "delivery_time_slot": "16:00",
-    "status": "完了",
-    "remarks": "不定貫、実測は出荷時入力",
-    "created_at": "2026-05-23T03:00:00+09:00",
-    "updated_at": "2026-05-23T04:30:00+09:00"
   },
   {
     "id": "DEMO-20260524-001",
@@ -127,7 +154,15 @@
     "source": "LINE",
     "system": "LINE",
     "items": [
-      {"product_id": "P-003", "product_name": "みかん", "quantity": 60, "unit": "個", "temperature_zone": "冷凍", "unit_price": 400, "is_variable_weight": false}
+      {
+        "product_id": "P-003",
+        "product_name": "みかん",
+        "quantity": 60,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "unit_price": 400,
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "西日本便",
     "delivery_carrier": "芦川便",
@@ -150,8 +185,23 @@
     "source": "Phone",
     "system": "Phone",
     "items": [
-      {"product_id": "P-006", "product_name": "いちご", "quantity": 20, "unit": "パック", "temperature_zone": "常温", "unit_price": 633, "is_variable_weight": false},
-      {"product_id": "P-009", "product_name": "なし", "quantity": 12, "unit": "個", "temperature_zone": "冷蔵", "is_variable_weight": false}
+      {
+        "product_id": "P-006",
+        "product_name": "いちご",
+        "quantity": 20,
+        "unit": "パック",
+        "temperature_zone": "常温",
+        "unit_price": 633,
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-009",
+        "product_name": "なし",
+        "quantity": 12,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "東北便",
     "delivery_carrier": "自社便",
@@ -174,8 +224,22 @@
     "source": "Email",
     "system": "Email",
     "items": [
-      {"product_id": "P-007", "product_name": "メロン", "quantity": 3, "unit": "玉", "temperature_zone": "冷凍", "is_variable_weight": false},
-      {"product_id": "P-010", "product_name": "マンゴー", "quantity": 5, "unit": "個", "temperature_zone": "冷凍", "is_variable_weight": false}
+      {
+        "product_id": "P-007",
+        "product_name": "メロン",
+        "quantity": 3,
+        "unit": "玉",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-010",
+        "product_name": "マンゴー",
+        "quantity": 5,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "四国便",
     "delivery_carrier": "冷凍ヤマト便",
@@ -185,28 +249,6 @@
     "remarks": "冷凍まとめ便",
     "created_at": "2026-05-24T02:10:00+09:00",
     "updated_at": "2026-05-24T03:05:00+09:00"
-  },
-  {
-    "id": "DEMO-20260524-004",
-    "uid": "DEMO-20260524-004",
-    "tenant_id": "T-001",
-    "order_date": "2026-05-24",
-    "preparation_date": "2026-05-25",
-    "delivery_date": "2026-05-26",
-    "customer_id": "C-008",
-    "customer_name": "レストラン花水木",
-    "source": "手入力",
-    "system": "手入力",
-    "items": [
-      {"product_id": "P-016", "product_name": "にんにく", "quantity": 6, "unit": "kg", "temperature_zone": "常温", "is_variable_weight": false}
-    ],
-    "delivery_route": "関西便",
-    "delivery_carrier": "芦川便",
-    "delivery_time_slot": "午後",
-    "status": "受注済み",
-    "remarks": "定期便追加",
-    "created_at": "2026-05-24T04:00:00+09:00",
-    "updated_at": "2026-05-24T04:00:00+09:00"
   },
   {
     "id": "DEMO-20260525-001",
@@ -220,8 +262,23 @@
     "source": "Web",
     "system": "ECサイト",
     "items": [
-      {"product_id": "P-004", "product_name": "ぶどう", "quantity": 10, "unit": "房", "temperature_zone": "常温", "unit_price": 1000, "is_variable_weight": false},
-      {"product_id": "P-015", "product_name": "アボカド", "quantity": 18, "unit": "個", "temperature_zone": "冷蔵", "is_variable_weight": false}
+      {
+        "product_id": "P-004",
+        "product_name": "ぶどう",
+        "quantity": 10,
+        "unit": "房",
+        "temperature_zone": "常温",
+        "unit_price": 1000,
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-015",
+        "product_name": "アボカド",
+        "quantity": 18,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "北関東便",
     "delivery_carrier": "自社便",
@@ -230,30 +287,6 @@
     "remarks": null,
     "created_at": "2026-05-25T00:45:00+09:00",
     "updated_at": "2026-05-25T00:45:00+09:00"
-  },
-  {
-    "id": "DEMO-20260525-002",
-    "uid": "DEMO-20260525-002",
-    "tenant_id": "T-001",
-    "order_date": "2026-05-25",
-    "preparation_date": "2026-05-25",
-    "delivery_date": "2026-05-26",
-    "customer_id": "C-005",
-    "customer_name": "カフェ森ノ音",
-    "source": "FAX",
-    "system": "FAX",
-    "items": [
-      {"product_id": "P-005", "product_name": "もも", "quantity": 9, "unit": "箱", "temperature_zone": "冷蔵", "unit_price": 7200, "is_variable_weight": true},
-      {"product_id": "P-012", "product_name": "さくらんぼ", "quantity": 6, "unit": "パック", "temperature_zone": "冷蔵", "is_variable_weight": false}
-    ],
-    "delivery_route": "北海道便",
-    "delivery_carrier": "冷蔵ヤマト便",
-    "delivery_time_slot": "16:00",
-    "status": "配送中",
-    "yamato_tracking_number": "YM202605250002",
-    "remarks": "着日厳守",
-    "created_at": "2026-05-25T01:15:00+09:00",
-    "updated_at": "2026-05-25T02:00:00+09:00"
   },
   {
     "id": "DEMO-20260525-003",
@@ -267,7 +300,14 @@
     "source": "LINE",
     "system": "LINE",
     "items": [
-      {"product_id": "P-013", "product_name": "いちじく", "quantity": 30, "unit": "箱", "temperature_zone": "冷凍", "is_variable_weight": false}
+      {
+        "product_id": "P-013",
+        "product_name": "いちじく",
+        "quantity": 30,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "中部便",
     "delivery_carrier": "冷凍ヤマト便",
@@ -290,7 +330,14 @@
     "source": "Phone",
     "system": "Phone",
     "items": [
-      {"product_id": "P-002", "product_name": "バナナ", "quantity": 25, "unit": "kg", "temperature_zone": "常温", "is_variable_weight": false}
+      {
+        "product_id": "P-002",
+        "product_name": "バナナ",
+        "quantity": 25,
+        "unit": "kg",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "中国便",
     "delivery_carrier": "自社便",
@@ -313,7 +360,14 @@
     "source": "Email",
     "system": "Email",
     "items": [
-      {"product_id": "P-001", "product_name": "りんご", "quantity": 20, "unit": "箱", "temperature_zone": "冷蔵", "is_variable_weight": false}
+      {
+        "product_id": "P-001",
+        "product_name": "りんご",
+        "quantity": 20,
+        "unit": "箱",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "関東便",
     "delivery_carrier": "自社便",
@@ -335,8 +389,22 @@
     "source": "LINE",
     "system": "LINE",
     "items": [
-      {"product_id": "P-010", "product_name": "マンゴー", "quantity": 30, "unit": "個", "temperature_zone": "冷凍", "is_variable_weight": false},
-      {"product_id": "P-017", "product_name": "ブルーベリー", "quantity": 6, "unit": "箱", "temperature_zone": "冷凍", "is_variable_weight": false}
+      {
+        "product_id": "P-010",
+        "product_name": "マンゴー",
+        "quantity": 30,
+        "unit": "個",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-017",
+        "product_name": "ブルーベリー",
+        "quantity": 6,
+        "unit": "箱",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "九州便",
     "delivery_carrier": "冷凍ヤマト便",
@@ -346,29 +414,6 @@
     "session_id": "sess-demo-20260526-002",
     "created_at": "2026-05-26T01:25:00+09:00",
     "updated_at": "2026-05-26T01:26:00+09:00"
-  },
-  {
-    "id": "DEMO-20260526-003",
-    "uid": "DEMO-20260526-003",
-    "tenant_id": "T-001",
-    "order_date": "2026-05-26",
-    "preparation_date": "2026-05-26",
-    "delivery_date": "2026-05-28",
-    "customer_id": "C-006",
-    "customer_name": "中華食堂龍華",
-    "source": "FAX",
-    "system": "FAX",
-    "items": [
-      {"product_id": "P-014", "product_name": "レモン", "quantity": 40, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false},
-      {"product_id": "P-016", "product_name": "にんにく", "quantity": 4, "unit": "kg", "temperature_zone": "常温", "is_variable_weight": false}
-    ],
-    "delivery_route": "東北便",
-    "delivery_carrier": "自社便",
-    "delivery_time_slot": "16:00",
-    "status": "受注済み",
-    "remarks": "中2日納品",
-    "created_at": "2026-05-26T02:05:00+09:00",
-    "updated_at": "2026-05-26T02:05:00+09:00"
   },
   {
     "id": "DEMO-20260526-004",
@@ -382,7 +427,14 @@
     "source": "Web",
     "system": "ECサイト",
     "items": [
-      {"product_id": "P-007", "product_name": "メロン", "quantity": 4, "unit": "玉", "temperature_zone": "冷凍", "is_variable_weight": false}
+      {
+        "product_id": "P-007",
+        "product_name": "メロン",
+        "quantity": 4,
+        "unit": "玉",
+        "temperature_zone": "冷凍",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "関西便",
     "delivery_carrier": "芦川便",
@@ -404,8 +456,22 @@
     "source": "Phone",
     "system": "Phone",
     "items": [
-      {"product_id": "P-015", "product_name": "アボカド", "quantity": 10, "unit": "個", "temperature_zone": "冷蔵", "is_variable_weight": false},
-      {"product_id": "P-011", "product_name": "キウイ", "quantity": 24, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false}
+      {
+        "product_id": "P-015",
+        "product_name": "アボカド",
+        "quantity": 10,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-011",
+        "product_name": "キウイ",
+        "quantity": 24,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "四国便",
     "delivery_carrier": "自社便",
@@ -428,8 +494,22 @@
     "source": "Email",
     "system": "Email",
     "items": [
-      {"product_id": "P-009", "product_name": "なし", "quantity": 20, "unit": "個", "temperature_zone": "冷蔵", "is_variable_weight": false},
-      {"product_id": "P-012", "product_name": "さくらんぼ", "quantity": 12, "unit": "パック", "temperature_zone": "冷蔵", "is_variable_weight": false}
+      {
+        "product_id": "P-009",
+        "product_name": "なし",
+        "quantity": 20,
+        "unit": "個",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-012",
+        "product_name": "さくらんぼ",
+        "quantity": 12,
+        "unit": "パック",
+        "temperature_zone": "冷蔵",
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "西日本便",
     "delivery_carrier": "芦川便",
@@ -451,8 +531,23 @@
     "source": "LINE",
     "system": "LINE",
     "items": [
-      {"product_id": "P-008", "product_name": "スイカ", "quantity": 2, "unit": "個", "temperature_zone": "常温", "is_variable_weight": false},
-      {"product_id": "P-004", "product_name": "ぶどう", "quantity": 5, "unit": "房", "temperature_zone": "常温", "unit_price": 1000, "is_variable_weight": false}
+      {
+        "product_id": "P-008",
+        "product_name": "スイカ",
+        "quantity": 2,
+        "unit": "個",
+        "temperature_zone": "常温",
+        "is_variable_weight": false
+      },
+      {
+        "product_id": "P-004",
+        "product_name": "ぶどう",
+        "quantity": 5,
+        "unit": "房",
+        "temperature_zone": "常温",
+        "unit_price": 1000,
+        "is_variable_weight": false
+      }
     ],
     "delivery_route": "北海道便",
     "delivery_carrier": "芦川便",
@@ -462,27 +557,5 @@
     "session_id": "sess-demo-20260527-003",
     "created_at": "2026-05-27T02:25:00+09:00",
     "updated_at": "2026-05-27T02:26:00+09:00"
-  },
-  {
-    "id": "DEMO-20260527-004",
-    "uid": "DEMO-20260527-004",
-    "tenant_id": "T-001",
-    "order_date": "2026-05-27",
-    "preparation_date": "2026-05-27",
-    "delivery_date": "2026-05-27",
-    "customer_id": "C-001",
-    "customer_name": "ビストロ青葉",
-    "source": "手入力",
-    "system": "手入力",
-    "items": [
-      {"product_id": "P-006", "product_name": "いちご", "quantity": 80, "unit": "パック", "temperature_zone": "常温", "unit_price": 633, "is_variable_weight": false}
-    ],
-    "delivery_route": "北関東便",
-    "delivery_carrier": "自社便",
-    "delivery_time_slot": "午前",
-    "status": "要対応",
-    "remarks": "イベント用大量注文。異常検知デモ",
-    "created_at": "2026-05-27T03:05:00+09:00",
-    "updated_at": "2026-05-27T03:05:00+09:00"
   }
 ]

@@ -283,7 +283,7 @@ export default function OrderDetailModal({ order, onClose, onMemoUpdated }: Prop
             </div>
           </div>
 
-          {order.source !== "手入力" && orderId && (
+          {orderId && (
             <MessageThread key={orderId} orderId={orderId} />
           )}
 

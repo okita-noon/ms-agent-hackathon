@@ -7,8 +7,10 @@ from azure.core import MatchConditions
 from azure.cosmos.aio import CosmosClient, ContainerProxy
 from azure.cosmos.exceptions import CosmosAccessConditionFailedError
 
-from src.models.order import Order, OrderStatus
+from src.models.order import Order, OrderSource, OrderStatus
 from src.models.tenant import ConnectorConfig
+
+_EXCLUDED_ORDER_SOURCES = (OrderSource.FAX.value, OrderSource.MANUAL.value)
 
 
 class CosmosOrderRepository:
@@ -45,12 +47,16 @@ class CosmosOrderRepository:
             "SELECT * FROM c "
             "WHERE c.tenant_id = @tid "
             "AND (c.delivery_date = @d OR (c.status = @needs_review AND c.order_date = @d)) "
+            "AND c.source != @excluded_fax "
+            "AND c.source != @excluded_manual "
             "ORDER BY c.customer_name"
         )
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},
             {"name": "@needs_review", "value": OrderStatus.NEEDS_REVIEW.value},
+            {"name": "@excluded_fax", "value": _EXCLUDED_ORDER_SOURCES[0]},
+            {"name": "@excluded_manual", "value": _EXCLUDED_ORDER_SOURCES[1]},
         ]
         items = self._container.query_items(query, parameters=params)
         return [Order.model_validate(doc) async for doc in items]
@@ -68,10 +74,17 @@ class CosmosOrderRepository:
         date_field: str = "delivery_date",
     ) -> tuple[list[Order], int]:
         safe_field = "order_date" if date_field == "order_date" else "delivery_date"
-        where = ["c.tenant_id = @tid", f"c.{safe_field} = @d"]
+        where = [
+            "c.tenant_id = @tid",
+            f"c.{safe_field} = @d",
+            "c.source != @excluded_fax",
+            "c.source != @excluded_manual",
+        ]
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},
+            {"name": "@excluded_fax", "value": _EXCLUDED_ORDER_SOURCES[0]},
+            {"name": "@excluded_manual", "value": _EXCLUDED_ORDER_SOURCES[1]},
         ]
 
         if status:
