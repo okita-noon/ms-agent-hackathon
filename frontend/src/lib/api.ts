@@ -68,7 +68,7 @@ export interface OrderFilters {
 
 export interface OrdersResponse {
   orders: Order[];
-  date: string;
+  date: string | null;
   total: number;
   limit: number;
   offset: number;
@@ -127,11 +127,14 @@ export async function updateOrderMemo(orderId: string, memo: string | null): Pro
 
 
 export async function fetchOrders(
-  date: string,
+  date: string | null,
   filters: OrderFilters = {}
 ): Promise<OrdersResponse> {
-  const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
-  const params = new URLSearchParams({ [paramKey]: date });
+  const params = new URLSearchParams();
+  if (date) {
+    const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
+    params.set(paramKey, date);
+  }
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
   if (filters.q?.trim()) params.set("q", filters.q.trim());

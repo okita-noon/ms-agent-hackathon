@@ -12,7 +12,7 @@ class IOrderRepository(Protocol):
     async def list_orders(
         self,
         tenant_id: str,
-        target_date: date,
+        target_date: date | None = None,
         *,
         status: str | None = None,
         source: str | None = None,
