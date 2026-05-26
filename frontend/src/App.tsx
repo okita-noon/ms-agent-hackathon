@@ -19,7 +19,7 @@ const WebPhone = lazy(() => import("./pages/WebPhone"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
-const NAV_ITEMS: NavItem[] = [
+const MAIN_NAV_ITEMS: NavItem[] = [
   {
     to: "/orders",
     label: "受注",
@@ -47,6 +47,9 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
+];
+
+const DEMO_NAV_ITEMS: NavItem[] = [
   {
     to: "/web-phone",
     label: "電話発注",
@@ -58,32 +61,46 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+function NavItems({ items }: { items: NavItem[] }) {
+  return (
+    <>
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              isActive
+                ? "bg-brand-50 text-brand-700"
+                : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <span className={isActive ? "text-brand-600" : "text-gray-400"}>
+                {item.icon}
+              </span>
+              {item.label}
+            </>
+          )}
+        </NavLink>
+      ))}
+    </>
+  );
+}
+
 function Sidebar() {
   return (
     <aside className="w-40 shrink-0 bg-white border-r border-gray-200 flex flex-col">
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className={isActive ? "text-brand-600" : "text-gray-400"}>
-                  {item.icon}
-                </span>
-                {item.label}
-              </>
-            )}
-          </NavLink>
-        ))}
+        <NavItems items={MAIN_NAV_ITEMS} />
+        <div className="pt-4">
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            デモ用
+          </p>
+          <NavItems items={DEMO_NAV_ITEMS} />
+        </div>
       </nav>
     </aside>
   );
