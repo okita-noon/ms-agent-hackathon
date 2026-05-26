@@ -19,20 +19,11 @@ import OrderFilterBar from "../components/OrderFilterBar";
 import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import DashboardAgentPanel from "../components/DashboardAgentPanel";
+import { offsetDate, todayJst } from "../lib/date";
 
 const PAGE_SIZE = 50;
 
 type DateField = "delivery_date" | "order_date";
-
-function today(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-function offsetDate(base: string, days: number): string {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
 
 function formatDate(value?: string): string {
   if (!value) return "-";
@@ -53,7 +44,7 @@ function formatClock(value: Date | null): string {
 
 export default function Orders() {
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
-  const [date, setDate] = useState(() => today());
+  const [date, setDate] = useState(() => todayJst());
   const [dateField, setDateField] = useState<DateField>("delivery_date");
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -231,7 +222,7 @@ export default function Orders() {
   }
 
   const filterStatusUI = statusFilter || "すべて";
-  const todayStr = today();
+  const todayStr = todayJst();
 
   return (
     <>

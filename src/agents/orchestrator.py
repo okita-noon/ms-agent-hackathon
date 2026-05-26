@@ -6,7 +6,6 @@ import logging
 import os
 import re
 from collections.abc import Awaitable, Callable
-from datetime import date
 from pathlib import Path
 from string import Template
 
@@ -40,6 +39,7 @@ from src.services.line_template_renderer import (
     format_line_order_items,
     render_line_template,
 )
+from src.utils.business_date import today_jst
 
 logger = logging.getLogger(__name__)
 
@@ -1274,7 +1274,7 @@ class OrderOrchestrator:
             order.customer_name = draft.get("customer_name", order.customer_name)
             order.source = source
             order.items = items
-            order.delivery_date = draft.get("delivery_date") or order.delivery_date or date.today()
+            order.delivery_date = draft.get("delivery_date") or order.delivery_date or today_jst()
             order.delivery_route = draft.get("delivery_route") or order.delivery_route
             order.delivery_carrier = draft.get("delivery_carrier") or order.delivery_carrier
             order.delivery_time_slot = draft.get("delivery_time_slot") or order.delivery_time_slot
@@ -1285,8 +1285,8 @@ class OrderOrchestrator:
             order = Order(
                 uid="",
                 tenant_id=self._ctx.tenant_id,
-                order_date=date.today(),
-                delivery_date=draft.get("delivery_date") or date.today(),
+                order_date=today_jst(),
+                delivery_date=draft.get("delivery_date") or today_jst(),
                 customer_id=draft["customer_id"],
                 customer_name=draft.get("customer_name", ""),
                 source=source,
@@ -1434,7 +1434,7 @@ class OrderOrchestrator:
             "customer_id": customer.id,
             "customer_name": customer.name,
             "items": items,
-            "delivery_date": date.today(),
+            "delivery_date": today_jst(),
             "delivery_route": preference.default_route,
             "delivery_carrier": preference.default_carrier,
             "delivery_time_slot": preference.default_time_slot,
@@ -1474,7 +1474,7 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "customer_id": intake_draft["customer_id"],
         "customer_name": intake_draft.get("customer_name", ""),
         "items": intake_draft["items"],
-        "delivery_date": intake_draft.get("delivery_date") or date.today(),
+        "delivery_date": intake_draft.get("delivery_date") or today_jst(),
         "delivery_route": intake_draft.get("delivery_route"),
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),

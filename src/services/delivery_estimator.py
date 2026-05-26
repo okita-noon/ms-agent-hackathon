@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from src.models.customer import DeliveryLeadTime
 from src.models.order import DeliveryRoute
 from src.models.tenant import TenantConfig
+from src.utils.business_date import now_jst, today_jst
 
 # 配送ルート → (最短日数, 最長日数)。倉庫所在地は関東と仮定。
 _ROUTE_DELIVERY_DAYS: dict[DeliveryRoute, tuple[int, int]] = {
@@ -87,13 +88,13 @@ def estimate(
     なければ配送ルートから推定する。
     tenant_config があれば締め時間と定休日を考慮する。
     """
-    base = order_date or date.today()
+    base = order_date or today_jst()
     cutoff_hour = tenant_config.order_cutoff_hour if tenant_config else 16
     closed_weekdays = tenant_config.closed_weekdays if tenant_config else []
     extra_holidays = _parse_extra_holidays(tenant_config.extra_holidays) if tenant_config else set()
 
     # 締め時間判定: 過ぎていれば起算日を翌営業日にずらす
-    current_time = now or datetime.now()
+    current_time = now or now_jst()
     if current_time.hour >= cutoff_hour:
         base = _advance_business_days(base, 1, closed_weekdays, extra_holidays)
 

@@ -448,9 +448,9 @@
     "id": "DEMO-20260527-001",
     "uid": "DEMO-20260527-001",
     "tenant_id": "T-001",
-    "order_date": "2026-05-27",
-    "preparation_date": "2026-05-27",
-    "delivery_date": "2026-05-27",
+    "order_date": "2026-05-26",
+    "preparation_date": "2026-05-26",
+    "delivery_date": "2026-05-26",
     "customer_id": "C-010",
     "customer_name": "ベーカリー麦の庭",
     "source": "Phone",
@@ -479,16 +479,16 @@
     "status": "受注済み",
     "remarks": "電話聞き取り",
     "session_id": "sess-demo-20260527-001",
-    "created_at": "2026-05-27T00:15:00+09:00",
-    "updated_at": "2026-05-27T00:16:00+09:00"
+    "created_at": "2026-05-26T00:15:00+09:00",
+    "updated_at": "2026-05-26T00:16:00+09:00"
   },
   {
     "id": "DEMO-20260527-002",
     "uid": "DEMO-20260527-002",
     "tenant_id": "T-001",
-    "order_date": "2026-05-27",
-    "preparation_date": "2026-05-27",
-    "delivery_date": "2026-05-29",
+    "order_date": "2026-05-26",
+    "preparation_date": "2026-05-26",
+    "delivery_date": "2026-05-28",
     "customer_id": "C-002",
     "customer_name": "炭火焼鳥とり善",
     "source": "Email",
@@ -516,16 +516,16 @@
     "delivery_time_slot": "午後",
     "status": "配送中",
     "remarks": "中1日配送",
-    "created_at": "2026-05-27T01:10:00+09:00",
-    "updated_at": "2026-05-27T02:40:00+09:00"
+    "created_at": "2026-05-26T01:10:00+09:00",
+    "updated_at": "2026-05-26T02:40:00+09:00"
   },
   {
     "id": "DEMO-20260527-003",
     "uid": "DEMO-20260527-003",
     "tenant_id": "T-001",
-    "order_date": "2026-05-27",
-    "preparation_date": "2026-05-27",
-    "delivery_date": "2026-05-28",
+    "order_date": "2026-05-26",
+    "preparation_date": "2026-05-26",
+    "delivery_date": "2026-05-27",
     "customer_id": "C-005",
     "customer_name": "カフェ森ノ音",
     "source": "LINE",
@@ -555,7 +555,7 @@
     "status": "受注済み",
     "remarks": "ギフト包装",
     "session_id": "sess-demo-20260527-003",
-    "created_at": "2026-05-27T02:25:00+09:00",
-    "updated_at": "2026-05-27T02:26:00+09:00"
+    "created_at": "2026-05-26T02:25:00+09:00",
+    "updated_at": "2026-05-26T02:26:00+09:00"
   }
 ]

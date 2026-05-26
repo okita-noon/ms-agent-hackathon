@@ -95,6 +95,25 @@ class TestBuildDraftFromIntake:
     def test_empty_items(self):
         assert _build_draft_from_intake({"customer_id": "C-001", "items": []}) is None
 
+    def test_defaults_delivery_date_to_jst_business_date(self):
+        intake = {
+            "customer_id": "C-001",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                }
+            ],
+        }
+
+        with patch("src.agents.orchestrator.today_jst", return_value=date(2026, 5, 26)):
+            draft = _build_draft_from_intake(intake)
+
+        assert draft is not None
+        assert draft["delivery_date"] == date(2026, 5, 26)
+
 
 class TestExtractJson:
     def setup_method(self):
@@ -414,6 +433,38 @@ class TestMemoryContext:
 
 class TestProcessOrderMessageSendsOnce:
     """Verify that process_order_message sends exactly one LINE message — no more, no less."""
+
+    @pytest.mark.asyncio
+    async def test_create_order_from_draft_uses_jst_business_date(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-JST"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+        draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+        }
+
+        with patch("src.agents.orchestrator.today_jst", return_value=date(2026, 5, 26)):
+            order = await orch.create_order_from_draft(draft, source=OrderSource.LINE)
+
+        assert order.id == "ORD-JST"
+        assert saved_orders[0].order_date == date(2026, 5, 26)
+        assert saved_orders[0].delivery_date == date(2026, 5, 26)
 
     @pytest.mark.asyncio
     async def test_sends_once_on_intake_fallback(self, mock_tenant_ctx):
