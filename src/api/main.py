@@ -831,6 +831,7 @@ async def list_orders(
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("IOrderRepository")
 
+    target: date | None = None
     if order_date:
         target = date.fromisoformat(order_date)
         date_field = "order_date"
@@ -838,8 +839,7 @@ async def list_orders(
         target = date.fromisoformat(delivery_date)
         date_field = "delivery_date"
     else:
-        target = date.today()
-        date_field = "delivery_date"
+        date_field = "order_date"
 
     orders, total = await repo.list_orders(
         tenant_id,
@@ -853,7 +853,7 @@ async def list_orders(
     )
     return {
         "orders": [o.model_dump(mode="json") for o in orders],
-        "date": target.isoformat(),
+        "date": target.isoformat() if target else None,
         "total": total,
         "limit": limit,
         "offset": offset,
