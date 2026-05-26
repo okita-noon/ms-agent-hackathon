@@ -26,15 +26,15 @@ class TestHealthEndpoint:
 
 
 class TestRootRedirect:
-    def test_redirects_to_dashboard(self, client):
+    def test_redirects_to_frontend_root(self, client):
         resp = client.get("/", follow_redirects=False)
         assert resp.status_code == 307
-        assert "/dashboard" in resp.headers["location"]
+        assert resp.headers["location"] == "https://storderaidev2.z11.web.core.windows.net/"
 
-    def test_legacy_dashboard_path_redirects_to_dashboard(self, client):
+    def test_legacy_dashboard_path_redirects_to_frontend_root(self, client):
         resp = client.get("/dashboard/", follow_redirects=False)
         assert resp.status_code == 307
-        assert "/dashboard" in resp.headers["location"]
+        assert resp.headers["location"] == "https://storderaidev2.z11.web.core.windows.net/"
 
 
 class TestLineWebhook:
