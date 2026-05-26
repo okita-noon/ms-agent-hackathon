@@ -21,6 +21,11 @@ from src.agents.definitions import (
     INVENTORY_AGENT_INSTRUCTIONS,
     ORCHESTRATOR_INSTRUCTIONS,
     PHONE_ORDER_AGENT_INSTRUCTIONS,
+    get_communication_instructions,
+    get_exception_instructions,
+    get_intake_instructions,
+    get_inventory_instructions,
+    get_orchestrator_instructions,
 )
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundMessage
@@ -88,6 +93,13 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
 def _insert_order_id(response_text: str, order_id: str) -> str:
     """LINE・電話の返信テキスト末尾に受注Noを付与する。"""
     return f"{response_text}\n\n受注No: {order_id}"
+
+
+def _source_to_channel(source: OrderSource) -> str:
+    """OrderSource をナレッジチャネル名に変換する。"""
+    if source == OrderSource.EMAIL:
+        return "email"
+    return "line"
 
 
 def _build_email_from_template(
@@ -160,44 +172,44 @@ class OrderOrchestrator:
             kernel.add_plugin(plugin_instance, plugin_name=plugin_name)
         return kernel
 
-    def _make_intake_agent(self) -> ChatCompletionAgent:
+    def _make_intake_agent(self, channel: str = "line") -> ChatCompletionAgent:
         kernel = self._build_kernel(
             (IntakePlugin(self._ctx), "intake"),
         )
         return ChatCompletionAgent(
             kernel=kernel,
             name="IntakeAgent",
-            instructions=INTAKE_AGENT_INSTRUCTIONS,
+            instructions=get_intake_instructions(channel),
         )
 
-    def _make_exception_agent(self) -> ChatCompletionAgent:
+    def _make_exception_agent(self, channel: str = "line") -> ChatCompletionAgent:
         kernel = self._build_kernel(
             (ExceptionPlugin(self._ctx), "exception"),
         )
         return ChatCompletionAgent(
             kernel=kernel,
             name="ExceptionAgent",
-            instructions=EXCEPTION_AGENT_INSTRUCTIONS,
+            instructions=get_exception_instructions(channel),
         )
 
-    def _make_inventory_agent(self) -> ChatCompletionAgent:
+    def _make_inventory_agent(self, channel: str = "line") -> ChatCompletionAgent:
         kernel = self._build_kernel(
             (InventoryPlugin(self._ctx), "inventory"),
         )
         return ChatCompletionAgent(
             kernel=kernel,
             name="InventoryAgent",
-            instructions=INVENTORY_AGENT_INSTRUCTIONS,
+            instructions=get_inventory_instructions(channel),
         )
 
-    def _make_communication_agent(self) -> ChatCompletionAgent:
+    def _make_communication_agent(self, channel: str = "line") -> ChatCompletionAgent:
         kernel = self._build_kernel(
             (CommunicationPlugin(self._ctx), "communication"),
         )
         return ChatCompletionAgent(
             kernel=kernel,
             name="CommunicationAgent",
-            instructions=COMMUNICATION_AGENT_INSTRUCTIONS,
+            instructions=get_communication_instructions(channel),
         )
 
     def _make_phone_order_agent(self) -> ChatCompletionAgent:
@@ -210,7 +222,7 @@ class OrderOrchestrator:
             instructions=PHONE_ORDER_AGENT_INSTRUCTIONS,
         )
 
-    def _make_orchestrator_agent(self) -> ChatCompletionAgent:
+    def _make_orchestrator_agent(self, channel: str = "line") -> ChatCompletionAgent:
         # Shared kernel with all plugins for final response generation
         kernel = self._build_kernel(
             (IntakePlugin(self._ctx), "intake"),
@@ -220,7 +232,7 @@ class OrderOrchestrator:
         return ChatCompletionAgent(
             kernel=kernel,
             name="Orchestrator",
-            instructions=ORCHESTRATOR_INSTRUCTIONS,
+            instructions=get_orchestrator_instructions(channel),
         )
 
     def _extract_json(self, text: str) -> dict | None:
@@ -556,9 +568,10 @@ class OrderOrchestrator:
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
+        channel = _source_to_channel(source)
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
-        intake_agent = self._make_intake_agent()
+        intake_agent = self._make_intake_agent(channel)
         if known_customer_id and known_customer_name:
             lookup_instruction = (
                 f"顧客は特定済みです（customer_id={known_customer_id}, "
@@ -640,7 +653,7 @@ class OrderOrchestrator:
         exception_text: str | None = None
         exception_result: dict | None = None
         if items and customer_id:
-            exception_agent = self._make_exception_agent()
+            exception_agent = self._make_exception_agent(channel)
             items_summary = json.dumps(items, ensure_ascii=False)
             exception_prompt = (
                 f"以下の注文ドラフトの異常検知を行ってください。\n"
@@ -663,7 +676,7 @@ class OrderOrchestrator:
         inventory_result: dict | None = None
         inventory_needs_review = False
         if not anomaly_confirmation_needed and items:
-            inventory_agent = self._make_inventory_agent()
+            inventory_agent = self._make_inventory_agent(channel)
             items_summary = json.dumps(items, ensure_ascii=False)
             inventory_prompt = (
                 f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
@@ -813,6 +826,7 @@ class OrderOrchestrator:
     ) -> dict:
         """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
         result: dict = {}
+        channel = _source_to_channel(source)
 
         if known_customer_id and known_customer_name:
             lookup_instruction = (
@@ -833,7 +847,7 @@ class OrderOrchestrator:
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
 
         # ── Chain Step 1: Intake Agent ─────────────────────────────────────────
-        intake_agent = self._make_intake_agent()
+        intake_agent = self._make_intake_agent(channel)
         if pending_order_draft:
             intake_prompt = (
                 f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
@@ -897,7 +911,7 @@ class OrderOrchestrator:
         exception_result: dict | None = None
         anomaly_confirmation_needed = False
         if items and customer_id:
-            exception_agent = self._make_exception_agent()
+            exception_agent = self._make_exception_agent(channel)
             items_summary = json.dumps(items, ensure_ascii=False)
             exception_prompt = (
                 f"以下の注文ドラフトの異常検知を行ってください。\n"
@@ -918,7 +932,7 @@ class OrderOrchestrator:
         inventory_result: dict | None = None
         inventory_needs_review = False
         if not anomaly_confirmation_needed and items:
-            inventory_agent = self._make_inventory_agent()
+            inventory_agent = self._make_inventory_agent(channel)
             items_summary = json.dumps(items, ensure_ascii=False)
             inventory_prompt = (
                 f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
@@ -1069,7 +1083,8 @@ class OrderOrchestrator:
     ) -> str:
         """Communication Agentで返信メッセージを生成する. 失敗時は既存のOrchestratorにフォールバック."""
         try:
-            comm_agent = self._make_communication_agent()
+            channel = _source_to_channel(source)
+            comm_agent = self._make_communication_agent(channel)
 
             context_parts = [f"元のメッセージ: {message}", f"チャネル: {source.value}"]
             memory_context = _format_memory_context(conversation_history, pending_order_draft, current_order).strip()
@@ -1171,7 +1186,8 @@ class OrderOrchestrator:
         delivery_estimate: str | None = None,
         current_order: Order | None = None,
     ) -> str:
-        orchestrator_agent = self._make_orchestrator_agent()
+        channel = _source_to_channel(source)
+        orchestrator_agent = self._make_orchestrator_agent(channel)
         context_parts = [
             f"元のメッセージ: {message}",
             f"LINE User ID: {line_user_id}",
