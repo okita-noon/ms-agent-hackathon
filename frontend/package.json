@@ -12,10 +12,8 @@
   "dependencies": {
     "@azure/msal-browser": "^5.10.1",
     "@azure/msal-react": "^5.4.1",
-    "chart.js": "^4.5.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.50.0",
     "react": "^19.2.6",
-    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1"
   },

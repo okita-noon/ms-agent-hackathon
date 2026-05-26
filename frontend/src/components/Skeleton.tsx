@@ -31,17 +31,3 @@ export function SkeletonTableRows({ cols = 7, rows = 5 }: { cols?: number; rows?
   );
 }
 
-export function SkeletonCharts() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-      {[0, 1].map((i) => (
-        <div key={i} className="bg-white rounded-xl border border-gray-100 p-5">
-          <SkeletonBox className="h-3 w-24 mb-4" />
-          <div className="h-48 flex items-center justify-center">
-            <SkeletonBox className="h-36 w-36 !rounded-full" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}

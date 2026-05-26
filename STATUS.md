@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-26（Web電話ページ追加・UI改善：サイドバー縮小・受注ヘッダー統合・テーブルボーダー強化）
+> 最終更新: 2026-05-27（電話発注（Web）の顧客選択機能追加・名称変更・設定パネル整理）
 
 ## 実装済み
 
@@ -56,8 +56,7 @@
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
   - ログイン画面（ID/パスワード + Microsoft SSO）
-  - サイドバーナビゲーション（受注・在庫・顧客・分析）
-  - 受注一覧を起動時のデフォルト画面に。統計カード・ドーナツチャートは「分析」タブへ分離（#63）
+  - サイドバーナビゲーション（受注・在庫・顧客・電話発注）
   - 受注一覧テーブル（日付選択・ステータスバッジ・温度帯表示）
   - 受注一覧の最終処理時刻表示
   - 受注ステータスは5種類（要対応 / 受注済み / 配送中 / 完了 / キャンセル）。旧ステータスは表示時に自動正規化
@@ -73,7 +72,7 @@
   - JWT保存をlocalStorageからHttpOnly Cookieへ移行。`/api/auth/me` でログイン状態を復元し、API呼び出しは `credentials: include` でCookie認証
   - Microsoft SSO のMSALキャッシュを `sessionStorage` に変更し、ブラウザ永続ストレージに認証トークンを残さない方針へ寄せた
   - 受注一覧にSSEライブ更新を追加。`/api/orders/events` をCookie認証で購読し、新着・更新イベント受信時に一覧とDashboard Agentパネルを再取得、新着行を一時ハイライト
-  - Web電話ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。実際の電話チャネルと同一のAzure Speech Servicesを使用
+  - 電話発注（Web）ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。顧客選択ドロップダウンで発注元を指定可能。Agent処理・在庫確認・受注保存は実際の電話チャネルと同一コードパスを使用し、ACS電話番号取得後はそのまま本番電話受注に切替可能
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
