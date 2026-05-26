@@ -6,11 +6,10 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { readUserFromToken, type AuthUser } from "./token";
+import type { AuthUser } from "./token";
 import { AuthContext } from "./context";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const TOKEN_KEY = "foogent_token";
 const SSO_PENDING_KEY = "sso_redirect_pending";
 
 interface AuthProviderProps {
@@ -25,8 +24,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   const [initialAuth] = useState(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    const storedUser = stored ? readUserFromToken(stored) : null;
     // Microsoft loginRedirect から戻ってきた直後は URL に code= が残る。
     // sessionStorage フラグ（loginRedirect 前にセット）も合わせてチェックすることで
     // URL だけでは検知できないケースでもローディング状態を維持し、
@@ -36,28 +33,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
       /[#&](code|error)=/.test(window.location.hash) ||
       sessionStorage.getItem(SSO_PENDING_KEY) === "1";
     return {
-      token: storedUser ? stored : null,
-      user: storedUser,
-      // ユーザーが未確定 かつ (未検証トークンあり OR MSALリダイレクト中) → 読み込み中
-      isLoading: !storedUser && Boolean(stored || hasMsalRedirect),
-      stored,
+      token: null,
+      user: null,
+      isLoading: true,
+      hasMsalRedirect,
     };
   });
   const [user, setUser] = useState<AuthUser | null>(initialAuth.user);
   const [token, setToken] = useState<string | null>(initialAuth.token);
   const [isLoading, setIsLoading] = useState(initialAuth.isLoading);
 
-  const saveToken = useCallback((t: string, u: AuthUser) => {
-    localStorage.setItem(TOKEN_KEY, t);
-    setToken(t);
+  const saveUser = useCallback((u: AuthUser) => {
+    setToken(null);
     setUser(u);
     // user と同じバッチで isLoading を落とし、LoadingScreen → Dashboard の
     // 遷移を1回のレンダリングに収める（中間状態でログイン画面が見えるのを防ぐ）
     setIsLoading(false);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+  const logout = useCallback(async () => {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined);
     setToken(null);
     setUser(null);
   }, []);
@@ -81,6 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const timeout = setTimeout(() => controller.abort(), 30_000);
         const res = await fetch(`${API_BASE}/api/auth/microsoft`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id_token: redirectResult.idToken }),
           signal: controller.signal,
@@ -92,7 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         const data = await res.json();
         if (cancelled) return;
-        saveToken(data.access_token, {
+        saveUser({
           user_id: "",
           tenant_id: data.tenant_id,
           email: data.email,
@@ -115,7 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveToken]);
+  }, [saveUser]);
 
   // 401 イベントでトークン期限切れを検知してログアウト
   useEffect(() => {
@@ -129,16 +128,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let active = true;
-    const stored = initialAuth.stored;
-    if (!stored) {
-      return undefined;
-    }
+    if (initialAuth.hasMsalRedirect) return undefined;
 
-    const cachedUser = initialAuth.user;
-
-    fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${stored}` },
-    })
+    fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
       .then((res) => {
         if (res.status === 401 || res.status === 403) throw new Error("invalid");
         if (!res.ok) throw new Error("transient");
@@ -146,7 +138,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
       .then((data) => {
         if (!active) return;
-        setToken(stored);
+        setToken(null);
         setUser({
           user_id: data.user_id,
           tenant_id: data.tenant_id,
@@ -154,22 +146,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           display_name: data.display_name,
         });
       })
-      .catch((err: unknown) => {
-        const isAuthRejected = err instanceof Error && err.message === "invalid";
-        if (cachedUser && !isAuthRejected) return;
-        localStorage.removeItem(TOKEN_KEY);
+      .catch(() => {
         if (!active) return;
         setToken(null);
         setUser(null);
       })
       .finally(() => {
-        if (active && !cachedUser) setIsLoading(false);
+        if (active) setIsLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [initialAuth.stored, initialAuth.user]);
+  }, [initialAuth.hasMsalRedirect]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -179,6 +168,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const res = await fetch(`${API_BASE}/api/auth/login`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
@@ -187,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           throw new Error(err.detail || "ログインに失敗しました");
         }
         const data = await res.json();
-        saveToken(data.access_token, {
+        saveUser({
           user_id: "",
           tenant_id: data.tenant_id,
           email: data.email,
@@ -199,7 +189,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw err;
       }
     },
-    [saveToken]
+    [saveUser]
   );
 
   const loginWithMicrosoft = useCallback(async () => {

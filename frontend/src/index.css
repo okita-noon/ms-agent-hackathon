@@ -84,6 +84,14 @@ tr.row-hover:hover {
   background-color: #f1f5f9;
 }
 
+.animate-new-order {
+  animation: newOrderHighlight 6s ease-out;
+}
+@keyframes newOrderHighlight {
+  0%, 35% { background-color: #dcfce7; }
+  100% { background-color: transparent; }
+}
+
 /* Tab active indicator slide */
 .tab-indicator {
   transition: left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1);

@@ -12,7 +12,7 @@ const msalConfig: Configuration = {
     redirectUri: window.location.origin + "/",
   },
   cache: {
-    cacheLocation: "localStorage",
+    cacheLocation: "sessionStorage",
   },
   system: {
     // OS の native broker (Windows Hello 等) を呼び出すと

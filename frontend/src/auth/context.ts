@@ -7,7 +7,7 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithMicrosoft: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);

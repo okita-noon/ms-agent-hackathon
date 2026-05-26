@@ -28,7 +28,7 @@
 - [x] チャネル×ユーザー単位の非同期ロック（並行処理の安全性）
 - [x] Learning Service（パターン記録・プロファイル更新）
 - [x] テナント解決サービス（LINE/電話→テナント紐付け）
-- [x] 認証（ID/パスワード + Microsoft SSO、JWT発行）
+- [x] 認証（ID/パスワード + Microsoft SSO、HttpOnly CookieでJWT発行）
 - [x] FastAPI アプリ（REST API 10エンドポイント）
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
@@ -70,7 +70,9 @@
   - API未接続時のデモデータフォールバック
   - デモ顧客名を法人記号形式から飲食店・レストラン想定の店舗名へ更新
   - ログイン画面用の濃色ロゴを追加し、白背景でも `foogent` が読めるように改善
-  - 保存済みJWTから即時にログイン状態を復元し、`/api/auth/me` 検証をバックグラウンド化。ページ単位の遅延ロードとMicrosoft SSOライブラリの動的読み込みでログイン後の起動待ちを短縮
+  - JWT保存をlocalStorageからHttpOnly Cookieへ移行。`/api/auth/me` でログイン状態を復元し、API呼び出しは `credentials: include` でCookie認証
+  - Microsoft SSO のMSALキャッシュを `sessionStorage` に変更し、ブラウザ永続ストレージに認証トークンを残さない方針へ寄せた
+  - 受注一覧にSSEライブ更新を追加。`/api/orders/events` をCookie認証で購読し、新着・更新イベント受信時に一覧とDashboard Agentパネルを再取得、新着行を一時ハイライト
   - Web電話ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。実際の電話チャネルと同一のAzure Speech Servicesを使用
 
 ### CI/CD

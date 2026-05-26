@@ -67,6 +67,8 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 | `JWT_ISSUER` | No | JWT `iss` クレーム（デフォルト `orderai-api`）。トークン検証時に厳密一致 |
 | `JWT_AUDIENCE` | No | JWT `aud` クレーム（デフォルト `orderai-dashboard`）。トークン検証時に厳密一致 |
 | `JWT_EXPIRE_HOURS` | No | トークン有効期限(デフォルト: 24時間) |
+| `AUTH_COOKIE_SECURE` | No | 認証 Cookie の `Secure` 属性（デフォルト: `true`）。ローカルHTTP検証時のみ `false` |
+| `AUTH_COOKIE_SAMESITE` | No | 認証 Cookie の `SameSite` 属性（デフォルト: `none`）。静的サイト/API別ドメイン運用では `none` |
 | `AZURE_AD_ALLOWED_TENANTS` | SSO使用時 Yes | Microsoft Entra `tid` のカンマ区切り allowlist。未設定なら全 SSO 拒否（fail-closed） |
 | `AZURE_AD_ALLOWED_DOMAINS` | No | email/UPN ドメインの追加 allowlist（小文字、カンマ区切り） |
 | `REGISTRATION_ENABLED` | No | `true` でセルフ登録解放（デフォルト無効＝`/api/auth/register` は 404） |
@@ -212,8 +214,8 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 
 ```
 ブラウザ → POST /api/auth/login {email, password}
-        ← {access_token, tenant_id, display_name}
-        → 以後全 API に Authorization: Bearer <token>
+        ← Set-Cookie: foogent_access_token=<JWT>; HttpOnly; Secure; SameSite=None
+        → 以後全 API に Cookie を自動送信（fetch credentials: include）
 ```
 
 ### Microsoft SSO
@@ -221,8 +223,8 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 ```
 ブラウザ → MSAL.js ポップアップ → Microsoft ログイン → id_token 取得
         → POST /api/auth/microsoft {id_token}
-        ← {access_token, tenant_id, display_name}
-        → 以後全 API に Authorization: Bearer <token>
+        ← Set-Cookie: foogent_access_token=<JWT>; HttpOnly; Secure; SameSite=None
+        → 以後全 API に Cookie を自動送信（fetch credentials: include）
 ```
 
 ### トークン
@@ -231,6 +233,8 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 - ペイロード: `iss`, `aud`, `iat`, `exp`, `sub` (user_id), `tenant_id`, `email`, `display_name`
 - 検証時に `iss` (`JWT_ISSUER`) と `aud` (`JWT_AUDIENCE`) も照合される
 - 全ビジネス API は JWT から `tenant_id` を取得（query parameter 不要）
+- JWT は原則として HttpOnly Cookie に保存し、フロントエンド JavaScript から読めないようにする
+- Cookie 認証での状態変更リクエストは `Origin` を `FRONTEND_ORIGINS` と照合して CSRF リスクを抑える
 
 ---
 
@@ -241,8 +245,10 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 | POST | `/api/auth/login` | 不要 | ID/PW ログイン |
 | POST | `/api/auth/register` | 招待トークン | `REGISTRATION_ENABLED=true` かつ `X-Invite-Token` ヘッダ必須。デフォルト 404 |
 | POST | `/api/auth/microsoft` | 不要 | Microsoft SSO（事前登録ユーザーのみ） |
+| POST | `/api/auth/logout` | Cookie | 認証 Cookie を削除 |
 | GET | `/api/auth/me` | 必要 | 現在のユーザー情報 |
 | GET | `/api/orders` | 必要 | 受注一覧。tenant_id は JWT から取得 |
+| GET | `/api/orders/events` | 必要 | 受注更新の Server-Sent Events。Cookie 認証 |
 | GET | `/api/orders/{id}` | 必要 | 受注詳細。tenant_id ミスマッチは 404（IDOR ガード） |
 | GET | `/api/customers` | 必要 | 顧客一覧 |
 | ... | その他ビジネスAPI | 必要 | JWT から tenant_id 取得 |

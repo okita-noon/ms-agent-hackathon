@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 
 from src.auth.dependencies import get_current_user
 from src.auth.microsoft import validate_microsoft_id_token
@@ -24,6 +24,38 @@ from src.auth.service import (
 logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(tags=["auth"])
+AUTH_COOKIE_NAME = "foogent_access_token"
+
+
+def _cookie_secure() -> bool:
+    return os.environ.get("AUTH_COOKIE_SECURE", "true").lower() != "false"
+
+
+def _cookie_samesite() -> str:
+    value = os.environ.get("AUTH_COOKIE_SAMESITE", "none").lower()
+    return value if value in {"lax", "strict", "none"} else "none"
+
+
+def _set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=int(os.environ.get("JWT_EXPIRE_HOURS", "24")) * 3600,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
+        path="/",
+    )
 
 
 def _registration_enabled() -> bool:
@@ -40,7 +72,7 @@ def _get_user_store() -> UserStore:
 
 
 @auth_router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, response: Response):
     store = _get_user_store()
     result = await store.find_by_email(req.email)
     if not result:
@@ -70,8 +102,9 @@ async def login(req: LoginRequest):
         )
 
     token = create_access_token(user)
+    _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token=token,
+        access_token="",
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
@@ -81,6 +114,7 @@ async def login(req: LoginRequest):
 @auth_router.post("/register", response_model=TokenResponse)
 async def register(
     req: RegisterRequest,
+    response: Response,
     x_invite_token: str | None = Header(None, alias="X-Invite-Token"),
 ):
     if not _registration_enabled():
@@ -113,8 +147,9 @@ async def register(
     )
 
     token = create_access_token(user)
+    _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token=token,
+        access_token="",
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
@@ -122,7 +157,7 @@ async def register(
 
 
 @auth_router.post("/microsoft", response_model=TokenResponse)
-async def microsoft_login(req: MicrosoftLoginRequest):
+async def microsoft_login(req: MicrosoftLoginRequest, response: Response):
     claims = await validate_microsoft_id_token(req.id_token)
     if claims is None:
         raise HTTPException(
@@ -165,8 +200,9 @@ async def microsoft_login(req: MicrosoftLoginRequest):
         )
 
     token = create_access_token(user)
+    _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token=token,
+        access_token="",
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
@@ -176,3 +212,9 @@ async def microsoft_login(req: MicrosoftLoginRequest):
 @auth_router.get("/me", response_model=CurrentUser)
 async def get_me(user: CurrentUser = Depends(get_current_user)):
     return user
+
+
+@auth_router.post("/logout")
+async def logout(response: Response):
+    _clear_auth_cookie(response)
+    return {"status": "ok"}
