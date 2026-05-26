@@ -174,6 +174,7 @@ class TestPhoneDemoMessage:
             caller_number="+81312345678",
             called_number="+81501234567",
             call_connection_id=None,
+            customer_id=None,
         )
         mock_handler.disconnect_demo_call.assert_awaited_once_with("demo-12345678")
 
