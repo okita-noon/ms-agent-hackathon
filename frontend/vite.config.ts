@@ -8,6 +8,11 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://localhost:8080",
+      "/voicevox": {
+        target: "http://localhost:50021",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/voicevox/, ""),
+      },
     },
   },
   build: {

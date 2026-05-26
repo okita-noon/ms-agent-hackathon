@@ -179,13 +179,21 @@ export default function Orders() {
     <>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
+        <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-gray-900 tracking-tight">受注一覧</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <span className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-bold text-brand-700">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            受注 <span className="tabular-nums">{acceptedOrderCount}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            要対応 <span className="tabular-nums">{reviewOrderCount}</span>
+          </span>
+          <span className="text-xs text-gray-400">
             {loading && orders.length === 0
-              ? "データを読み込み中..."
-              : `表示 ${pageStart}-${pageEnd}件 / 全${totalOrders}件`}
-          </p>
+              ? "読み込み中..."
+              : `${pageStart}-${pageEnd} / ${totalOrders}件`}
+          </span>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {triageAvailable && (
@@ -298,24 +306,6 @@ export default function Orders() {
         <div className="min-w-0">
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {/* Section header */}
-        <div className="px-5 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">注文一覧</h2>
-            <p className="text-sm text-gray-400 mt-0.5">すべての注文の確認・管理ができます</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-bold text-brand-700">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              受注 <span className="tabular-nums">{acceptedOrderCount}</span>件
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              要対応 <span className="tabular-nums">{reviewOrderCount}</span>件
-            </span>
-          </div>
-        </div>
-
         {/* Filter bar */}
         <OrderFilterBar
           searchQuery={query}
@@ -394,7 +384,7 @@ export default function Orders() {
                   <th className="px-5 py-3">備考</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-200">
                 {displayOrders.map((o) => {
                   const items = o.items || [];
                   return (
