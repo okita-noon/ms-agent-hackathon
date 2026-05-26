@@ -71,7 +71,7 @@
   - デモ顧客名を法人記号形式から飲食店・レストラン想定の店舗名へ更新
   - ログイン画面用の濃色ロゴを追加し、白背景でも `foogent` が読めるように改善
   - 保存済みJWTから即時にログイン状態を復元し、`/api/auth/me` 検証をバックグラウンド化。ページ単位の遅延ロードとMicrosoft SSOライブラリの動的読み込みでログイン後の起動待ちを短縮
-  - Web電話ページ（`/web-phone`）：音声入力（Web Speech API）・VOICEVOX ずんだもん TTS・IME対応テキスト入力で電話発注をシミュレーション
+  - Web電話ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。実際の電話チャネルと同一のAzure Speech Servicesを使用
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check

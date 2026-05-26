@@ -115,6 +115,24 @@ class PhoneCallHandler:
             logger.debug("Unhandled phone event type: %s", event_type)
             return None
 
+    def init_demo_call(
+        self,
+        caller_number: str,
+        called_number: str,
+    ) -> str:
+        """Initialise a demo CallState and return its call_connection_id."""
+        call_id = f"demo-{caller_number[-8:] or 'anonymous'}"
+        if call_id not in self._calls:
+            self._calls[call_id] = CallState(
+                call_connection_id=call_id,
+                server_call_id=f"server-{call_id}",
+                caller_number=caller_number,
+                called_number=called_number,
+                tenant_ctx=resolve_tenant_for_phone(called_number),
+                audio_enabled=False,
+            )
+        return call_id
+
     async def process_demo_message(
         self,
         message: str,

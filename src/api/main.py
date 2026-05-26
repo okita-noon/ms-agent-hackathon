@@ -529,6 +529,12 @@ class PhoneDemoMessageRequest(BaseModel):
     called_number: str = "+81501234567"
     call_connection_id: str | None = None
     disconnect: bool = False
+    with_audio: bool = False
+
+
+class WebPhoneGreetingRequest(BaseModel):
+    caller_number: str = "+81312345678"
+    called_number: str = "+81501234567"
 
 
 class LineTesterMessageRequest(BaseModel):
@@ -648,6 +654,64 @@ async def phone_demo_message(
 
 # ── Web phone endpoints (JWT protected) ──────────────────────────────────────
 
+_speech_service: Any | None = None
+
+
+def _get_speech_service() -> Any:
+    global _speech_service  # noqa: PLW0603
+    if _speech_service is None:
+        from src.services.speech_service import SpeechService
+
+        key = os.environ.get("SPEECH_SERVICE_KEY", "")
+        region = os.environ.get("SPEECH_SERVICE_REGION", "")
+        if not key or not region:
+            raise HTTPException(
+                status_code=503,
+                detail="SPEECH_SERVICE_KEY / SPEECH_SERVICE_REGION not configured",
+            )
+        _speech_service = SpeechService(speech_key=key, speech_region=region)
+    return _speech_service
+
+
+@app.get("/api/speech-token")
+async def speech_token(tenant_id: str = Depends(get_tenant_id)):
+    """Issue a short-lived token for Azure Speech SDK in the browser."""
+    svc = _get_speech_service()
+    token = await svc.issue_token()
+    region = os.environ.get("SPEECH_SERVICE_REGION", "")
+    return {"token": token, "region": region}
+
+
+@app.post("/api/web-phone/greeting")
+async def web_phone_greeting(
+    payload: WebPhoneGreetingRequest,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Start a web phone call and return greeting audio."""
+    import base64
+
+    from src.services.phone_handler import GREETING_MESSAGE
+
+    handler = _get_phone_handler()
+    call_connection_id = handler.init_demo_call(
+        caller_number=payload.caller_number,
+        called_number=payload.called_number,
+    )
+
+    try:
+        svc = _get_speech_service()
+        audio_bytes = await svc.synthesize(GREETING_MESSAGE)
+        audio_b64 = base64.b64encode(audio_bytes).decode()
+    except Exception:
+        logger.exception("TTS failed for greeting")
+        audio_b64 = ""
+
+    return {
+        "text": GREETING_MESSAGE,
+        "audio": audio_b64,
+        "call_connection_id": call_connection_id,
+    }
+
 
 @app.post("/api/web-phone/message")
 async def web_phone_message(
@@ -665,6 +729,18 @@ async def web_phone_message(
     if payload.disconnect:
         disconnect_result = await handler.disconnect_demo_call(result["call_connection_id"])
         result["disconnect"] = disconnect_result
+
+    if payload.with_audio and result.get("response"):
+        import base64
+
+        try:
+            svc = _get_speech_service()
+            audio_bytes = await svc.synthesize(result["response"])
+            result["response_audio"] = base64.b64encode(audio_bytes).decode()
+        except Exception:
+            logger.exception("TTS failed for response")
+            result["response_audio"] = ""
+
     return result
 
 
