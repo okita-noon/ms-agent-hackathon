@@ -1,7 +1,8 @@
 import type { Order, Customer, Message } from "./api";
+import { todayJst } from "./date";
 
 export function getDemoOrders(): Order[] {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayJst();
   const ts = (h: number, m: number) => `${today}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
   return [
     { uid: "ORD-002", tenant_id: "T-001", order_date: ts(14, 57), delivery_date: today, customer_id: "C-001", customer_name: "丸山 太郎", source: "Email", items: [{ product_name: "さくらんぼ", quantity: 10, unit: "パック", temperature_zone: "冷蔵" }], delivery_carrier: "冷蔵ヤマト便", delivery_route: "東北便", delivery_time_slot: "16:00", status: "配送中", remarks: undefined, updated_at: ts(15, 5) },
@@ -12,8 +13,8 @@ export function getDemoOrders(): Order[] {
   ];
 }
 
-export function getDemoMessages(orderId: string): Message[] {
-  const today = new Date().toISOString().split("T")[0];
+export function getDemoMessages(orderId: string, order?: Order): Message[] {
+  const today = todayJst();
   const msgs: Record<string, Message[]> = {
     "ORD-001": [
       { id: "dm-001-1", role: "user", text: "りんご10箱とバナナ20kgをお願いします。", channel: "line", created_at: `${today}T09:00:00Z` },
@@ -52,7 +53,39 @@ export function getDemoMessages(orderId: string): Message[] {
       { id: "dm-006-4", role: "assistant", text: "かしこまりました。東北便（自社便）で手配いたします。ご注文ありがとうございます。", channel: "line", created_at: `${today}T15:00:42Z` },
     ],
   };
-  return msgs[orderId] || [];
+  if (msgs[orderId]) return msgs[orderId];
+  if (!order || order.items.length === 0) return [];
+  return generateDemoMessages(orderId, order);
+}
+
+function generateDemoMessages(orderId: string, order: Order): Message[] {
+  const sourceToChannel: Record<string, string> = {
+    LINE: "line",
+    Phone: "phone",
+    Email: "email",
+    "Web電話": "phone",
+  };
+  const channel = sourceToChannel[order.source] || "line";
+  const baseTime = order.order_date || new Date().toISOString();
+  const base = new Date(baseTime);
+  const ts = (offsetSec: number) => new Date(base.getTime() + offsetSec * 1000).toISOString();
+
+  const itemsText = order.items
+    .map((i) => `${i.product_name}${i.quantity}${i.unit}`)
+    .join("と");
+  const confirmItems = order.items
+    .map((i) => `${i.product_name}${i.quantity}${i.unit}（${i.temperature_zone || "常温"}）`)
+    .join("、");
+  const deliveryInfo = [order.delivery_route, order.delivery_carrier].filter(Boolean).join("（") + (order.delivery_carrier ? "）" : "");
+  const timeSlot = order.delivery_time_slot ? `${order.delivery_time_slot}の` : "";
+
+  const prefix = `dm-${orderId}-`;
+  return [
+    { id: `${prefix}1`, role: "user" as const, text: `${itemsText}をお願いします。`, channel, created_at: ts(0) },
+    { id: `${prefix}2`, role: "assistant" as const, text: `承知しました。${confirmItems}ですね。配送日はいつがよろしいでしょうか？`, channel, created_at: ts(15) },
+    { id: `${prefix}3`, role: "user" as const, text: order.delivery_date ? `${order.delivery_date}でお願いします。` : "今日でお願いします。", channel, created_at: ts(45) },
+    { id: `${prefix}4`, role: "assistant" as const, text: `かしこまりました。${timeSlot}${deliveryInfo || "配送便"}で手配いたします。ご注文ありがとうございます。`, channel, created_at: ts(60) },
+  ];
 }
 
 export function getDemoCustomers(): Customer[] {

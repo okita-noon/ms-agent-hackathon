@@ -8,17 +8,16 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from pathlib import Path
 from string import Template
 
 from src.connectors.context import TenantContext
 from src.models.customer import Customer
 from src.models.product import Product
+from src.utils.business_date import JST, now_jst, today_jst
 
 logger = logging.getLogger(__name__)
-
-JST = timezone(timedelta(hours=9))
 
 DORMANT_THRESHOLD_DAYS = 30
 SEND_HOUR_START = 9
@@ -58,7 +57,7 @@ def render_message(
 
 def is_send_allowed(now: datetime | None = None) -> bool:
     """現在時刻が送信可能時間帯（JST）内かどうか判定する."""
-    current = now or datetime.now(JST)
+    current = now or now_jst()
     return SEND_HOUR_START <= current.hour < SEND_HOUR_END
 
 
@@ -75,7 +74,7 @@ class DormantCustomerService:
         order_repo = self._ctx.get_connector("IOrderRepository")
 
         all_customers: list[Customer] = await customer_repo.list_all(self._ctx.tenant_id)
-        today = date.today()
+        today = today_jst()
         dormant: list[tuple[Customer, date | None]] = []
 
         for customer in all_customers:

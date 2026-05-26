@@ -11,9 +11,11 @@ from src.agents.orchestrator import (
     OrderOrchestrator,
     _build_draft_from_intake,
     _enforce_response_policy,
+    _format_open_orders_summary,
     _format_memory_context,
     _inventory_requires_operator_review,
     _is_affirmative_reply,
+    _is_current_order_inquiry,
     _is_inventory_inquiry,
     _parse_order_items,
 )
@@ -93,6 +95,25 @@ class TestBuildDraftFromIntake:
     def test_empty_items(self):
         assert _build_draft_from_intake({"customer_id": "C-001", "items": []}) is None
 
+    def test_defaults_delivery_date_to_jst_business_date(self):
+        intake = {
+            "customer_id": "C-001",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                }
+            ],
+        }
+
+        with patch("src.agents.orchestrator.today_jst", return_value=date(2026, 5, 26)):
+            draft = _build_draft_from_intake(intake)
+
+        assert draft is not None
+        assert draft["delivery_date"] == date(2026, 5, 26)
+
 
 class TestExtractJson:
     def setup_method(self):
@@ -119,6 +140,99 @@ class TestInventoryReview:
 
     def test_all_available_false_requires_review(self):
         assert _inventory_requires_operator_review({"all_available": False})
+
+
+class TestCurrentOrderInquiry:
+    def test_match_current_order_keywords(self):
+        assert _is_current_order_inquiry("今の注文は？")
+        assert _is_current_order_inquiry("現在の注文状況を教えて")
+
+    def test_not_match_general_order_message(self):
+        assert not _is_current_order_inquiry("バナナ5kgお願いします")
+
+    def test_format_open_orders_summary_group_by_delivery_date(self):
+        orders = [
+            Order(
+                id="ORD-1",
+                tenant_id="T-001",
+                order_date=date(2026, 5, 26),
+                delivery_date=date(2026, 5, 28),
+                customer_id="C-001",
+                customer_name="Test",
+                source=OrderSource.LINE,
+                status=OrderStatus.ACCEPTED,
+                items=[
+                    OrderItem(
+                        product_id="P-001",
+                        product_name="りんご",
+                        quantity=2,
+                        unit="箱",
+                        temperature_zone=TemperatureZone.AMBIENT,
+                    )
+                ],
+            ),
+            Order(
+                id="ORD-2",
+                tenant_id="T-001",
+                order_date=date(2026, 5, 26),
+                delivery_date=date(2026, 5, 29),
+                customer_id="C-001",
+                customer_name="Test",
+                source=OrderSource.LINE,
+                status=OrderStatus.ACCEPTED,
+                items=[
+                    OrderItem(
+                        product_id="P-002",
+                        product_name="バナナ",
+                        quantity=5,
+                        unit="kg",
+                        temperature_zone=TemperatureZone.AMBIENT,
+                    )
+                ],
+            ),
+        ]
+        summary = _format_open_orders_summary(orders)
+        assert "りんご 2箱 が5月28日配送予定" in summary
+        assert "バナナ 5kg が5月29日配送予定" in summary
+
+    @pytest.mark.asyncio
+    async def test_inquiry_returns_open_order_summary(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = [
+            Order(
+                id="ORD-1",
+                tenant_id="T-TEST",
+                customer_id="C-001",
+                customer_name="テスト社",
+                order_date=date(2026, 5, 26),
+                delivery_date=date(2026, 5, 28),
+                source=OrderSource.LINE,
+                status=OrderStatus.ACCEPTED,
+                items=[
+                    OrderItem(
+                        product_id="P-001",
+                        product_name="りんご",
+                        quantity=2,
+                        unit="箱",
+                        temperature_zone=TemperatureZone.CHILLED,
+                    )
+                ],
+            )
+        ]
+
+        with patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send:
+            result = await orch.process_order_message(
+                message="今の注文は？",
+                line_user_id="WEB-C-001",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                known_customer_id="C-001",
+            )
+
+        assert "現在の注文は" in result["response"]
+        assert "りんご 2箱 が5月28日配送予定" in result["response"]
+        mock_send.assert_awaited_once()
 
     def test_item_reserve_failure_requires_review(self):
         assert _inventory_requires_operator_review({"items": [{"product_id": "P-001", "reserved": False}]})
@@ -319,6 +433,38 @@ class TestMemoryContext:
 
 class TestProcessOrderMessageSendsOnce:
     """Verify that process_order_message sends exactly one LINE message — no more, no less."""
+
+    @pytest.mark.asyncio
+    async def test_create_order_from_draft_uses_jst_business_date(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-JST"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+        draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+        }
+
+        with patch("src.agents.orchestrator.today_jst", return_value=date(2026, 5, 26)):
+            order = await orch.create_order_from_draft(draft, source=OrderSource.LINE)
+
+        assert order.id == "ORD-JST"
+        assert saved_orders[0].order_date == date(2026, 5, 26)
+        assert saved_orders[0].delivery_date == date(2026, 5, 26)
 
     @pytest.mark.asyncio
     async def test_sends_once_on_intake_fallback(self, mock_tenant_ctx):

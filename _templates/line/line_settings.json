@@ -42,6 +42,11 @@
       "variables": [],
       "branch": "B-11"
     },
+    "order_current_summary": {
+      "file": "order_current_summary.txt",
+      "variables": ["summary"],
+      "branch": "B-13"
+    },
     "order_locked_need_review": {
       "file": "order_locked_need_review.txt",
       "variables": [],

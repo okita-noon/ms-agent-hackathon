@@ -19,20 +19,11 @@ import OrderFilterBar from "../components/OrderFilterBar";
 import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import DashboardAgentPanel from "../components/DashboardAgentPanel";
+import { offsetDate, todayJst } from "../lib/date";
 
 const PAGE_SIZE = 50;
 
 type DateField = "delivery_date" | "order_date";
-
-function today(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-function offsetDate(base: string, days: number): string {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
 
 function formatDate(value?: string): string {
   if (!value) return "-";
@@ -52,7 +43,8 @@ function formatClock(value: Date | null): string {
 }
 
 export default function Orders() {
-  const [date, setDate] = useState(() => today());
+  const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
+  const [date, setDate] = useState(() => todayJst());
   const [dateField, setDateField] = useState<DateField>("delivery_date");
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -77,12 +69,12 @@ export default function Orders() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetchOrders(date, {
+      const resp = await fetchOrders(dateFilterEnabled ? date : null, {
         status: statusFilter || undefined,
         q: query || undefined,
         limit: PAGE_SIZE,
         offset,
-        date_field: dateField,
+        date_field: dateFilterEnabled ? dateField : undefined,
       });
       setOrders(resp.orders);
       setTotalOrders(resp.total);
@@ -104,7 +96,7 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  }, [date, dateField, statusFilter, query, offset]);
+  }, [dateFilterEnabled, date, dateField, statusFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -125,7 +117,7 @@ export default function Orders() {
   }, []);
 
   const loadAgentExceptions = useCallback(async () => {
-    if (!agentPanelOpen) {
+    if (!agentPanelOpen || !dateFilterEnabled) {
       setAgentExceptions([]);
       return;
     }
@@ -138,7 +130,7 @@ export default function Orders() {
     } finally {
       setAgentLoading(false);
     }
-  }, [agentPanelOpen, date]);
+  }, [agentPanelOpen, dateFilterEnabled, date]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
@@ -155,8 +147,10 @@ export default function Orders() {
     function handleOrderEvent(event: MessageEvent<string>) {
       setLiveStatus("live");
       const payload = JSON.parse(event.data || "{}") as OrderEventPayload;
-      const eventDate = dateField === "order_date" ? payload.order_date : payload.delivery_date;
-      if (eventDate && eventDate !== date) return;
+      if (dateFilterEnabled) {
+        const eventDate = dateField === "order_date" ? payload.order_date : payload.delivery_date;
+        if (eventDate && eventDate !== date) return;
+      }
 
       if (payload.order_id) {
         setRecentOrderIds((current) => new Set(current).add(payload.order_id || ""));
@@ -184,7 +178,7 @@ export default function Orders() {
       events.close();
       setLiveStatus("offline");
     };
-  }, [date, dateField, load, loadAgentExceptions]);
+  }, [dateFilterEnabled, date, dateField, load, loadAgentExceptions]);
 
   const displayOrders = useMemo(() => {
     const result = [...orders];
@@ -204,12 +198,13 @@ export default function Orders() {
     ACCEPTED_ORDER_STATUSES.has(normalizeStatus(o.status))
   ).length;
   const reviewOrderCount = orders.length - acceptedOrderCount;
-  const hasFilters = Boolean(statusFilter || query.trim());
+  const hasFilters = Boolean(dateFilterEnabled || statusFilter || query.trim());
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
   const page = Math.floor(offset / PAGE_SIZE) + 1;
 
   function resetFilters() {
+    setDateFilterEnabled(false);
     setStatusFilter("");
     setQuery("");
     setSortKey("order_date_desc");
@@ -227,7 +222,7 @@ export default function Orders() {
   }
 
   const filterStatusUI = statusFilter || "すべて";
-  const todayStr = today();
+  const todayStr = todayJst();
 
   return (
     <>
@@ -277,68 +272,98 @@ export default function Orders() {
             </button>
           )}
 
-          {/* Date field toggle */}
-          <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => changeDateField("delivery_date")}
-              className={`px-3 py-2 transition-colors ${
-                dateField === "delivery_date"
-                  ? "bg-brand-600 text-white"
-                  : "text-gray-500 hover:bg-gray-50"
+          {/* Date filter toggle */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={dateFilterEnabled}
+            onClick={() => { setDateFilterEnabled((prev) => !prev); setOffset(0); }}
+            className={`btn-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+              dateFilterEnabled
+                ? "border-brand-200 bg-brand-50 text-brand-700"
+                : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            <span
+              className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
+                dateFilterEnabled ? "bg-brand-600" : "bg-gray-300"
               }`}
             >
-              配送日
-            </button>
-            <button
-              type="button"
-              onClick={() => changeDateField("order_date")}
-              className={`px-3 py-2 border-l border-gray-200 transition-colors ${
-                dateField === "order_date"
-                  ? "bg-brand-600 text-white"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              受注日
-            </button>
-          </div>
+              <span
+                className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
+                  dateFilterEnabled ? "translate-x-3" : "translate-x-0"
+                }`}
+              />
+            </span>
+            日付で絞り込み
+          </button>
 
-          {/* Quick date buttons */}
-          <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => changeDate(offsetDate(date, -1))}
-              className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
-            >
-              前日
-            </button>
-            <button
-              type="button"
-              onClick={() => changeDate(todayStr)}
-              className={`px-3 py-2 border-l border-gray-200 transition-colors ${
-                date === todayStr
-                  ? "bg-brand-50 text-brand-700 font-semibold"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              本日
-            </button>
-            <button
-              type="button"
-              onClick={() => changeDate(offsetDate(date, 1))}
-              className="px-3 py-2 border-l border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
-            >
-              翌日
-            </button>
-          </div>
+          {dateFilterEnabled && (
+            <>
+              {/* Date field toggle */}
+              <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => changeDateField("delivery_date")}
+                  className={`px-3 py-2 transition-colors ${
+                    dateField === "delivery_date"
+                      ? "bg-brand-600 text-white"
+                      : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  配送日
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeDateField("order_date")}
+                  className={`px-3 py-2 border-l border-gray-200 transition-colors ${
+                    dateField === "order_date"
+                      ? "bg-brand-600 text-white"
+                      : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  受注日
+                </button>
+              </div>
 
-          {/* Date picker */}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => changeDate(e.target.value)}
-            className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
-          />
+              {/* Quick date buttons */}
+              <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => changeDate(offsetDate(date, -1))}
+                  className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  前日
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeDate(todayStr)}
+                  className={`px-3 py-2 border-l border-gray-200 transition-colors ${
+                    date === todayStr
+                      ? "bg-brand-50 text-brand-700 font-semibold"
+                      : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  本日
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeDate(offsetDate(date, 1))}
+                  className="px-3 py-2 border-l border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  翌日
+                </button>
+              </div>
+
+              {/* Date picker */}
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => changeDate(e.target.value)}
+                className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
+              />
+            </>
+          )}
 
           <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
             <span
@@ -398,7 +423,7 @@ export default function Orders() {
               </svg>
             </div>
             <p className="text-sm text-gray-400">
-              {hasFilters ? "条件に一致する受注データはありません" : "この日の受注データはありません"}
+              {hasFilters ? "条件に一致する受注データはありません" : "受注データはありません"}
             </p>
           </div>
         ) : (

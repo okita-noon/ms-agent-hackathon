@@ -64,7 +64,7 @@ class CosmosOrderRepository:
     async def list_orders(
         self,
         tenant_id: str,
-        target_date: date,
+        target_date: date | None = None,
         *,
         status: str | None = None,
         source: str | None = None,
@@ -76,16 +76,17 @@ class CosmosOrderRepository:
         safe_field = "order_date" if date_field == "order_date" else "delivery_date"
         where = [
             "c.tenant_id = @tid",
-            f"c.{safe_field} = @d",
             "c.source != @excluded_fax",
             "c.source != @excluded_manual",
         ]
-        params = [
+        params: list[dict[str, object]] = [
             {"name": "@tid", "value": tenant_id},
-            {"name": "@d", "value": target_date.isoformat()},
             {"name": "@excluded_fax", "value": _EXCLUDED_ORDER_SOURCES[0]},
             {"name": "@excluded_manual", "value": _EXCLUDED_ORDER_SOURCES[1]},
         ]
+        if target_date is not None:
+            where.append(f"c.{safe_field} = @d")
+            params.append({"name": "@d", "value": target_date.isoformat()})
 
         if status:
             where.append("c.status = @status")
@@ -118,7 +119,8 @@ class CosmosOrderRepository:
             {"name": "@offset", "value": offset},
             {"name": "@limit", "value": limit},
         ]
-        page_query = f"SELECT * FROM c WHERE {where_clause} ORDER BY c.customer_name OFFSET @offset LIMIT @limit"
+        order_by = "c.order_date DESC" if target_date is None else "c.customer_name"
+        page_query = f"SELECT * FROM c WHERE {where_clause} ORDER BY {order_by} OFFSET @offset LIMIT @limit"
         items = self._container.query_items(page_query, parameters=page_params)
         orders = [Order.model_validate(doc) async for doc in items]
         return orders, total

@@ -24,8 +24,12 @@ const SOURCE_COLORS = {
   'Web': '#f97316',
 };
 
+function todayJst() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
 function init() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayJst();
   document.getElementById('deliveryDate').value = today;
   updateClock();
   setInterval(updateClock, 1000);
@@ -65,7 +69,7 @@ async function loadData() {
 }
 
 function getDemoOrders() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayJst();
   return [
     { uid: 'ORD-001', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-001', customer_name: 'ビストロ青葉', source: 'LINE', items: [{ product_name: 'りんご', quantity: 10, unit: '箱', temperature_zone: '冷蔵' }, { product_name: 'バナナ', quantity: 20, unit: 'kg', temperature_zone: '常温' }], delivery_carrier: '自社便', delivery_route: '北関東便', status: '未処理', remarks: null },
     { uid: 'ORD-002', tenant_id: 'T-001', order_date: today, delivery_date: today, customer_id: 'C-002', customer_name: '炭火焼鳥とり善', source: 'LINE', items: [{ product_name: 'もも', quantity: 5, unit: '箱', temperature_zone: '冷蔵' }], delivery_carrier: '芦川便', delivery_route: '西日本便', status: '完了', remarks: null },

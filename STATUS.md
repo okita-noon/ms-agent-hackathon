@@ -52,6 +52,9 @@
 - [x] デモ用顧客 C-011（株式会社Zennハッカソン）追加。未登録メールのデフォルトフォールバック先
 - [x] LINE 返信テンプレート基盤（`_templates/line/` + `line_template_renderer.py`）を追加。LINE では受注Noを表示せず、定型返信を優先
 - [x] LINE の現在注文コンテキスト（`current_order_id` / `current_order_snapshot`）をセッションとオーケストレータに追加。1顧客1オープン注文前提で追加・変更・取消へ寄せる
+- [x] 受注作成時の業務日をJST基準に統一。Container Apps のUTC日付に引きずられて、JST深夜帯の注文が前日扱いになる問題を修正
+- [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能
+- [x] Cosmos DB 本番デモデータの未来日受注（`DEMO-20260527-*`）を2026-05-26基準へ補正し、再投入用シードJSONも同様に更新
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
@@ -73,6 +76,7 @@
   - Microsoft SSO のMSALキャッシュを `sessionStorage` に変更し、ブラウザ永続ストレージに認証トークンを残さない方針へ寄せた
   - 受注一覧にSSEライブ更新を追加。`/api/orders/events` をCookie認証で購読し、新着・更新イベント受信時に一覧とDashboard Agentパネルを再取得、新着行を一時ハイライト
   - 電話発注（Web）ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。顧客選択ドロップダウンで発注元を指定可能。Agent処理・在庫確認・受注保存は実際の電話チャネルと同一コードパスを使用し、ACS電話番号取得後はそのまま本番電話受注に切替可能
+  - ダッシュボードの日付初期値・前日/翌日移動・デモデータ日付をJST基準に統一し、受注日/配送日フィルターのUTCずれを解消
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check

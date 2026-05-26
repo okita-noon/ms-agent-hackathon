@@ -68,7 +68,7 @@ export interface OrderFilters {
 
 export interface OrdersResponse {
   orders: Order[];
-  date: string;
+  date: string | null;
   total: number;
   limit: number;
   offset: number;
@@ -127,11 +127,14 @@ export async function updateOrderMemo(orderId: string, memo: string | null): Pro
 
 
 export async function fetchOrders(
-  date: string,
+  date: string | null,
   filters: OrderFilters = {}
 ): Promise<OrdersResponse> {
-  const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
-  const params = new URLSearchParams({ [paramKey]: date });
+  const params = new URLSearchParams();
+  if (date) {
+    const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
+    params.set(paramKey, date);
+  }
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
   if (filters.q?.trim()) params.set("q", filters.q.trim());
@@ -185,7 +188,8 @@ export interface Message {
 }
 
 export async function fetchOrderMessages(
-  orderId: string
+  orderId: string,
+  order?: Order,
 ): Promise<{ messages: Message[]; session_id: string | null }> {
   try {
     const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/messages`);
@@ -193,7 +197,7 @@ export async function fetchOrderMessages(
     const data = await resp.json();
     if (data.messages.length === 0) {
       const { getDemoMessages } = await import("./demo");
-      const demoMsgs = getDemoMessages(orderId);
+      const demoMsgs = getDemoMessages(orderId, order);
       if (demoMsgs.length > 0) {
         return { messages: demoMsgs, session_id: `demo-${orderId}` };
       }
@@ -201,7 +205,7 @@ export async function fetchOrderMessages(
     return data;
   } catch {
     const { getDemoMessages } = await import("./demo");
-    const demoMsgs = getDemoMessages(orderId);
+    const demoMsgs = getDemoMessages(orderId, order);
     return { messages: demoMsgs, session_id: demoMsgs.length > 0 ? `demo-${orderId}` : null };
   }
 }
