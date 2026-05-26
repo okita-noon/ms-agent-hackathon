@@ -19,9 +19,7 @@ from fastapi import (
     Response,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from fastapi.responses import HTMLResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.api.dashboard_agent import router as dashboard_agent_router
@@ -36,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_FRONTEND_URL = "https://storderaidev2.z11.web.core.windows.net/"
 DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+LINE_TESTER_COOKIE_NAME = "line_tester_auth"
 LineWebhookHandler: Any | None = None
 PhoneCallHandler: Any | None = None
 
@@ -204,8 +203,25 @@ async def health():
 
 
 @app.get("/line-tester", response_class=HTMLResponse)
-async def line_tester_page():
+async def line_tester_page(request: Request):
     _ensure_line_tester_enabled()
+    if not _is_line_tester_authorized(request):
+        return """<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINE Tester Unlock</title>
+<style>body{font-family:Segoe UI,Meiryo,sans-serif;background:#f2f5f7;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.12)}input,button{font-size:14px;padding:10px}input{width:100%;box-sizing:border-box;margin:8px 0}button{width:100%}</style>
+</head>
+<body><div class="box"><h2>LINE Tester</h2><p>アクセスコードを入力してください。</p><input id="code" type="password" placeholder="code"><button id="unlock">入室</button><p id="msg" style="color:#b00020;"></p></div>
+<script>
+document.getElementById("unlock").addEventListener("click", async ()=>{
+  const code = document.getElementById("code").value;
+  const res = await fetch("/line-tester/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
+  if(res.redirected){ location.href = res.url; return; }
+  document.getElementById("msg").textContent = "コードが違います";
+});
+</script></body>
+</html>"""
     return """<!doctype html>
 <html lang="ja">
 <head>
@@ -305,9 +321,22 @@ async def line_tester_page():
 </html>"""
 
 
-@app.get("/api/line-tester/customers")
-async def line_tester_customers():
+@app.post("/line-tester/unlock")
+async def line_tester_unlock(request: Request):
     _ensure_line_tester_enabled()
+    body = await request.json()
+    code = str(body.get("code", ""))
+    if code != _line_tester_access_code():
+        raise HTTPException(status_code=401, detail="invalid access code")
+    response = RedirectResponse(url="/line-tester", status_code=303)
+    response.set_cookie(key=LINE_TESTER_COOKIE_NAME, value=code, httponly=True, samesite="lax", max_age=60 * 60 * 8)
+    return response
+
+
+@app.get("/api/line-tester/customers")
+async def line_tester_customers(request: Request):
+    _ensure_line_tester_enabled()
+    _ensure_line_tester_authorized(request)
     tenant_id = _line_tester_tenant_id()
     tenant_ctx = resolve_tenant_by_id(tenant_id)
     repo = tenant_ctx.get_connector("ICustomerRepository")
@@ -318,8 +347,9 @@ async def line_tester_customers():
 
 
 @app.post("/api/line-tester/message")
-async def line_tester_message(payload: LineTesterMessageRequest):
+async def line_tester_message(request: Request, payload: LineTesterMessageRequest):
     _ensure_line_tester_enabled()
+    _ensure_line_tester_authorized(request)
     tenant_id = _line_tester_tenant_id()
     tenant_ctx = resolve_tenant_by_id(tenant_id)
 
@@ -343,10 +373,7 @@ async def line_tester_message(payload: LineTesterMessageRequest):
     session_id = payload.session_id or f"web-local-{int(datetime.now(timezone.utc).timestamp())}"
     line_user_id = f"WEB-{payload.customer_id}" if payload.customer_id else "WEB-TESTER"
 
-    history: list[MessageHistory] = []
-    for item in payload.conversation_history:
-        history.append(MessageHistory(**item))
-
+    history = [MessageHistory(**item) for item in payload.conversation_history]
     result = await orchestrator.process_order_message(
         message=payload.message,
         line_user_id=line_user_id,
@@ -387,7 +414,6 @@ async def line_tester_message(payload: LineTesterMessageRequest):
     pending = result.get("pending_order_draft")
     if result.get("order_saved") is True:
         pending = None
-
     return {
         "response": response_text,
         "session_id": session_id,
@@ -554,6 +580,19 @@ def _line_tester_enabled() -> bool:
 
 def _line_tester_tenant_id() -> str:
     return os.environ.get("LINE_TESTER_TENANT_ID", "T-001")
+
+
+def _line_tester_access_code() -> str:
+    return os.environ.get("LINE_TESTER_ACCESS_CODE", "test")
+
+
+def _is_line_tester_authorized(request: Request) -> bool:
+    return request.cookies.get(LINE_TESTER_COOKIE_NAME) == _line_tester_access_code()
+
+
+def _ensure_line_tester_authorized(request: Request) -> None:
+    if not _is_line_tester_authorized(request):
+        raise HTTPException(status_code=401, detail="line tester access code is required")
 
 
 def _ensure_line_tester_enabled() -> None:
