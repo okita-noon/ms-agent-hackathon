@@ -89,7 +89,7 @@ Phone Order Agent による同期応答、在庫確認、非同期の Orchestrat
 ```
 ダッシュボード（ブラウザ）
     → Azure Speech SDK (STT): マイク音声をリアルタイム文字起こし
-    → POST /api/web-phone/message（JWT認証、テキスト + customer_id）
+    → POST /api/web-phone/message（Cookie認証、テキスト + customer_id）
     → PhoneCallHandler.process_demo_message()
        ├─ CallState を生成（caller_number はダミー固定値）
        ├─ known_customer_id が指定されていれば ICustomerRepository で顧客名を解決
@@ -104,7 +104,7 @@ Phone Order Agent による同期応答、在庫確認、非同期の Orchestrat
 | 観点 | 実電話（`/api/phone-webhook`） | 電話発注 Web（`/api/web-phone/*`） |
 |---|---|---|
 | 音声入出力 | ACS Call Automation + Azure Speech | ブラウザ Speech SDK (STT) + REST API (TTS) |
-| 認証 | EventGrid 共有鍵 | JWT（ダッシュボードログイン） |
+| 認証 | EventGrid 共有鍵 | HttpOnly Cookie（ダッシュボードログイン） |
 | 顧客特定 | 発信者電話番号で自動判定 | UIドロップダウンで明示選択（`customer_id`） |
 | セッション管理 | 同一（`PhoneCallHandler` の `CallState`） | 同一 |
 | Agent処理 | 同一（`Phone Order Agent` → `Orchestrator`） | 同一 |
