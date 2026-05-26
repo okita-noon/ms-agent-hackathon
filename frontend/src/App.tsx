@@ -16,7 +16,7 @@ const Orders = lazy(() => import("./pages/Orders"));
 const Customers = lazy(() => import("./pages/Customers"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Analytics = lazy(() => import("./pages/Analytics"));
-const PhoneDebug = lazy(() => import("./pages/PhoneDebug"));
+const WebPhone = lazy(() => import("./pages/WebPhone"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
@@ -62,8 +62,8 @@ const BASE_NAV_ITEMS: NavItem[] = [
 
 const DEV_NAV_ITEMS: NavItem[] = [
   {
-    to: "/phone-debug",
-    label: "電話DB",
+    to: "/web-phone",
+    label: "Web電話",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -78,7 +78,7 @@ const NAV_ITEMS = (import.meta.env.DEV || localStorage.getItem("debug_nav") === 
 
 function Sidebar() {
   return (
-    <aside className="w-52 shrink-0 bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-40 shrink-0 bg-white border-r border-gray-200 flex flex-col">
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV_ITEMS.map((item) => (
           <NavLink
@@ -147,7 +147,7 @@ function DashboardLayout() {
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="customers" element={<Customers />} />
                 <Route path="analytics" element={<Analytics />} />
-                <Route path="phone-debug" element={<PhoneDebug />} />
+                <Route path="web-phone" element={<WebPhone />} />
                 <Route path="*" element={<Navigate to="/orders" replace />} />
               </Routes>
             </Suspense>

@@ -114,6 +114,8 @@
 | POST | `/api/email-webhook` | Microsoft Graph Change Notifications受信（メールチャネル） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | POST | `/api/phone-demo/message` | 電話番号取得前のデモ用。音声認識済みテキストを電話チャネルとして受注処理（EventGrid共有鍵必須） |
+| POST | `/api/web-phone/message` | Web電話：音声認識済みテキストを電話チャネルとして注入（JWT認証） |
+| POST | `/api/web-phone/disconnect` | Web電話：通話切断（JWT認証） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |
 | GET | `/api/products?tenant_id=T-001` | 商品マスタ一覧 |

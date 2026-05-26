@@ -276,7 +276,7 @@ export async function previewAgentResolution(
   return (await resp.json()) as AgentResolutionResponse;
 }
 
-export interface PhoneDebugRequest {
+export interface WebPhoneRequest {
   message: string;
   caller_number?: string;
   called_number?: string;
@@ -284,7 +284,7 @@ export interface PhoneDebugRequest {
   disconnect?: boolean;
 }
 
-export interface PhoneDebugResponse {
+export interface WebPhoneResponse {
   call_connection_id: string;
   status?: string;
   order_id?: string | null;
@@ -295,10 +295,10 @@ export interface PhoneDebugResponse {
   disconnect?: Record<string, unknown>;
 }
 
-export async function phoneDebugSendMessage(
-  req: PhoneDebugRequest
-): Promise<PhoneDebugResponse> {
-  const resp = await authFetch(`${API_BASE}/api/phone-debug/message`, {
+export async function webPhoneSendMessage(
+  req: WebPhoneRequest,
+): Promise<WebPhoneResponse> {
+  const resp = await authFetch(`${API_BASE}/api/web-phone/message`, {
     method: "POST",
     body: JSON.stringify(req),
   });
@@ -306,10 +306,10 @@ export async function phoneDebugSendMessage(
   return resp.json();
 }
 
-export async function phoneDebugDisconnect(
-  callConnectionId: string
-): Promise<PhoneDebugResponse> {
-  const resp = await authFetch(`${API_BASE}/api/phone-debug/disconnect`, {
+export async function webPhoneDisconnect(
+  callConnectionId: string,
+): Promise<WebPhoneResponse> {
+  const resp = await authFetch(`${API_BASE}/api/web-phone/disconnect`, {
     method: "POST",
     body: JSON.stringify({ call_connection_id: callConnectionId }),
   });
