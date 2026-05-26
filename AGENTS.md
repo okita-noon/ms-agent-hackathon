@@ -41,7 +41,7 @@
 |---|---|---|
 | リソースグループ | `rg-orderai-dev2` | Japan East |
 | Container Apps API | `ca-api-orderai-dev2` | `https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io` |
-| ダッシュボード | `storderaidev2` Static Website | `https://storderaidev2.z11.web.core.windows.net/dashboard/` |
+| ダッシュボード | `storderaidev2` Static Website | `https://storderaidev2.z11.web.core.windows.net/` |
 | ACR | `acrorderaidev2` | `acrorderaidev2.azurecr.io` |
 | Cosmos DB | `cosmos-orderai-dev2` | DB: `orders`, `intelligence` |
 | Azure SQL | `sql-orderai-dev2` | DB: `db-orderai-dev2` |
@@ -192,7 +192,7 @@
 
 ### Frontend
 - React/Vite アプリ: `frontend/`
-- 配信先: Azure Storage Static Website `/dashboard/`
+- 配信先: Azure Storage Static Website ルート
 - API接続先: `VITE_API_BASE_URL`
 
 ### CI/CD
@@ -274,7 +274,7 @@ src/
 frontend/                         # React/Vite ダッシュボード
 ├── src/                           # 画面・認証・APIクライアント
 ├── package.json                   # npm scripts
-└── vite.config.ts                 # /dashboard/ base・dev proxy
+└── vite.config.ts                 # Vite base・dev proxy
 
 infra/
 ├── main.bicep                    # Bicep メインテンプレート

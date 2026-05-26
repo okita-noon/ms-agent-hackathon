@@ -180,4 +180,4 @@ output sqlServerFqdn string = sqlDatabase.outputs.serverFqdn
 // output aiServicesEndpoint string = aiServices.outputs.endpoint  // クォータ承認後に有効化
 output aiSearchEndpoint string = aiSearch.outputs.endpoint
 output containerAppsUrl string = containerApps.outputs.appUrl
-output frontendUrl string = '${storage.outputs.webEndpoint}dashboard/'
+output frontendUrl string = storage.outputs.webEndpoint

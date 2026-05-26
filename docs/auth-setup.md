@@ -89,7 +89,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
      - 外部ユーザーも許可する場合は「任意の組織ディレクトリ」を選択
    - リダイレクト URI:
      - 種類: **SPA (Single Page Application)**
-     - URI: `https://storderaidev2.z11.web.core.windows.net/dashboard/`
+     - URI: `https://storderaidev2.z11.web.core.windows.net/`
 3. **登録** をクリック
 
 ### 3-2. アプリケーション情報の取得
@@ -126,7 +126,7 @@ az containerapp update \
     "ENTRA_CLIENT_ID=<アプリケーション(クライアント)ID>" \
     "AZURE_AD_ALLOWED_TENANTS=<ディレクトリ(テナント)ID>" \
     "FRONTEND_ORIGINS=https://storderaidev2.z11.web.core.windows.net" \
-    "FRONTEND_URL=https://storderaidev2.z11.web.core.windows.net/dashboard/"
+    "FRONTEND_URL=https://storderaidev2.z11.web.core.windows.net/"
 ```
 
 > `AZURE_AD_ALLOWED_TENANTS` は SSO 受け入れテナントの allowlist。複数組織を許可するならカンマ区切り。
@@ -145,7 +145,7 @@ VITE_ENTRA_TENANT_ID=<ディレクトリ(テナント)ID>
 ### 3-6. ローカル開発時
 
 ローカルでSSO をテストする場合、Entra ID のアプリ登録に以下のリダイレクト URI を追加:
-- `http://localhost:5173/dashboard`（Vite dev server）
+- `http://localhost:5173/`（Vite dev server）
 
 ---
 
