@@ -21,9 +21,7 @@ const SOURCE_COLORS = {
   'LINE': '#06c755',
   'Phone': '#3b82f6',
   'Email': '#8b5cf6',
-  'FAX': '#6b7280',
   'Web': '#f97316',
-  '手入力': '#64748b',
 };
 
 function init() {

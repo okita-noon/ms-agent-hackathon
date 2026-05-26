@@ -114,4 +114,31 @@ class TestListByDate:
         assert [order.id for order in orders] == ["ORD-REVIEW"]
         args, kwargs = mock_container.query_items.call_args
         assert "c.delivery_date = @d OR (c.status = @needs_review AND c.order_date = @d)" in args[0]
+        assert "c.source != @excluded_fax" in args[0]
+        assert "c.source != @excluded_manual" in args[0]
         assert {"name": "@needs_review", "value": "要対応"} in kwargs["parameters"]
+        assert {"name": "@excluded_fax", "value": "FAX"} in kwargs["parameters"]
+        assert {"name": "@excluded_manual", "value": "手入力"} in kwargs["parameters"]
+
+
+class TestListOrders:
+    @pytest.mark.asyncio
+    async def test_excludes_deferred_sources_from_dashboard_list(self):
+        mock_container = MagicMock()
+        mock_container.query_items.side_effect = [
+            _AsyncItems([1]),
+            _AsyncItems([_make_order_doc("ORD-001", "T-001")]),
+        ]
+        repo = _build_repo_with_container(mock_container)
+
+        orders, total = await repo.list_orders("T-001", date(2026, 5, 18))
+
+        assert total == 1
+        assert [order.id for order in orders] == ["ORD-001"]
+        count_query = mock_container.query_items.call_args_list[0].args[0]
+        page_query = mock_container.query_items.call_args_list[1].args[0]
+        page_params = mock_container.query_items.call_args_list[1].kwargs["parameters"]
+        assert "c.source != @excluded_fax" in count_query
+        assert "c.source != @excluded_manual" in page_query
+        assert {"name": "@excluded_fax", "value": "FAX"} in page_params
+        assert {"name": "@excluded_manual", "value": "手入力"} in page_params
