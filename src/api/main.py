@@ -20,6 +20,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from src.api.dashboard_agent import router as dashboard_agent_router
@@ -200,6 +201,201 @@ async def health():
     return {"status": "ok", "service": "foogent-api"}
 
 
+@app.get("/line-tester", response_class=HTMLResponse)
+async def line_tester_page():
+    _ensure_line_tester_enabled()
+    return """<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>foogent LINE テスター</title>
+  <style>
+    body{margin:0;font-family:Meiryo,Segoe UI,sans-serif;background:#7B9EBC}
+    .wrap{max-width:640px;margin:0 auto;height:100vh;display:flex;flex-direction:column}
+    .head{padding:12px;background:#6b8daa;color:#fff;display:flex;gap:8px;align-items:center}
+    select,input,button{font-size:14px}
+    .chat{flex:1;overflow:auto;padding:12px}
+    .row{margin:8px 0;display:flex}
+    .u{justify-content:flex-end}.a{justify-content:flex-start}
+    .b{max-width:75%;padding:10px;border-radius:10px;white-space:pre-wrap}
+    .u .b{background:#DCF8C6}.a .b{background:#fff}
+    .t{font-size:11px;color:#eaf7ff;margin-top:2px}
+    .u .t{text-align:right}.a .t{text-align:left}
+    .foot{padding:10px;background:#e8eef3;display:flex;gap:8px}
+    .foot input{flex:1;padding:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <label>顧客:</label>
+      <select id="customer"></select>
+      <span id="status">loading...</span>
+    </div>
+    <div id="chat" class="chat"></div>
+    <div class="foot">
+      <input id="msg" placeholder="メッセージを入力" />
+      <button id="send">送信</button>
+      <button id="reset">リセット</button>
+    </div>
+  </div>
+  <script>
+    const st = {sessionId:newSessionId(), history:[], pending:null, customerId:null, customerName:null, busy:false};
+    const $ = (id)=>document.getElementById(id);
+    const chat=$("chat"), status=$("status"), msg=$("msg"), send=$("send"), reset=$("reset"), customer=$("customer");
+    function newSessionId(){ return "web-local-"+Date.now(); }
+    function nowLabel(){
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      return `${hh}:${mm}:${ss}`;
+    }
+    function add(text, role){
+      const r=document.createElement("div"); r.className="row "+(role==="user"?"u":"a");
+      const box=document.createElement("div");
+      const b=document.createElement("div"); b.className="b"; b.textContent=text; box.appendChild(b);
+      const t=document.createElement("div"); t.className="t"; t.textContent=nowLabel(); box.appendChild(t);
+      r.appendChild(box); chat.appendChild(r);
+      chat.scrollTop=chat.scrollHeight;
+    }
+    function setBusy(v){ st.busy=v; send.disabled=v; msg.disabled=v; status.textContent=v?"処理中...":"ready"; }
+    async function loadCustomers(){
+      const res = await fetch("/api/line-tester/customers"); const data = await res.json();
+      customer.innerHTML = "";
+      for (const c of data.customers){
+        const o=document.createElement("option"); o.value=c.customer_id||""; o.textContent=c.label; o.dataset.name=c.customer_name||""; customer.appendChild(o);
+      }
+      status.textContent="ready";
+    }
+    customer.addEventListener("change", ()=>{
+      st.customerId = customer.value || null;
+      st.customerName = customer.options[customer.selectedIndex]?.dataset?.name || null;
+      st.history=[]; st.pending=null; st.sessionId=newSessionId(); chat.innerHTML="";
+      add("顧客を切り替えました", "assistant");
+    });
+    async function sendMsg(){
+      if(st.busy) return;
+      const text = msg.value.trim(); if(!text) return;
+      msg.value=""; add(text,"user"); setBusy(true);
+      const payload = {
+        message:text, customer_id:st.customerId, customer_name:st.customerName,
+        session_id:st.sessionId, conversation_history:st.history, pending_order_draft:st.pending
+      };
+      try{
+        const res = await fetch("/api/line-tester/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+        const data = await res.json();
+        add(data.response||"（応答なし）","assistant");
+        st.sessionId = data.session_id || st.sessionId;
+        st.history = data.conversation_history || st.history;
+        st.pending = data.pending_order_draft || null;
+      }catch(e){
+        add("エラー: "+e, "assistant");
+      }finally{ setBusy(false); msg.focus(); }
+    }
+    send.addEventListener("click", sendMsg);
+    msg.addEventListener("keydown", (e)=>{ if(e.key==="Enter") sendMsg(); });
+    reset.addEventListener("click", ()=>{ st.history=[]; st.pending=null; st.sessionId=newSessionId(); chat.innerHTML=""; add("会話をリセットしました","assistant");});
+    loadCustomers().catch((e)=>{ status.textContent="error"; add("初期化エラー: "+e, "assistant");});
+  </script>
+</body>
+</html>"""
+
+
+@app.get("/api/line-tester/customers")
+async def line_tester_customers():
+    _ensure_line_tester_enabled()
+    tenant_id = _line_tester_tenant_id()
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("ICustomerRepository")
+    customers = await repo.list_all(tenant_id)
+    items = [{"label": "ゲスト（顧客未指定）", "customer_id": None, "customer_name": None}]
+    items.extend({"label": f"{c.id}: {c.name}", "customer_id": c.id, "customer_name": c.name} for c in customers)
+    return {"tenant_id": tenant_id, "customers": items}
+
+
+@app.post("/api/line-tester/message")
+async def line_tester_message(payload: LineTesterMessageRequest):
+    _ensure_line_tester_enabled()
+    tenant_id = _line_tester_tenant_id()
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+
+    from src.agents.orchestrator import OrderOrchestrator
+    from src.models.message_history import MessageHistory
+    from src.models.order import OrderSource
+
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+    api_key = os.environ.get("AZURE_OPENAI_KEY", "")
+    if not endpoint or not api_key:
+        raise HTTPException(status_code=500, detail="AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_KEY is required")
+
+    deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", DEFAULT_AZURE_OPENAI_DEPLOYMENT)
+    orchestrator = OrderOrchestrator(
+        tenant_ctx=tenant_ctx,
+        azure_openai_endpoint=endpoint,
+        azure_openai_key=api_key,
+        deployment_name=deployment_name,
+    )
+
+    session_id = payload.session_id or f"web-local-{int(datetime.now(timezone.utc).timestamp())}"
+    line_user_id = f"WEB-{payload.customer_id}" if payload.customer_id else "WEB-TESTER"
+
+    history: list[MessageHistory] = []
+    for item in payload.conversation_history:
+        history.append(MessageHistory(**item))
+
+    result = await orchestrator.process_order_message(
+        message=payload.message,
+        line_user_id=line_user_id,
+        reply_token=None,
+        source=OrderSource.LINE,
+        conversation_history=history,
+        pending_order_draft=payload.pending_order_draft,
+        session_id=session_id,
+        known_customer_id=payload.customer_id,
+        known_customer_name=payload.customer_name,
+    )
+
+    response_text = result.get("response", "")
+    base_index = len(history)
+    history.append(
+        MessageHistory(
+            id=f"web-user-{base_index}",
+            tenant_id=tenant_id,
+            session_id=session_id,
+            channel="line",
+            channel_user_id=line_user_id,
+            role="user",
+            text=payload.message,
+        )
+    )
+    history.append(
+        MessageHistory(
+            id=f"web-assistant-{base_index + 1}",
+            tenant_id=tenant_id,
+            session_id=session_id,
+            channel="line",
+            channel_user_id=line_user_id,
+            role="assistant",
+            text=response_text,
+        )
+    )
+
+    pending = result.get("pending_order_draft")
+    if result.get("order_saved") is True:
+        pending = None
+
+    return {
+        "response": response_text,
+        "session_id": session_id,
+        "pending_order_draft": pending,
+        "conversation_history": [h.model_dump(mode="json") for h in history],
+        "order_id": result.get("order_id"),
+        "order_saved": result.get("order_saved", False),
+    }
+
+
 async def _process_line_events(handler: Any, body_json: dict) -> None:
     """Process LINE events in the background after returning 200 to LINE."""
     try:
@@ -333,6 +529,28 @@ class PhoneDemoMessageRequest(BaseModel):
     called_number: str = "+81501234567"
     call_connection_id: str | None = None
     disconnect: bool = False
+
+
+class LineTesterMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    customer_id: str | None = None
+    customer_name: str | None = None
+    session_id: str | None = None
+    conversation_history: list[dict[str, Any]] = Field(default_factory=list)
+    pending_order_draft: dict[str, Any] | None = None
+
+
+def _line_tester_enabled() -> bool:
+    return os.environ.get("LINE_TESTER_PUBLIC_ENABLED", "true").lower() == "true"
+
+
+def _line_tester_tenant_id() -> str:
+    return os.environ.get("LINE_TESTER_TENANT_ID", "T-001")
+
+
+def _ensure_line_tester_enabled() -> None:
+    if not _line_tester_enabled():
+        raise HTTPException(status_code=404, detail="line tester is disabled")
 
 
 def _get_phone_handler() -> Any:
