@@ -20,7 +20,7 @@ const WebPhone = lazy(() => import("./pages/WebPhone"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
-const BASE_NAV_ITEMS: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   {
     to: "/orders",
     label: "受注",
@@ -58,9 +58,6 @@ const BASE_NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
-];
-
-const DEV_NAV_ITEMS: NavItem[] = [
   {
     to: "/web-phone",
     label: "Web電話",
@@ -71,10 +68,6 @@ const DEV_NAV_ITEMS: NavItem[] = [
     ),
   },
 ];
-
-const NAV_ITEMS = (import.meta.env.DEV || localStorage.getItem("debug_nav") === "1")
-  ? [...BASE_NAV_ITEMS, ...DEV_NAV_ITEMS]
-  : BASE_NAV_ITEMS;
 
 function Sidebar() {
   return (

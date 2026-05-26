@@ -69,7 +69,7 @@
 `ca-api-orderai-dev2` に以下の環境変数が設定済み:
 
 **基盤**
-`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
+`COSMOS_CONNECTION_STRING`, `SQL_CONNECTION_STRING`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_ID`, `ACS_CONNECTION_STRING`, `ACS_PHONE_NUMBER`, `ACS_CALLBACK_BASE_URL`, `SPEECH_SERVICE_ENDPOINT`, `SPEECH_SERVICE_KEY`, `SPEECH_SERVICE_REGION`, `FRONTEND_ORIGINS`, `FRONTEND_URL`
 
 **電話同期応答**
 | 変数名 | 必須 | 説明 |
@@ -114,7 +114,9 @@
 | POST | `/api/email-webhook` | Microsoft Graph Change Notifications受信（メールチャネル） |
 | POST | `/api/phone-webhook` | ACS Call Automation Webhook受信（電話チャネル） |
 | POST | `/api/phone-demo/message` | 電話番号取得前のデモ用。音声認識済みテキストを電話チャネルとして受注処理（EventGrid共有鍵必須） |
-| POST | `/api/web-phone/message` | Web電話：音声認識済みテキストを電話チャネルとして注入（JWT認証） |
+| GET | `/api/speech-token` | Azure Speech SDK用の短寿命認証トークン発行（JWT認証） |
+| POST | `/api/web-phone/greeting` | Web電話：通話開始・挨拶TTS音声返却（JWT認証） |
+| POST | `/api/web-phone/message` | Web電話：テキストを電話チャネルとして注入、`with_audio=true`でTTS音声付き（JWT認証） |
 | POST | `/api/web-phone/disconnect` | Web電話：通話切断（JWT認証） |
 | GET | `/api/orders?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 受注一覧（配送日指定） |
 | GET | `/api/orders/{order_id}?tenant_id=T-001` | 受注詳細 |

@@ -282,6 +282,7 @@ export interface WebPhoneRequest {
   called_number?: string;
   call_connection_id?: string;
   disconnect?: boolean;
+  with_audio?: boolean;
 }
 
 export interface WebPhoneResponse {
@@ -289,10 +290,35 @@ export interface WebPhoneResponse {
   status?: string;
   order_id?: string | null;
   response?: string;
+  response_audio?: string;
   session_status?: string;
   demo_mode?: boolean;
   error?: string;
   disconnect?: Record<string, unknown>;
+}
+
+export interface WebPhoneGreetingResponse {
+  text: string;
+  audio: string;
+  call_connection_id: string;
+}
+
+export async function fetchSpeechToken(): Promise<{ token: string; region: string }> {
+  const resp = await authFetch(`${API_BASE}/api/speech-token`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function webPhoneGreeting(req: {
+  caller_number?: string;
+  called_number?: string;
+}): Promise<WebPhoneGreetingResponse> {
+  const resp = await authFetch(`${API_BASE}/api/web-phone/greeting`, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
 }
 
 export async function webPhoneSendMessage(
