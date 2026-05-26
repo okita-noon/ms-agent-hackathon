@@ -202,6 +202,41 @@ async def health():
     return {"status": "ok", "service": "foogent-api"}
 
 
+class LineTesterMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    customer_id: str | None = None
+    customer_name: str | None = None
+    session_id: str | None = None
+    conversation_history: list[dict[str, Any]] = Field(default_factory=list)
+    pending_order_draft: dict[str, Any] | None = None
+
+
+def _line_tester_enabled() -> bool:
+    return os.environ.get("LINE_TESTER_PUBLIC_ENABLED", "true").lower() == "true"
+
+
+def _line_tester_tenant_id() -> str:
+    return os.environ.get("LINE_TESTER_TENANT_ID", "T-001")
+
+
+def _line_tester_access_code() -> str:
+    return os.environ.get("LINE_TESTER_ACCESS_CODE", "test")
+
+
+def _is_line_tester_authorized(request: Request) -> bool:
+    return request.cookies.get(LINE_TESTER_COOKIE_NAME) == _line_tester_access_code()
+
+
+def _ensure_line_tester_authorized(request: Request) -> None:
+    if not _is_line_tester_authorized(request):
+        raise HTTPException(status_code=401, detail="line tester access code is required")
+
+
+def _ensure_line_tester_enabled() -> None:
+    if not _line_tester_enabled():
+        raise HTTPException(status_code=404, detail="line tester is disabled")
+
+
 @app.get("/line-tester", response_class=HTMLResponse)
 async def line_tester_page(request: Request):
     _ensure_line_tester_enabled()
@@ -563,41 +598,6 @@ class PhoneDemoMessageRequest(BaseModel):
 class WebPhoneGreetingRequest(BaseModel):
     caller_number: str = "+81312345678"
     called_number: str = "+81501234567"
-
-
-class LineTesterMessageRequest(BaseModel):
-    message: str = Field(..., min_length=1)
-    customer_id: str | None = None
-    customer_name: str | None = None
-    session_id: str | None = None
-    conversation_history: list[dict[str, Any]] = Field(default_factory=list)
-    pending_order_draft: dict[str, Any] | None = None
-
-
-def _line_tester_enabled() -> bool:
-    return os.environ.get("LINE_TESTER_PUBLIC_ENABLED", "true").lower() == "true"
-
-
-def _line_tester_tenant_id() -> str:
-    return os.environ.get("LINE_TESTER_TENANT_ID", "T-001")
-
-
-def _line_tester_access_code() -> str:
-    return os.environ.get("LINE_TESTER_ACCESS_CODE", "test")
-
-
-def _is_line_tester_authorized(request: Request) -> bool:
-    return request.cookies.get(LINE_TESTER_COOKIE_NAME) == _line_tester_access_code()
-
-
-def _ensure_line_tester_authorized(request: Request) -> None:
-    if not _is_line_tester_authorized(request):
-        raise HTTPException(status_code=401, detail="line tester access code is required")
-
-
-def _ensure_line_tester_enabled() -> None:
-    if not _line_tester_enabled():
-        raise HTTPException(status_code=404, detail="line tester is disabled")
 
 
 def _get_phone_handler() -> Any:
