@@ -88,12 +88,32 @@ jobs:
             --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
             --query "[0].value" \
             -o tsv)
+          # index.html: キャッシュ無効化（常に最新を取得）
+          az storage blob upload \
+            --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name '$web' \
+            --file dist/index.html \
+            --name index.html \
+            --content-cache-control "no-cache" \
+            --overwrite true
+          # その他のアセット（ハッシュ付きファイル名）: 長期キャッシュ
           az storage blob upload-batch \
             --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
             --account-key "$ACCOUNT_KEY" \
             --destination '$web' \
             --source dist \
-            --overwrite true
+            --overwrite true \
+            --content-cache-control "public, max-age=31536000, immutable" \
+            --pattern "assets/*"
+          # その他のファイル（favicon等）
+          az storage blob upload-batch \
+            --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
+            --account-key "$ACCOUNT_KEY" \
+            --destination '$web' \
+            --source dist \
+            --overwrite true \
+            --exclude-pattern "index.html;assets/*"
 
       - name: Show frontend URL
         run: |
