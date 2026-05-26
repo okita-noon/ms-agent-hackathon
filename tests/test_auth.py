@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from src.auth.dependencies import get_current_user, get_tenant_id
 from src.auth.endpoints import auth_router
@@ -64,9 +65,7 @@ class TestJWT:
 
 class TestDependencies:
     @staticmethod
-    def _make_request(method: str = "GET") -> "Request":
-        from starlette.requests import Request
-
+    def _make_request(method: str = "GET") -> Request:
         scope = {"type": "http", "method": method, "headers": []}
         return Request(scope)
 
