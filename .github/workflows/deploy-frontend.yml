@@ -107,13 +107,15 @@ jobs:
             --content-cache-control "public, max-age=31536000, immutable" \
             --pattern "assets/*"
           # その他のファイル（favicon等）
-          az storage blob upload-batch \
-            --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
-            --account-key "$ACCOUNT_KEY" \
-            --destination '$web' \
-            --source dist \
-            --overwrite true \
-            --exclude-pattern "index.html;assets/*"
+          find dist -maxdepth 1 -type f ! -name "index.html" -print0 | while IFS= read -r -d '' file; do
+            az storage blob upload \
+              --account-name "${{ env.STORAGE_ACCOUNT_NAME }}" \
+              --account-key "$ACCOUNT_KEY" \
+              --container-name '$web' \
+              --file "$file" \
+              --name "$(basename "$file")" \
+              --overwrite true
+          done
 
       - name: Show frontend URL
         run: |
