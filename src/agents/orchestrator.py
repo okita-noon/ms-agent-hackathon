@@ -117,12 +117,14 @@ def _build_line_from_template(
     items: list[dict] | list[OrderItem] | None = None,
     delivery_estimate: str | None = None,
     body: str | None = None,
+    summary: str | None = None,
 ) -> str:
     return render_line_template(
         template_name,
         order_items=format_line_order_items(items),
         delivery_estimate_line=build_delivery_estimate_line(delivery_estimate),
         body=body or "",
+        summary=summary or "",
     )
 
 
@@ -265,6 +267,37 @@ class OrderOrchestrator:
         }
         line_action_type = _resolve_line_action_type(message, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
+
+        if source == OrderSource.LINE and _is_current_order_inquiry(message):
+            customer_id = known_customer_id or (current_order.customer_id if current_order else None)
+            if not customer_id:
+                customer_repo = self._ctx.get_connector("ICustomerRepository")
+                customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
+                customer_id = customer.id if customer else None
+            if customer_id:
+                repo = self._ctx.get_connector("IOrderRepository")
+                customer_orders = await repo.list_by_customer(customer_id, limit=20)
+                open_orders = [
+                    o for o in customer_orders if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                ]
+                if open_orders:
+                    response_text = _build_line_from_template(
+                        "order_current_summary.txt",
+                        summary=_format_open_orders_summary(open_orders),
+                    )
+                    result.update({"response": response_text, "customer_id": customer_id})
+                    if response_callback:
+                        await response_callback(response_text)
+                    else:
+                        await self._send_line_message(response_text, reply_token, line_user_id)
+                    return result
+            response_text = _build_line_from_template("order_no_current_order.txt")
+            result.update({"response": response_text, "pending_action_type": line_action_type})
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
 
         if pending_order_draft and _is_affirmative_reply(message):
             saved_order = await self.create_order_from_draft(
@@ -1887,6 +1920,46 @@ def _is_full_order_cancel(message: str) -> bool:
         "全キャンセル",
     )
     return any(keyword in normalized for keyword in keywords)
+
+
+def _is_current_order_inquiry(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message)
+    keywords = (
+        "今の注文",
+        "現在の注文",
+        "いまの注文",
+        "注文状況",
+        "今入ってる注文",
+        "オープン注文",
+        "未完了注文",
+    )
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _format_open_orders_summary(orders: list[Order]) -> str:
+    grouped: dict[date | None, list[Order]] = {}
+    for order in orders:
+        grouped.setdefault(order.delivery_date, []).append(order)
+
+    def _date_key(d: date | None) -> tuple[int, date]:
+        return (1, date.max) if d is None else (0, d)
+
+    chunks: list[str] = []
+    for delivery_date in sorted(grouped.keys(), key=_date_key):
+        day_orders = grouped[delivery_date]
+        item_texts: list[str] = []
+        for order in day_orders:
+            for item in order.items:
+                qty = int(item.quantity) if float(item.quantity).is_integer() else item.quantity
+                item_texts.append(f"{item.product_name} {qty}{item.unit}")
+        if not item_texts:
+            continue
+        items_joined = "、".join(item_texts)
+        if delivery_date:
+            chunks.append(f"{items_joined} が{delivery_date.month}月{delivery_date.day}日配送予定")
+        else:
+            chunks.append(f"{items_joined} が配送日未定")
+    return "、".join(chunks)
 
 
 def _is_affirmative_reply(message: str) -> bool:

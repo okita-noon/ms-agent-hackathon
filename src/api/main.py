@@ -207,6 +207,7 @@ class LineTesterMessageRequest(BaseModel):
     customer_id: str | None = None
     customer_name: str | None = None
     session_id: str | None = None
+    current_order_id: str | None = None
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
     pending_order_draft: dict[str, Any] | None = None
 
@@ -294,7 +295,7 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
     </div>
   </div>
   <script>
-    const st = {sessionId:newSessionId(), history:[], pending:null, customerId:null, customerName:null, busy:false};
+    const st = {sessionId:newSessionId(), history:[], pending:null, currentOrderId:null, customerId:null, customerName:null, busy:false};
     const $ = (id)=>document.getElementById(id);
     const chat=$("chat"), status=$("status"), msg=$("msg"), send=$("send"), reset=$("reset"), customer=$("customer");
     function newSessionId(){ return "web-local-"+Date.now(); }
@@ -325,7 +326,7 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
     customer.addEventListener("change", ()=>{
       st.customerId = customer.value || null;
       st.customerName = customer.options[customer.selectedIndex]?.dataset?.name || null;
-      st.history=[]; st.pending=null; st.sessionId=newSessionId(); chat.innerHTML="";
+      st.history=[]; st.pending=null; st.currentOrderId=null; st.sessionId=newSessionId(); chat.innerHTML="";
       add("顧客を切り替えました", "assistant");
     });
     async function sendMsg(){
@@ -334,7 +335,8 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
       msg.value=""; add(text,"user"); setBusy(true);
       const payload = {
         message:text, customer_id:st.customerId, customer_name:st.customerName,
-        session_id:st.sessionId, conversation_history:st.history, pending_order_draft:st.pending
+        session_id:st.sessionId, current_order_id:st.currentOrderId,
+        conversation_history:st.history, pending_order_draft:st.pending
       };
       try{
         const res = await fetch("/api/line-tester/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -343,13 +345,15 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
         st.sessionId = data.session_id || st.sessionId;
         st.history = data.conversation_history || st.history;
         st.pending = data.pending_order_draft || null;
+        st.currentOrderId = data.current_order_id ?? st.currentOrderId;
+        if (data.current_order_cleared === true) st.currentOrderId = null;
       }catch(e){
         add("エラー: "+e, "assistant");
       }finally{ setBusy(false); msg.focus(); }
     }
     send.addEventListener("click", sendMsg);
     msg.addEventListener("keydown", (e)=>{ if(e.key==="Enter") sendMsg(); });
-    reset.addEventListener("click", ()=>{ st.history=[]; st.pending=null; st.sessionId=newSessionId(); chat.innerHTML=""; add("会話をリセットしました","assistant");});
+    reset.addEventListener("click", ()=>{ st.history=[]; st.pending=null; st.currentOrderId=null; st.sessionId=newSessionId(); chat.innerHTML=""; add("会話をリセットしました","assistant");});
     loadCustomers().catch((e)=>{ status.textContent="error"; add("初期化エラー: "+e, "assistant");});
   </script>
 </body>
@@ -389,6 +393,7 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
     tenant_ctx = resolve_tenant_by_id(tenant_id)
 
     from src.agents.orchestrator import OrderOrchestrator
+    from src.models.order import Order
     from src.models.message_history import MessageHistory
     from src.models.order import OrderSource
 
@@ -409,6 +414,13 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
     line_user_id = f"WEB-{payload.customer_id}" if payload.customer_id else "WEB-TESTER"
 
     history = [MessageHistory(**item) for item in payload.conversation_history]
+    current_order: Order | None = None
+    if payload.current_order_id:
+        order_repo = tenant_ctx.get_connector("IOrderRepository")
+        current_order = await order_repo.find_by_id(tenant_id, payload.current_order_id)
+        if current_order and current_order.customer_id != payload.customer_id:
+            current_order = None
+
     result = await orchestrator.process_order_message(
         message=payload.message,
         line_user_id=line_user_id,
@@ -419,6 +431,7 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
         session_id=session_id,
         known_customer_id=payload.customer_id,
         known_customer_name=payload.customer_name,
+        current_order=current_order,
     )
 
     response_text = result.get("response", "")
@@ -456,6 +469,8 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
         "conversation_history": [h.model_dump(mode="json") for h in history],
         "order_id": result.get("order_id"),
         "order_saved": result.get("order_saved", False),
+        "current_order_id": result.get("current_order_id"),
+        "current_order_cleared": result.get("current_order_cleared", False),
     }
 
 
