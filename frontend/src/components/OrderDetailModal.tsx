@@ -111,14 +111,14 @@ function ChannelIcon({ channel }: { channel: string }) {
   );
 }
 
-function MessageThread({ orderId }: { orderId: string }) {
+function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchOrderMessages(orderId)
+    fetchOrderMessages(orderId, order)
       .then((data) => {
         if (!cancelled) setMessages(data.messages);
       })
@@ -284,7 +284,7 @@ export default function OrderDetailModal({ order, onClose, onMemoUpdated }: Prop
           </div>
 
           {orderId && (
-            <MessageThread key={orderId} orderId={orderId} />
+            <MessageThread key={orderId} orderId={orderId} order={order} />
           )}
 
           {order.remarks && (

@@ -185,7 +185,8 @@ export interface Message {
 }
 
 export async function fetchOrderMessages(
-  orderId: string
+  orderId: string,
+  order?: Order,
 ): Promise<{ messages: Message[]; session_id: string | null }> {
   try {
     const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/messages`);
@@ -193,7 +194,7 @@ export async function fetchOrderMessages(
     const data = await resp.json();
     if (data.messages.length === 0) {
       const { getDemoMessages } = await import("./demo");
-      const demoMsgs = getDemoMessages(orderId);
+      const demoMsgs = getDemoMessages(orderId, order);
       if (demoMsgs.length > 0) {
         return { messages: demoMsgs, session_id: `demo-${orderId}` };
       }
@@ -201,7 +202,7 @@ export async function fetchOrderMessages(
     return data;
   } catch {
     const { getDemoMessages } = await import("./demo");
-    const demoMsgs = getDemoMessages(orderId);
+    const demoMsgs = getDemoMessages(orderId, order);
     return { messages: demoMsgs, session_id: demoMsgs.length > 0 ? `demo-${orderId}` : null };
   }
 }
