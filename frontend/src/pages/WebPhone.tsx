@@ -136,7 +136,7 @@ export default function WebPhone() {
   }
 
   const processResponse = useCallback(
-    async (res: WebPhoneResponse, recognizedText?: string) => {
+    async (res: WebPhoneResponse) => {
       if (!callConnectionId && res.call_connection_id) {
         setCallConnectionId(res.call_connection_id);
       }
@@ -181,7 +181,7 @@ export default function WebPhone() {
         call_connection_id: callConnectionId ?? undefined,
         with_audio: true,
       });
-      await processResponse(res, messageText.trim());
+      await processResponse(res);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -240,7 +240,7 @@ export default function WebPhone() {
               call_connection_id: callConnectionId ?? undefined,
               with_audio: true,
             });
-            await processResponse(res, text);
+            await processResponse(res);
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             setError(msg);
