@@ -1,15 +1,9 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const TOKEN_KEY = "foogent_token";
 
 function getHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
+  return {
     "Content-Type": "application/json",
   };
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
 }
 
 const FETCH_TIMEOUT_MS = 30_000;
@@ -21,10 +15,10 @@ async function authFetch(url: string, init?: RequestInit): Promise<Response> {
     const resp = await fetch(url, {
       ...init,
       signal: controller.signal,
+      credentials: "include",
       headers: { ...getHeaders(), ...init?.headers },
     });
     if (resp.status === 401) {
-      localStorage.removeItem(TOKEN_KEY);
       window.dispatchEvent(new Event("auth:token-expired"));
     }
     return resp;
@@ -78,6 +72,25 @@ export interface OrdersResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export type OrderEventType = "connected" | "order_created" | "order_updated";
+
+export interface OrderEventPayload {
+  order_id?: string;
+  tenant_id?: string;
+  customer_id?: string;
+  customer_name?: string;
+  source?: string;
+  status?: string;
+  reason?: string;
+  delivery_date?: string | null;
+  order_date?: string;
+  created_at?: string;
+}
+
+export function createOrderEventSource(): EventSource {
+  return new EventSource(`${API_BASE}/api/orders/events`, { withCredentials: true });
 }
 
 export type DeliveryLeadTime = "当日" | "翌日" | "中1日" | "中2日";

@@ -39,13 +39,15 @@
 | `/api/auth/login` | 公開（パスワード検証） |
 | `/api/auth/register` | デフォルト無効。`REGISTRATION_ENABLED=true` + `X-Invite-Token` ヘッダ必須 |
 | `/api/auth/microsoft` | Microsoft Entra の id_token を検証。`AZURE_AD_ALLOWED_TENANTS` allowlist の `tid` のみ受理。自動登録なし（事前 provision 必須） |
-| `/api/auth/me` ほかビジネス API | Bearer JWT 必須。`tenant_id` は JWT クレームから取得（クエリ不可） |
+| `/api/auth/logout` | 認証 Cookie を削除 |
+| `/api/auth/me` ほかビジネス API | HttpOnly Cookie JWT（互換用に Bearer JWT も受理）。`tenant_id` は JWT クレームから取得（クエリ不可） |
 | `GET /api/orders/{id}` | JWT の `tenant_id` と doc の `tenant_id` 一致時のみ返却（IDOR ガード） |
 | `/api/line-webhook` | `x-line-signature` ヘッダで HMAC-SHA256 を検証（必須） |
 | `/api/phone-webhook` | `EVENTGRID_WEBHOOK_KEY` を `?code=` クエリか `X-EventGrid-Webhook-Key` ヘッダで検証（必須） |
 | `/api/phone-demo/message` | `EVENTGRID_WEBHOOK_KEY` を `?code=` クエリか `X-EventGrid-Webhook-Key` ヘッダで検証（必須） |
 
 JWT は `iss` / `aud` も検証する（`JWT_ISSUER` / `JWT_AUDIENCE`）。
+ダッシュボードのJWTは `foogent_access_token` Cookie に `HttpOnly; Secure; SameSite=None` で保存し、状態変更APIでは Cookie 認証時の `Origin` を `FRONTEND_ORIGINS` と照合する。
 `JWT_SECRET_KEY` は未設定だと起動時に `RuntimeError`（フェイルクローズ）。
 
 ### pre-commit フックのセットアップ
