@@ -21,7 +21,17 @@ if ! ruff format --check src/ tests/ 2>&1; then
   FAILED=1
 fi
 
-# 3. Conflict check
+# 3. Frontend type check (if frontend files changed)
+if git diff origin/main --name-only | grep -q "^frontend/"; then
+  if [ -f frontend/tsconfig.app.json ]; then
+    if ! npx --prefix frontend tsc --project tsconfig.app.json --noEmit 2>&1; then
+      echo "❌ フロントエンドの型チェック失敗。TypeScript エラーを修正してください。"
+      FAILED=1
+    fi
+  fi
+fi
+
+# 4. Conflict check
 git fetch origin main --quiet 2>/dev/null || true
 if ! git merge origin/main --no-commit --no-ff 2>&1; then
   git merge --abort 2>/dev/null || true
