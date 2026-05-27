@@ -173,8 +173,10 @@ class TestCurrentOrderInquiry:
             ),
         ]
         summary = _format_open_orders_summary(orders)
-        assert "りんご 2箱 が5月28日配送予定" in summary
-        assert "バナナ 5kg が5月29日配送予定" in summary
+        assert "【5/28配送予定】" in summary
+        assert "・りんご 2箱" in summary
+        assert "【5/29配送予定】" in summary
+        assert "・バナナ 5kg" in summary
 
     @pytest.mark.asyncio
     async def test_inquiry_returns_open_order_summary(self, mock_tenant_ctx):
@@ -211,8 +213,8 @@ class TestCurrentOrderInquiry:
                 known_customer_id="C-001",
             )
 
-        assert "現在の注文は" in result["response"]
-        assert "りんご 2箱 が5月28日配送予定" in result["response"]
+        assert "現在のご注文内容" in result["response"]
+        assert "・りんご 2箱" in result["response"]
         mock_send.assert_awaited_once()
 
     def test_item_reserve_failure_requires_review(self):

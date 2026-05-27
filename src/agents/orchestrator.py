@@ -15,11 +15,6 @@ from semantic_kernel.agents import ChatCompletionAgent
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 
 from src.agents.definitions import (
-    COMMUNICATION_AGENT_INSTRUCTIONS,
-    EXCEPTION_AGENT_INSTRUCTIONS,
-    INTAKE_AGENT_INSTRUCTIONS,
-    INVENTORY_AGENT_INSTRUCTIONS,
-    ORCHESTRATOR_INSTRUCTIONS,
     PHONE_ORDER_AGENT_INSTRUCTIONS,
     get_communication_instructions,
     get_exception_instructions,
@@ -90,7 +85,7 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
 
 
 def _insert_order_id(response_text: str, order_id: str) -> str:
-    """LINE・電話の返信テキスト末尾に受注Noを付与する。"""
+    """電話の返信テキスト末尾に受注Noを付与する。LINEでは使わない。"""
     return f"{response_text}\n\n受注No: {order_id}"
 
 
@@ -686,16 +681,33 @@ class OrderOrchestrator:
             if inventory_needs_review:
                 needs_confirmation = True
 
-        # ── Step 4: Save order if no confirmation needed ───────────────────────
+        # ── Step 4a: Estimate delivery date ────────────────────────────────
+        delivery_estimate_text: str | None = None
+        estimated_delivery_date: date | None = None
+        if not needs_confirmation or inventory_needs_review:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+            estimated_delivery_date = min_d
+
+        # ── Step 4b: Save order if no confirmation needed ─────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
+        if inventory_needs_review:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=_build_inventory_review_remarks(inventory_result),
                     )
@@ -707,6 +719,8 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -723,18 +737,6 @@ class OrderOrchestrator:
                     result["current_order_editable"] = _is_order_editable(saved_order)
             except Exception:
                 logger.exception("Failed to save order from single-agent pipeline")
-
-        # ── Step 4.5: Estimate delivery date ─────────────────────────────────
-        delivery_estimate_text: str | None = None
-        if not needs_confirmation:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
-            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(
-                route,
-                lead_time=lead_time,
-                tenant_config=self._ctx.config,
-            )
-            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
 
         # ── Step 5: Generate final response ─────────────────────────────────
         if source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
@@ -787,7 +789,7 @@ class OrderOrchestrator:
                 items=saved_order.items,
                 delivery_estimate=delivery_estimate_text,
             )
-        elif source != OrderSource.EMAIL and saved_order:
+        elif source == OrderSource.PHONE and saved_order:
             response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
@@ -942,16 +944,33 @@ class OrderOrchestrator:
             if inventory_needs_review:
                 needs_confirmation = True
 
+        # ── 配送予定日推定 ────────────────────────────────────────────────────
+        delivery_estimate_text: str | None = None
+        estimated_delivery_date: date | None = None
+        if not needs_confirmation or inventory_needs_review:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+            estimated_delivery_date = min_d
+
         # ── 注文保存 ──────────────────────────────────────────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
+        if inventory_needs_review:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=_build_inventory_review_remarks(inventory_result),
                     )
@@ -963,6 +982,8 @@ class OrderOrchestrator:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -979,18 +1000,6 @@ class OrderOrchestrator:
                     result["current_order_editable"] = _is_order_editable(saved_order)
             except Exception:
                 logger.exception("[multi-agent] Failed to save order")
-
-        # ── 配送予定日推定 ────────────────────────────────────────────────────
-        delivery_estimate_text: str | None = None
-        if not needs_confirmation:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
-            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(
-                route,
-                lead_time=lead_time,
-                tenant_config=self._ctx.config,
-            )
-            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
 
         # ── Chain Step 4: Communication Agent ─────────────────────────────────
         processing_note = _build_processing_note(needs_confirmation, inventory_needs_review)
@@ -1044,7 +1053,7 @@ class OrderOrchestrator:
                 items=saved_order.items,
                 delivery_estimate=delivery_estimate_text,
             )
-        elif source != OrderSource.EMAIL and saved_order:
+        elif source == OrderSource.PHONE and saved_order:
             response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
@@ -1960,22 +1969,22 @@ def _format_open_orders_summary(orders: list[Order]) -> str:
     def _date_key(d: date | None) -> tuple[int, date]:
         return (1, date.max) if d is None else (0, d)
 
-    chunks: list[str] = []
+    lines: list[str] = []
     for delivery_date in sorted(grouped.keys(), key=_date_key):
         day_orders = grouped[delivery_date]
         item_texts: list[str] = []
         for order in day_orders:
             for item in order.items:
                 qty = int(item.quantity) if float(item.quantity).is_integer() else item.quantity
-                item_texts.append(f"{item.product_name} {qty}{item.unit}")
+                item_texts.append(f"・{item.product_name} {qty}{item.unit}")
         if not item_texts:
             continue
-        items_joined = "、".join(item_texts)
         if delivery_date:
-            chunks.append(f"{items_joined} が{delivery_date.month}月{delivery_date.day}日配送予定")
+            lines.append(f"【{delivery_date.month}/{delivery_date.day}配送予定】")
         else:
-            chunks.append(f"{items_joined} が配送日未定")
-    return "、".join(chunks)
+            lines.append("【配送日未定】")
+        lines.extend(item_texts)
+    return "\n".join(lines)
 
 
 def _is_affirmative_reply(message: str) -> bool:
