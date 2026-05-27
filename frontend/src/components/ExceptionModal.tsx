@@ -53,7 +53,6 @@ interface ExceptionModalProps {
   exceptions: AgentExceptionCase[];
   orders: Order[];
   onClose: () => void;
-  onOpenOrder: (order: Order) => void;
   initialExceptionId?: string;
 }
 
@@ -65,7 +64,6 @@ export default function ExceptionModal({
   exceptions,
   orders,
   onClose,
-  onOpenOrder,
   initialExceptionId,
 }: ExceptionModalProps) {
   const [selectedId, setSelectedId] = useState<string>(
