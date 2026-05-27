@@ -113,12 +113,32 @@ class TestListByDate:
 
         assert [order.id for order in orders] == ["ORD-REVIEW"]
         args, kwargs = mock_container.query_items.call_args
-        assert "c.delivery_date = @d OR (c.status = @needs_review AND c.order_date = @d)" in args[0]
+        assert (
+            "c.delivery_date = @d OR "
+            "((c.status = @needs_review OR c.status = @legacy_awaiting_reply) AND c.order_date = @d)" in args[0]
+        )
         assert "c.source != @excluded_fax" in args[0]
         assert "c.source != @excluded_manual" in args[0]
         assert {"name": "@needs_review", "value": "要対応"} in kwargs["parameters"]
+        assert {"name": "@legacy_awaiting_reply", "value": "返信待ち"} in kwargs["parameters"]
         assert {"name": "@excluded_fax", "value": "FAX"} in kwargs["parameters"]
         assert {"name": "@excluded_manual", "value": "手入力"} in kwargs["parameters"]
+
+    @pytest.mark.asyncio
+    async def test_includes_legacy_awaiting_reply_orders_by_order_date(self):
+        """Legacy awaiting-reply documents are normalized to 要対応 after query."""
+        mock_container = MagicMock()
+        review_doc = _make_order_doc("ORD-LEGACY", "T-001")
+        review_doc["status"] = "返信待ち"
+        review_doc["order_date"] = "2026-05-18"
+        review_doc["delivery_date"] = "2026-05-19"
+        mock_container.query_items.return_value = _AsyncItems([review_doc])
+        repo = _build_repo_with_container(mock_container)
+
+        orders = await repo.list_by_date("T-001", date(2026, 5, 18))
+
+        assert [order.id for order in orders] == ["ORD-LEGACY"]
+        assert orders[0].status == "要対応"
 
 
 class TestListOrders:
@@ -142,3 +162,25 @@ class TestListOrders:
         assert "c.source != @excluded_manual" in page_query
         assert {"name": "@excluded_fax", "value": "FAX"} in page_params
         assert {"name": "@excluded_manual", "value": "手入力"} in page_params
+
+    @pytest.mark.asyncio
+    async def test_status_filter_includes_legacy_awaiting_reply_for_needs_review(self):
+        mock_container = MagicMock()
+        legacy_doc = _make_order_doc("ORD-LEGACY", "T-001")
+        legacy_doc["status"] = "返信待ち"
+        mock_container.query_items.side_effect = [
+            _AsyncItems([1]),
+            _AsyncItems([legacy_doc]),
+        ]
+        repo = _build_repo_with_container(mock_container)
+
+        orders, total = await repo.list_orders("T-001", status="要対応")
+
+        assert total == 1
+        assert [order.id for order in orders] == ["ORD-LEGACY"]
+        assert orders[0].status == "要対応"
+        count_query = mock_container.query_items.call_args_list[0].args[0]
+        page_params = mock_container.query_items.call_args_list[1].kwargs["parameters"]
+        assert "(c.status = @status OR c.status = @legacy_awaiting_reply)" in count_query
+        assert {"name": "@status", "value": "要対応"} in page_params
+        assert {"name": "@legacy_awaiting_reply", "value": "返信待ち"} in page_params
