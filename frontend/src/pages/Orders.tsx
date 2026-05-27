@@ -541,10 +541,6 @@ export default function Orders() {
           exceptions={agentExceptions}
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
-          onOpenOrder={(order) => {
-            setExceptionModalOpen(false);
-            setSelected(order);
-          }}
           initialExceptionId={exceptionModalInitialId}
         />
       )}
