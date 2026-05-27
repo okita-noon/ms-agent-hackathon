@@ -9,6 +9,7 @@ import pytest
 from src.agents.orchestrator import (
     FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS,
     OrderOrchestrator,
+    _check_draft_inventory,
     _build_draft_from_intake,
     _enforce_response_policy,
     _format_open_orders_summary,
@@ -113,6 +114,33 @@ class TestBuildDraftFromIntake:
 
         assert draft is not None
         assert draft["delivery_date"] == date(2026, 5, 26)
+
+
+@pytest.mark.asyncio
+async def test_check_draft_inventory_falls_back_when_status_name_unknown():
+    inventory = AsyncMock()
+    inventory.check.return_value = InventoryStatus(
+        product_id="P-001",
+        product_name="不明",
+        available_qty=0.0,
+        unit="箱",
+        is_sufficient=False,
+    )
+
+    class DummyCtx:
+        tenant_id = "T-001"
+
+        def get_connector(self, name: str):
+            assert name == "IInventoryService"
+            return inventory
+
+    draft = {
+        "items": [
+            {"product_id": "P-001", "product_name": "卵", "quantity": 1, "unit": "箱"},
+        ]
+    }
+    checked = await _check_draft_inventory(DummyCtx(), draft)
+    assert checked[0]["product_name"] == "卵"
 
 
 class TestExtractJson:

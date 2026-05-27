@@ -1848,10 +1848,13 @@ async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
         try:
             required_qty = float(quantity)
             status = await inventory.check(ctx.tenant_id, product_id, required_qty)
+            status_product_name = status.product_name
+            if isinstance(status_product_name, str) and status_product_name.strip() in {"", "不明", "unknown", "UNKNOWN"}:
+                status_product_name = None
             checked_items.append(
                 {
                     "product_id": product_id,
-                    "product_name": status.product_name or product_name,
+                    "product_name": status_product_name or product_name,
                     "required_qty": required_qty,
                     "unit": status.unit or unit,
                     "available_qty": status.available_qty,
