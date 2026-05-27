@@ -92,6 +92,14 @@ def _row_to_product(row) -> Product:
     )
 
 
+def _hiragana_to_katakana(text: str) -> str:
+    return "".join(chr(ord(ch) + 0x60) if "ぁ" <= ch <= "ゖ" else ch for ch in text)
+
+
+def _katakana_to_hiragana(text: str) -> str:
+    return "".join(chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch for ch in text)
+
+
 def _search_terms(raw_name: str) -> list[str]:
     normalized = unicodedata.normalize("NFKC", raw_name).strip()
     if not normalized:
@@ -113,6 +121,15 @@ def _search_terms(raw_name: str) -> list[str]:
     compact = re.sub(r"\s+", "", stripped or normalized)
     if compact:
         terms.append(compact)
+
+    # ひらがな⇔カタカナ両方で検索
+    base = compact or stripped or normalized
+    kata = _hiragana_to_katakana(base)
+    hira = _katakana_to_hiragana(base)
+    if kata != base:
+        terms.append(kata)
+    if hira != base:
+        terms.append(hira)
 
     deduped: list[str] = []
     for term in terms:
