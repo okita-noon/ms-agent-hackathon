@@ -75,7 +75,7 @@
 
 | Phase | 機能 | 実装方法 |
 |---|---|---|
-| **Must（デモ必須）** | Orchestrator + Intake Agent | Azure AI Agent Service + Semantic Kernel |
+| **Must（デモ必須）** | Orchestrator + Intake Agent | Semantic Kernel（ChatCompletionAgent） |
 | **Must** | Exception Agent（確認質問 + 異常数量検知） | 同上（Agenticらしさのデモの核心） |
 | **Must** | Learning Service（パターン学習 + 自動解釈） | Cosmos DB (Order Intelligence Store) + Container Apps + Foundry Embedding |
 | **Must** | LINE受信→注文抽出→自動返信 | LINE Webhook + Container Apps (FastAPI) |

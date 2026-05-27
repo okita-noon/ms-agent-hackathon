@@ -22,7 +22,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // effect の依存配列に含めると SSO 後の navigate で effect が再実行され、
   // 残存する _redirectResult で誤再ログインが起きる。ref で最新値を保持して解決する。
   const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
+  const authGenerationRef = useRef(0);
   const [initialAuth] = useState(() => {
     // Microsoft loginRedirect から戻ってきた直後は URL に code= が残る。
     // sessionStorage フラグ（loginRedirect 前にセット）も合わせてチェックすることで
@@ -43,6 +43,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(initialAuth.token);
   const [isLoading, setIsLoading] = useState(initialAuth.isLoading);
 
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
   const saveUser = useCallback((u: AuthUser) => {
     setToken(null);
     setUser(u);
@@ -52,6 +56,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
+    authGenerationRef.current += 1;
     await fetch(`${API_BASE}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
@@ -113,12 +118,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveUser]);
 
   // 401 イベントでトークン期限切れを検知してログアウト
   useEffect(() => {
     function handleTokenExpired() {
+      authGenerationRef.current += 1;
       setToken(null);
       setUser(null);
     }
@@ -128,7 +133,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let active = true;
+    const authGeneration = authGenerationRef.current;
     if (initialAuth.hasMsalRedirect) return undefined;
+    const isCurrentAuthCheck = () =>
+      active && authGeneration === authGenerationRef.current;
 
     fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
       .then((res) => {
@@ -137,8 +145,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return res.json();
       })
       .then((data) => {
-        if (!active) return;
-        setToken(null);
+        if (!isCurrentAuthCheck()) return;
         setUser({
           user_id: data.user_id,
           tenant_id: data.tenant_id,
@@ -147,12 +154,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       })
       .catch(() => {
-        if (!active) return;
+        if (!isCurrentAuthCheck()) return;
         setToken(null);
         setUser(null);
       })
       .finally(() => {
-        if (active) setIsLoading(false);
+        if (isCurrentAuthCheck()) setIsLoading(false);
       });
 
     return () => {
@@ -162,6 +169,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      authGenerationRef.current += 1;
       // ログイン処理中は LoadingScreen を出しておき、フォームが消えた瞬間に
       // ログイン画面が再表示されるフラッシュを防ぐ
       setIsLoading(true);

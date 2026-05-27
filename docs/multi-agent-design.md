@@ -446,20 +446,21 @@ LINE / 電話で動く Agent 群はリアルタイム会話を捌くが、業務
 
 | 区分 | 入口 | 主に呼ぶ Connector | 出力 |
 |---|---|---|---|
-| Exception Triage | `GET /api/agent/exceptions?delivery_date=...` | `IOrderRepository`, `IOrderIntelligenceStore`, `IInventoryService` | `ExceptionCase[]`（severity / type / evidence / metadata） |
+| Exception Triage | `GET /api/agent/exceptions?...` | `IOrderRepository`, `IOrderIntelligenceStore`, `IInventoryService` | `ExceptionCase[]`（severity / type / evidence / metadata） |
 | Resolution プレビュー | `POST /api/agent/resolutions/preview` | `IInventoryService.find_alternatives`（在庫不足時のみ） | `ResolutionPreview`（recommended_actions / customer_message / confidence） |
 | Feature flag | `GET /api/agent/features` | — | env 由来の機能フラグ |
 
 LLM 推論は呼ばず、CustomerOrderProfile（Z-score）と在庫の客観値で決定論的に
 組み立てる。文面と推奨アクションは担当者承認後に Communication Agent へ委譲する
 前提（`DASHBOARD_RESOLUTION_EXECUTE_ENABLED=true` で自動送信を許可）。
+`/api/agent/exceptions` は受注一覧と同じ `delivery_date` / `order_date` / `status` / `q` /
+`limit` / `offset` を受け取り、日付未指定時も現在表示中のページ範囲を対象にする。
 
 ### Exception Case の分類
 
 | `type` | 検知ロジック | severity の基本値 |
 |---|---|---|
-| `needs_review` | `Order.status == 要対応` | high |
-| `awaiting_reply` | `Order.status == 返信待ち` | medium |
+| `needs_review` | `Order.status == 要対応`。旧データの `返信待ち` は Repository 取得時に `要対応` へ正規化 | high |
 | `quantity_anomaly` | `ProductStats.std_dev` を使った Z-score (>3) で逸脱を検知。プロファイル不足時は 100 単位以上をフォールバック判定 | Z≥6 で high、それ未満は medium |
 | `unit_anomaly` | `ProductStats.typical_unit` と `OrderItem.unit` の不一致 | medium |
 | `inventory_shortage` | `IInventoryService.check` が `is_sufficient=False` を返す商品 | high |

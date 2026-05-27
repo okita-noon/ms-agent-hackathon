@@ -95,6 +95,45 @@ test.describe("SSO Login flow (local dev)", () => {
     ).toBeVisible();
   });
 
+  test("stale session check does not clear a successful password login", async ({ page }) => {
+    await page.route("**/api/auth/me", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.fulfill({ status: 401, body: "invalid" });
+    });
+    await page.route("**/api/auth/login", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          tenant_id: "T-001",
+          email: "test@example.com",
+          display_name: "テストユーザー",
+        }),
+      }),
+    );
+    await page.route(/\/api\/orders\?/, (route) => {
+      expect(route.request().headers().authorization).toBeUndefined();
+      return route.fulfill({ status: 500, body: "error" });
+    });
+    await page.route("**/api/agent/features", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ dashboard_agent: false }),
+      }),
+    );
+
+    await page.goto("/login");
+    await page.getByPlaceholder("user@example.com").fill("test@example.com");
+    await page.getByPlaceholder("********").fill("password");
+    await page.getByRole("button", { name: "ログイン", exact: true }).click();
+
+    await page.waitForURL("**/orders", { timeout: 5_000 });
+    await page.waitForTimeout(700);
+    await expect(page.getByRole("heading", { name: "受注一覧" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ログイン", exact: true })).not.toBeVisible();
+  });
+
   test("popup window does not render React app (window.opener)", async ({ context }) => {
     const popup = await context.newPage();
 
@@ -154,30 +193,5 @@ test.describe("SSO Login flow (local dev)", () => {
     }
 
     await popup.close();
-  });
-
-  test("saveToken sets user state for redirect", async ({ page }) => {
-    await page.goto("/login");
-    await page.waitForLoadState("networkidle");
-
-    await page.evaluate(() => {
-      const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-        .replace(/=/g, "");
-      const payload = btoa(
-        JSON.stringify({
-          sub: "U-TEST",
-          tenant_id: "T-001",
-          email: "test@example.com",
-          display_name: "Test",
-          exp: Math.floor(Date.now() / 1000) + 3600,
-        })
-      ).replace(/=/g, "");
-      const fakeJwt = `${header}.${payload}.fakesig`;
-      localStorage.setItem("foogent_token", fakeJwt);
-    });
-
-    await page.reload();
-    await page.waitForURL("**/orders", { timeout: 5_000 });
-    expect(page.url()).toContain("/orders");
   });
 });

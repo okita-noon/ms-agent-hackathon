@@ -446,17 +446,19 @@ class TestDashboardAgentApi:
             patch.dict("os.environ", {"DASHBOARD_AGENT_ENABLED": "false"}),
             patch("src.api.dashboard_agent.resolve_tenant_by_id") as resolve,
         ):
-            resp = client.get("/api/agent/exceptions?delivery_date=2026-05-20")
+            resp = client.get("/api/agent/exceptions")
 
         assert resp.status_code == 200
         body = resp.json()
         assert body["enabled"] is False
+        assert body["date"] is None
+        assert body["date_field"] is None
         assert body["cases"] == []
         resolve.assert_not_called()
 
-    def test_exceptions_resolves_tenant_and_returns_cases(self, client):
+    def test_exceptions_resolves_tenant_and_returns_cases_for_current_order_list(self, client):
         repo = AsyncMock()
-        repo.list_by_date.return_value = [_order(status=OrderStatus.NEEDS_REVIEW)]
+        repo.list_orders.return_value = ([_order(status=OrderStatus.NEEDS_REVIEW)], 1)
         store = AsyncMock()
         store.get_customer_profile.return_value = None
         inventory = _inventory_ok()
@@ -482,15 +484,74 @@ class TestDashboardAgentApi:
                 return_value=tenant_ctx,
             ) as resolve,
         ):
-            resp = client.get("/api/agent/exceptions?delivery_date=2026-05-20")
+            resp = client.get("/api/agent/exceptions?status=要対応&q=テスト&limit=25&offset=50")
 
         assert resp.status_code == 200
         body = resp.json()
         assert body["enabled"] is True
-        assert body["delivery_date"] == "2026-05-20"
+        assert body["date"] is None
+        assert body["date_field"] is None
+        assert body["filters"] == {
+            "status": "要対応",
+            "source": None,
+            "q": "テスト",
+            "limit": 25,
+            "offset": 50,
+        }
         assert body["cases"][0]["type"] == "needs_review"
         resolve.assert_called_once_with("T-TEST")
-        repo.list_by_date.assert_awaited_once_with("T-TEST", date(2026, 5, 20))
+        repo.list_orders.assert_awaited_once_with(
+            "T-TEST",
+            None,
+            status="要対応",
+            source=None,
+            q="テスト",
+            limit=25,
+            offset=50,
+            date_field="delivery_date",
+        )
+
+    def test_exceptions_uses_order_date_filter_when_requested(self, client):
+        repo = AsyncMock()
+        repo.list_orders.return_value = ([_order(status=OrderStatus.NEEDS_REVIEW)], 1)
+        store = AsyncMock()
+        store.get_customer_profile.return_value = None
+        inventory = _inventory_ok()
+
+        tenant_ctx = MagicMock()
+        tenant_ctx.tenant_id = "T-TEST"
+        tenant_ctx.get_connector.side_effect = lambda name: {
+            "IOrderRepository": repo,
+            "IOrderIntelligenceStore": store,
+            "IInventoryService": inventory,
+        }[name]
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "DASHBOARD_AGENT_ENABLED": "true",
+                    "DASHBOARD_EXCEPTION_TRIAGE_ENABLED": "true",
+                },
+            ),
+            patch("src.api.dashboard_agent.resolve_tenant_by_id", return_value=tenant_ctx),
+        ):
+            resp = client.get("/api/agent/exceptions?order_date=2026-05-20&limit=50&offset=0")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["date"] == "2026-05-20"
+        assert body["date_field"] == "order_date"
+        repo.list_orders.assert_awaited_once_with(
+            "T-TEST",
+            date(2026, 5, 20),
+            status=None,
+            source=None,
+            q=None,
+            limit=50,
+            offset=0,
+            date_field="order_date",
+        )
 
     def test_preview_disabled_when_resolution_off(self, client):
         payload = {

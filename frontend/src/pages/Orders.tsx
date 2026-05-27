@@ -37,11 +37,6 @@ function formatTime(value?: string): string {
   return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
 }
 
-function formatClock(value: Date | null): string {
-  if (!value) return "--:--";
-  return value.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
-}
-
 export default function Orders() {
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
   const [date, setDate] = useState(() => todayJst());
@@ -58,8 +53,7 @@ export default function Orders() {
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentPanelVisible, setAgentPanelVisible] = useState(true);
-  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
@@ -78,7 +72,6 @@ export default function Orders() {
       });
       setOrders(resp.orders);
       setTotalOrders(resp.total);
-      setLastUpdatedAt(new Date());
     } catch {
       const demoOrders = getDemoOrders().filter((order) => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -92,7 +85,6 @@ export default function Orders() {
       });
       setOrders(demoOrders.slice(offset, offset + PAGE_SIZE));
       setTotalOrders(demoOrders.length);
-      setLastUpdatedAt(new Date());
     } finally {
       setLoading(false);
     }
@@ -117,20 +109,26 @@ export default function Orders() {
   }, []);
 
   const loadAgentExceptions = useCallback(async () => {
-    if (!agentPanelOpen || !dateFilterEnabled) {
+    if (!agentPanelOpen) {
       setAgentExceptions([]);
       return;
     }
     setAgentLoading(true);
     try {
-      const resp = await fetchAgentExceptions(date);
+      const resp = await fetchAgentExceptions(dateFilterEnabled ? date : null, {
+        status: statusFilter || undefined,
+        q: query || undefined,
+        limit: PAGE_SIZE,
+        offset,
+        date_field: dateFilterEnabled ? dateField : undefined,
+      });
       setAgentExceptions(resp.enabled ? resp.cases : []);
     } catch {
       setAgentExceptions([]);
     } finally {
       setAgentLoading(false);
     }
-  }, [agentPanelOpen, dateFilterEnabled, date]);
+  }, [agentPanelOpen, dateFilterEnabled, date, dateField, statusFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
@@ -223,6 +221,9 @@ export default function Orders() {
 
   const filterStatusUI = statusFilter || "すべて";
   const todayStr = todayJst();
+  const agentScopeLabel = dateFilterEnabled
+    ? `${date} の${dateField === "order_date" ? "受注分" : "配送分"}`
+    : "現在表示中の受注";
 
   return (
     <>
@@ -268,7 +269,7 @@ export default function Orders() {
                   }`}
                 />
               </span>
-              Dashboard Agent
+              <span className="whitespace-nowrap">foogent ai</span>
             </button>
           )}
 
@@ -364,21 +365,6 @@ export default function Orders() {
               />
             </>
           )}
-
-          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                liveStatus === "live"
-                  ? "bg-green-500 pulse-dot"
-                  : liveStatus === "reconnecting"
-                    ? "bg-amber-500"
-                    : "bg-gray-300"
-              }`}
-            />
-            <span>{liveStatus === "live" ? "ライブ" : liveStatus === "reconnecting" ? "再接続中" : "接続中"}</span>
-            <span className="text-gray-300">/</span>
-            <span>最終更新 {formatClock(lastUpdatedAt)}</span>
-          </div>
 
           <button
             onClick={() => {
@@ -549,7 +535,7 @@ export default function Orders() {
             <DashboardAgentPanel
               exceptions={agentExceptions}
               loading={agentLoading}
-              date={date}
+              scopeLabel={agentScopeLabel}
               executeEnabled={executeEnabled}
             />
           </div>

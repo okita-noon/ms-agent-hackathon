@@ -2,6 +2,21 @@
 
 > すべてのAIエージェント（Claude Code, GitHub Copilot, Cursor等）が参照するプロジェクトルール。
 
+## AI エージェント共通ルール（必須）
+
+### セッション開始時
+- `main` ブランチから作業用ブランチを切る（既に作業ブランチにいる場合はそのまま使う）
+
+### Pull Request 作成前チェック
+PR を作成する前に以下を**必ず**実行し、全てパスすることを確認する:
+1. `ruff check src/ tests/` — lint エラーがないこと
+2. `ruff format --check src/ tests/` — フォーマット違反がないこと
+3. `git fetch origin main && git merge origin/main --no-commit --no-ff` でコンフリクトがないこと（確認後 `git merge --abort`）
+
+### Push 前チェック
+- 現在のブランチに紐づく PR が既にマージ済みの場合、同じブランチに push してはいけない
+- 新しいブランチを切り、新規 PR として作成すること
+
 ## プロジェクト概要
 
 - **プロジェクト名**: foogent（AI受発注自動一元管理システム）
@@ -22,7 +37,7 @@
 
 | カテゴリ | 技術 |
 |---|---|
-| Agent基盤 | Azure AI Agent Service |
+| Agent基盤 | Semantic Kernel（ChatCompletionAgent） |
 | LLM/Embedding | Azure AI Foundry（gpt-5.4-mini, text-embedding-3-small） |
 | オーケストレーション | Semantic Kernel 1.28（Python SDK） |
 | ドキュメントDB | Azure Cosmos DB Serverless（受注・パターン学習・セッション） |
@@ -132,7 +147,7 @@
 | PUT | `/api/orders/{order_id}/memo?tenant_id=T-001` | 受注メモ更新（特殊対応・アレルギー・ギフト包装等） |
 | PUT | `/api/customers/{customer_id}?tenant_id=T-001` | 顧客更新（LINE User ID紐付け・納品グループ等） |
 | GET | `/api/agent/features` | Dashboard Agent 機能フラグ（dashboard_agent/exception_triage/resolution_agent/resolution_execute/demo_mode） |
-| GET | `/api/agent/exceptions?delivery_date=YYYY-MM-DD` | 配送日単位の Exception Case 一覧（Z-score 数量異常・単位異常・在庫不足・要対応） |
+| GET | `/api/agent/exceptions?delivery_date=YYYY-MM-DD&status=要対応&limit=50&offset=0` | 受注一覧の表示条件に合わせた Exception Case 一覧（Z-score 数量異常・単位異常・在庫不足・要対応）。日付未指定時は現在ページ範囲を対象 |
 | POST | `/api/agent/resolutions/preview` | Resolution Agent によるプレビュー（推奨アクション・顧客向け文面） |
 
 ## アーキテクチャドキュメント
