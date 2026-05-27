@@ -19,6 +19,12 @@ const SEVERITY_BG: Record<AgentExceptionSeverity, string> = {
   low: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
+const SEVERITY_DETAIL: Record<AgentExceptionSeverity, { border: string; bg: string; icon: string; title: string; text: string; evidence: string }> = {
+  high:   { border: "border-red-200",   bg: "bg-red-50/60",   icon: "text-red-500",   title: "text-red-800",   text: "text-red-700",   evidence: "text-red-700" },
+  medium: { border: "border-amber-200", bg: "bg-amber-50/60", icon: "text-amber-500", title: "text-amber-800", text: "text-amber-700", evidence: "text-amber-700" },
+  low:    { border: "border-slate-200", bg: "bg-slate-50/60", icon: "text-slate-500", title: "text-slate-700", text: "text-slate-600", evidence: "text-slate-600" },
+};
+
 const SEVERITY_LABEL: Record<AgentExceptionSeverity, string> = {
   high: "高",
   medium: "中",
@@ -170,27 +176,22 @@ export default function ExceptionModal({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}
-                      >
-                        {exc.severity === "high" && (
-                          <svg
-                            className="w-3 h-3"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                        )}
-                        {SEVERITY_LABEL[exc.severity]}
-                      </span>
-                      <span className="text-[11px] text-gray-400 tabular-nums">
+                          {SEVERITY_LABEL[exc.severity]}
+                        </span>
+                        <span
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}
+                        >
+                          {TYPE_LABEL[exc.type] ?? exc.type}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-400 tabular-nums shrink-0 ml-2">
                         {(() => {
                           const o = orderMap.get(exc.order_id);
                           return o?.order_date
@@ -225,20 +226,9 @@ export default function ExceptionModal({
                           .join("、");
                       })()}
                     </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                          exc.severity === "high"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {TYPE_LABEL[exc.type] ?? exc.type}
-                      </span>
-                      <span className="text-[11px] text-gray-400 leading-tight truncate">
-                        {exc.summary}
-                      </span>
-                    </div>
+                    <p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed line-clamp-2">
+                      {exc.summary}
+                    </p>
                     {isActive && (
                       <div className="mt-1.5 flex justify-end">
                         <svg
@@ -377,41 +367,46 @@ export default function ExceptionModal({
                   <h4 className="text-sm font-bold text-gray-900 mb-3">
                     AI検知内容
                   </h4>
-                  <div className="rounded-xl border-2 border-red-200 bg-red-50/60 p-4">
-                    <div className="flex items-start gap-2">
-                      <svg
-                        className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
-                      <div>
-                        <p className="text-sm font-bold text-red-800">
-                          {selected.title}
-                        </p>
-                        <p className="text-sm text-red-700 mt-1 leading-relaxed">
-                          {selected.summary}
-                        </p>
-                        {selected.evidence.length > 0 && (
-                          <div className="mt-2 text-sm text-red-700">
-                            {selected.evidence.map((ev, i) => (
-                              <span key={i}>
-                                {i > 0 && "、"}
-                                {ev.label}: <strong>{ev.value}</strong>
-                              </span>
-                            ))}
+                  {(() => {
+                    const sc = SEVERITY_DETAIL[selected.severity];
+                    return (
+                      <div className={`rounded-xl border-2 ${sc.border} ${sc.bg} p-4`}>
+                        <div className="flex items-start gap-2">
+                          <svg
+                            className={`w-5 h-5 ${sc.icon} shrink-0 mt-0.5`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
+                          <div>
+                            <p className={`text-sm font-bold ${sc.title}`}>
+                              {selected.title}
+                            </p>
+                            <p className={`text-sm ${sc.text} mt-1 leading-relaxed`}>
+                              {selected.summary}
+                            </p>
+                            {selected.evidence.length > 0 && (
+                              <div className={`mt-2 text-sm ${sc.evidence}`}>
+                                {selected.evidence.map((ev, i) => (
+                                  <span key={i}>
+                                    {i > 0 && "、"}
+                                    {ev.label}: <strong>{ev.value}</strong>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 推奨対応 */}
@@ -511,31 +506,13 @@ export default function ExceptionModal({
         </div>
 
         {/* ── Footer ─────────────────────────────────── */}
-        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200"
+            className="px-5 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            保留
+            閉じる
           </button>
-          <button
-            disabled
-            title="担当者通知は未実装です"
-            className="px-4 py-2 text-sm text-gray-400 border border-gray-200 rounded-lg cursor-not-allowed"
-          >
-            担当者に通知
-          </button>
-          {selectedOrder && (
-            <button
-              onClick={() => {
-                onOpenOrder(selectedOrder);
-                onClose();
-              }}
-              className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors shadow-sm shadow-brand-600/20"
-            >
-              詳細を開く
-            </button>
-          )}
         </div>
       </div>
     </div>
