@@ -47,10 +47,10 @@ export function getDemoMessages(orderId: string, order?: Order): Message[] {
       { id: "dm-005-4", role: "assistant", text: "承知しました。ただ現在在庫が不足しておりますので、担当者に確認の上ご連絡いたします。", channel: "phone", created_at: `${today}T14:01:20Z` },
     ],
     "ORD-006": [
-      { id: "dm-006-1", role: "user", text: "レモン30個をお願いします。", channel: "line", created_at: `${today}T15:00:00Z` },
-      { id: "dm-006-2", role: "assistant", text: "レモン30個（常温）ですね。東北便でよろしいでしょうか？", channel: "line", created_at: `${today}T15:00:10Z` },
-      { id: "dm-006-3", role: "user", text: "はい、それでお願いします。", channel: "line", created_at: `${today}T15:00:30Z` },
-      { id: "dm-006-4", role: "assistant", text: "かしこまりました。東北便（自社便）で手配いたします。ご注文ありがとうございます。", channel: "line", created_at: `${today}T15:00:42Z` },
+      { id: "dm-006-1", role: "user", text: "レモン30個をお願いします。", channel: "phone", created_at: `${today}T15:00:00Z` },
+      { id: "dm-006-2", role: "assistant", text: "レモン30個（常温）ですね。東北便でよろしいでしょうか？", channel: "phone", created_at: `${today}T15:00:10Z` },
+      { id: "dm-006-3", role: "user", text: "はい、それでお願いします。", channel: "phone", created_at: `${today}T15:00:30Z` },
+      { id: "dm-006-4", role: "assistant", text: "かしこまりました。東北便（自社便）で手配いたします。ご注文ありがとうございます。", channel: "phone", created_at: `${today}T15:00:42Z` },
     ],
   };
   if (msgs[orderId]) return msgs[orderId];
