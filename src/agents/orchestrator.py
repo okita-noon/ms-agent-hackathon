@@ -289,9 +289,7 @@ class OrderOrchestrator:
             debug_log.append(f"[現在注文] {current_order.id} (status={current_order.status.value})")
         line_action_type = _resolve_line_action_type(message, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
-        debug_log.append(
-            f"[分類] action_type={line_action_type}, editable={current_order_editable}"
-        )
+        debug_log.append(f"[分類] action_type={line_action_type}, editable={current_order_editable}")
 
         if source == OrderSource.LINE and _is_current_order_inquiry(message):
             debug_log.append("[判定] 現在注文の問い合わせと判定")
@@ -712,8 +710,7 @@ class OrderOrchestrator:
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
         debug_log.append(
-            f"[Intake] customer_id={customer_id}, items={len(items)}件, "
-            f"needs_confirmation={needs_confirmation}"
+            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
         )
         for it in items:
             debug_log.append(
@@ -778,9 +775,7 @@ class OrderOrchestrator:
                 has_only_out_of_stock = bool(out_of_stock) and not partial_stock
                 if has_partial_stock:
                     needs_confirmation = True
-                debug_log.append(
-                    f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件"
-                )
+                debug_log.append(f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件")
                 logger.info(
                     "Inventory shortage: out_of_stock=%d, partial=%d",
                     len(out_of_stock),
@@ -852,7 +847,9 @@ class OrderOrchestrator:
                         f"{it.get('product_name', '?')} {it.get('quantity', '?')}{it.get('unit', '?')}"
                         for it in draft.get("items", [])
                     )
-                    debug_log.append(f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]")
+                    debug_log.append(
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                    )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
@@ -1070,8 +1067,7 @@ class OrderOrchestrator:
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
         debug_log.append(
-            f"[Intake] customer_id={customer_id}, items={len(items)}件, "
-            f"needs_confirmation={needs_confirmation}"
+            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
         )
         for it in items:
             debug_log.append(
@@ -1135,9 +1131,7 @@ class OrderOrchestrator:
                 has_only_out_of_stock = bool(out_of_stock) and not partial_stock
                 if has_partial_stock:
                     needs_confirmation = True
-                debug_log.append(
-                    f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件"
-                )
+                debug_log.append(f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件")
                 logger.info(
                     "[multi-agent] Inventory shortage: out_of_stock=%d, partial=%d",
                     len(out_of_stock),
@@ -1208,7 +1202,9 @@ class OrderOrchestrator:
                         f"{it.get('product_name', '?')} {it.get('quantity', '?')}{it.get('unit', '?')}"
                         for it in draft.get("items", [])
                     )
-                    debug_log.append(f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]")
+                    debug_log.append(
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                    )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
@@ -2210,7 +2206,9 @@ def _enforce_response_policy(
     if inventory_needs_review:
         replacement = "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
     else:
-        replacement = "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+        replacement = (
+            "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+        )
     logger.info("[ポリシー] 応答を書き換え: %s → %s", response_text[:80], replacement[:80])
     return replacement
 
