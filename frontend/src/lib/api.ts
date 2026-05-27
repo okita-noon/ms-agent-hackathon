@@ -258,7 +258,15 @@ export interface AgentResolutionPreview {
 
 export interface AgentExceptionsResponse {
   enabled: boolean;
-  delivery_date: string;
+  date: string | null;
+  date_field: "delivery_date" | "order_date" | null;
+  filters?: {
+    status?: string | null;
+    source?: string | null;
+    q?: string | null;
+    limit?: number;
+    offset?: number;
+  };
   cases: AgentExceptionCase[];
 }
 
@@ -274,10 +282,22 @@ export async function fetchAgentFeatures(): Promise<AgentFeatures> {
   return (await resp.json()) as AgentFeatures;
 }
 
-export async function fetchAgentExceptions(date: string): Promise<AgentExceptionsResponse> {
-  const resp = await authFetch(
-    `${API_BASE}/api/agent/exceptions?delivery_date=${encodeURIComponent(date)}`
-  );
+export async function fetchAgentExceptions(
+  date: string | null,
+  filters: OrderFilters = {},
+): Promise<AgentExceptionsResponse> {
+  const params = new URLSearchParams();
+  if (date) {
+    const paramKey = filters.date_field === "order_date" ? "order_date" : "delivery_date";
+    params.set(paramKey, date);
+  }
+  if (filters.status) params.set("status", filters.status);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+
+  const resp = await authFetch(`${API_BASE}/api/agent/exceptions?${params.toString()}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return (await resp.json()) as AgentExceptionsResponse;
 }

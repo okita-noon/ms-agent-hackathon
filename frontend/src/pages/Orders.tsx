@@ -109,20 +109,26 @@ export default function Orders() {
   }, []);
 
   const loadAgentExceptions = useCallback(async () => {
-    if (!agentPanelOpen || !dateFilterEnabled) {
+    if (!agentPanelOpen) {
       setAgentExceptions([]);
       return;
     }
     setAgentLoading(true);
     try {
-      const resp = await fetchAgentExceptions(date);
+      const resp = await fetchAgentExceptions(dateFilterEnabled ? date : null, {
+        status: statusFilter || undefined,
+        q: query || undefined,
+        limit: PAGE_SIZE,
+        offset,
+        date_field: dateFilterEnabled ? dateField : undefined,
+      });
       setAgentExceptions(resp.enabled ? resp.cases : []);
     } catch {
       setAgentExceptions([]);
     } finally {
       setAgentLoading(false);
     }
-  }, [agentPanelOpen, dateFilterEnabled, date]);
+  }, [agentPanelOpen, dateFilterEnabled, date, dateField, statusFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
@@ -215,6 +221,9 @@ export default function Orders() {
 
   const filterStatusUI = statusFilter || "すべて";
   const todayStr = todayJst();
+  const agentScopeLabel = dateFilterEnabled
+    ? `${date} の${dateField === "order_date" ? "受注分" : "配送分"}`
+    : "現在表示中の受注";
 
   return (
     <>
@@ -526,7 +535,7 @@ export default function Orders() {
             <DashboardAgentPanel
               exceptions={agentExceptions}
               loading={agentLoading}
-              date={date}
+              scopeLabel={agentScopeLabel}
               executeEnabled={executeEnabled}
             />
           </div>

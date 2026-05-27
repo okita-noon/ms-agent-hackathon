@@ -181,7 +181,7 @@ flowchart LR
 | メソッド | パス | 用途 | Feature Flag |
 |---|---|---|---|
 | GET | `/api/agent/features` | 有効なAgent機能を返す | 常時 |
-| GET | `/api/agent/exceptions?tenant_id=T-001&delivery_date=YYYY-MM-DD` | 例外注文一覧 | `dashboard_exception_triage` |
+| GET | `/api/agent/exceptions?delivery_date=YYYY-MM-DD&status=要対応&limit=50&offset=0` | 受注一覧の表示条件に合わせた例外注文一覧。日付未指定時も現在ページ範囲を対象 | `dashboard_exception_triage` |
 | POST | `/api/agent/triage` | 選択範囲の例外分析 | `dashboard_exception_triage` |
 | POST | `/api/agent/resolutions/preview` | 対応案のプレビュー生成 | `dashboard_resolution_agent` |
 | POST | `/api/agent/resolutions/execute` | 承認済み対応案の実行 | `dashboard_resolution_execute` |

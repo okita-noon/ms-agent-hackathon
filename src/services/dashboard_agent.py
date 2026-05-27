@@ -104,6 +104,34 @@ class DashboardAgentService:
     async def list_exception_cases(self, tenant_id: str, delivery_date: date) -> list[ExceptionCase]:
         repo = self._ctx.get_connector("IOrderRepository")
         orders: list[Order] = await repo.list_by_date(tenant_id, delivery_date)
+        return await self._classify_orders(tenant_id, orders)
+
+    async def list_exception_cases_for_order_list(
+        self,
+        tenant_id: str,
+        target_date: date | None = None,
+        *,
+        status: str | None = None,
+        source: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        date_field: str = "delivery_date",
+    ) -> list[ExceptionCase]:
+        repo = self._ctx.get_connector("IOrderRepository")
+        orders, _total = await repo.list_orders(
+            tenant_id,
+            target_date,
+            status=status,
+            source=source,
+            q=q,
+            limit=limit,
+            offset=offset,
+            date_field=date_field,
+        )
+        return await self._classify_orders(tenant_id, orders)
+
+    async def _classify_orders(self, tenant_id: str, orders: list[Order]) -> list[ExceptionCase]:
         if not orders:
             return []
 

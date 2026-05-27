@@ -446,13 +446,15 @@ LINE / 電話で動く Agent 群はリアルタイム会話を捌くが、業務
 
 | 区分 | 入口 | 主に呼ぶ Connector | 出力 |
 |---|---|---|---|
-| Exception Triage | `GET /api/agent/exceptions?delivery_date=...` | `IOrderRepository`, `IOrderIntelligenceStore`, `IInventoryService` | `ExceptionCase[]`（severity / type / evidence / metadata） |
+| Exception Triage | `GET /api/agent/exceptions?...` | `IOrderRepository`, `IOrderIntelligenceStore`, `IInventoryService` | `ExceptionCase[]`（severity / type / evidence / metadata） |
 | Resolution プレビュー | `POST /api/agent/resolutions/preview` | `IInventoryService.find_alternatives`（在庫不足時のみ） | `ResolutionPreview`（recommended_actions / customer_message / confidence） |
 | Feature flag | `GET /api/agent/features` | — | env 由来の機能フラグ |
 
 LLM 推論は呼ばず、CustomerOrderProfile（Z-score）と在庫の客観値で決定論的に
 組み立てる。文面と推奨アクションは担当者承認後に Communication Agent へ委譲する
 前提（`DASHBOARD_RESOLUTION_EXECUTE_ENABLED=true` で自動送信を許可）。
+`/api/agent/exceptions` は受注一覧と同じ `delivery_date` / `order_date` / `status` / `q` /
+`limit` / `offset` を受け取り、日付未指定時も現在表示中のページ範囲を対象にする。
 
 ### Exception Case の分類
 
