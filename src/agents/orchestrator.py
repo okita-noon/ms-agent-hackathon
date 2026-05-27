@@ -512,6 +512,13 @@ class OrderOrchestrator:
         phone_agent = self._make_phone_order_agent()
         intake_text = await self._invoke_agent(phone_agent, prompt)
         intake_draft = self._extract_json(intake_text) or {}
+
+        if intake_draft.get("is_farewell"):
+            return {
+                "response": intake_draft.get("response", "ありがとうございます。失礼いたします。"),
+                "phone_sync_status": "farewell",
+            }
+
         draft = _build_draft_from_intake(intake_draft)
 
         if not draft:

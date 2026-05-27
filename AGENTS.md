@@ -2,6 +2,21 @@
 
 > すべてのAIエージェント（Claude Code, GitHub Copilot, Cursor等）が参照するプロジェクトルール。
 
+## AI エージェント共通ルール（必須）
+
+### セッション開始時
+- `main` ブランチから作業用ブランチを切る（既に作業ブランチにいる場合はそのまま使う）
+
+### Pull Request 作成前チェック
+PR を作成する前に以下を**必ず**実行し、全てパスすることを確認する:
+1. `ruff check src/ tests/` — lint エラーがないこと
+2. `ruff format --check src/ tests/` — フォーマット違反がないこと
+3. `git fetch origin main && git merge origin/main --no-commit --no-ff` でコンフリクトがないこと（確認後 `git merge --abort`）
+
+### Push 前チェック
+- 現在のブランチに紐づく PR が既にマージ済みの場合、同じブランチに push してはいけない
+- 新しいブランチを切り、新規 PR として作成すること
+
 ## プロジェクト概要
 
 - **プロジェクト名**: foogent（AI受発注自動一元管理システム）

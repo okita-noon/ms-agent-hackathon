@@ -37,11 +37,6 @@ function formatTime(value?: string): string {
   return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
 }
 
-function formatClock(value: Date | null): string {
-  if (!value) return "--:--";
-  return value.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
-}
-
 export default function Orders() {
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
   const [date, setDate] = useState(() => todayJst());
@@ -59,7 +54,6 @@ export default function Orders() {
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentPanelVisible, setAgentPanelVisible] = useState(true);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
@@ -78,7 +72,6 @@ export default function Orders() {
       });
       setOrders(resp.orders);
       setTotalOrders(resp.total);
-      setLastUpdatedAt(new Date());
     } catch {
       const demoOrders = getDemoOrders().filter((order) => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -92,7 +85,6 @@ export default function Orders() {
       });
       setOrders(demoOrders.slice(offset, offset + PAGE_SIZE));
       setTotalOrders(demoOrders.length);
-      setLastUpdatedAt(new Date());
     } finally {
       setLoading(false);
     }
@@ -376,8 +368,6 @@ export default function Orders() {
               }`}
             />
             <span>{liveStatus === "live" ? "ライブ" : liveStatus === "reconnecting" ? "再接続中" : "接続中"}</span>
-            <span className="text-gray-300">/</span>
-            <span>最終更新 {formatClock(lastUpdatedAt)}</span>
           </div>
 
           <button
