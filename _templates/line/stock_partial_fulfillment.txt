@@ -1,6 +1,2 @@
-${product_name}は本日確保できる数量が${available_quantity}です。
-残り${shortage_quantity}は${next_delivery_date}納品であればご用意可能です。
-1. 本日${available_quantity}のみ
-2. 本日${available_quantity} + ${next_delivery_date}${shortage_quantity}
-3. 今回見送り
-ご希望をお知らせください。
+${shortage_summary}
+${available_quantity}でよろしいですか？
