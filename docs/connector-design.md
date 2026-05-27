@@ -164,7 +164,7 @@ class ConnectorFactory:
 ┌─────────────────────────────────────────────────────────┐
 │                  共有リソース                             │
 │  ・Azure Container Apps（アプリ実行基盤）                │
-│  ・Azure AI Agent Service（Agent実行）                   │
+│  ・Semantic Kernel（Agent実行）                           │
 │  ・Azure AI Foundry（LLM推論・Embedding）                │
 │  ・Platform DB（テナント管理・設定）                      │
 └─────────────────────────────────────────────────────────┘
