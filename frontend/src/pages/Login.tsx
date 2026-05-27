@@ -47,7 +47,11 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
-          <img src={`${import.meta.env.BASE_URL}logo-login.png`} alt="foogent" className="h-12 mx-auto mb-4" />
+          <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" className="h-16 mx-auto mb-2" />
+          <span className="text-3xl font-bold">
+            <span className="text-gray-700">foo</span>
+            <span className="text-orange-500">gent</span>
+          </span>
           <p className="text-sm text-gray-500 mt-1">
             AI受発注自動一元管理システム
           </p>
