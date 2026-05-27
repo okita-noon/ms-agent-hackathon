@@ -18,12 +18,20 @@ import ChannelBadge from "../components/ChannelBadge";
 import OrderFilterBar from "../components/OrderFilterBar";
 import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
-import DashboardAgentPanel from "../components/DashboardAgentPanel";
+import ExceptionModal from "../components/ExceptionModal";
 import { offsetDate, todayJst } from "../lib/date";
 
 const PAGE_SIZE = 50;
 
 type DateField = "delivery_date" | "order_date";
+
+const TYPE_LABEL: Record<string, string> = {
+  quantity_anomaly: "数量",
+  unit_anomaly: "単位",
+  inventory_shortage: "在庫",
+  needs_review: "要確認",
+  awaiting_reply: "返信待ち",
+};
 
 function formatDate(value?: string): string {
   if (!value) return "-";
@@ -51,14 +59,27 @@ export default function Orders() {
   const [selected, setSelected] = useState<Order | null>(null);
   const [agentFeatures, setAgentFeatures] = useState<AgentFeatures | null>(null);
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
-  const [agentLoading, setAgentLoading] = useState(false);
-  const [agentPanelVisible, setAgentPanelVisible] = useState(true);
+  const [, setAgentLoading] = useState(false);
   const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
+  const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
+  const [exceptionModalInitialId, setExceptionModalInitialId] = useState<string | undefined>();
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
-  const agentPanelOpen = triageAvailable && agentPanelVisible;
-  const executeEnabled = Boolean(agentFeatures?.resolution_execute);
+
+  // Build order_id → exceptions lookup
+  const exceptionsByOrderId = useMemo(() => {
+    const map = new Map<string, AgentExceptionCase[]>();
+    for (const exc of agentExceptions) {
+      const arr = map.get(exc.order_id) || [];
+      arr.push(exc);
+      map.set(exc.order_id, arr);
+    }
+    return map;
+  }, [agentExceptions]);
+
+  const highExceptionCount = agentExceptions.filter((e) => e.severity === "high").length;
+  const mediumExceptionCount = agentExceptions.filter((e) => e.severity === "medium").length;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,7 +130,7 @@ export default function Orders() {
   }, []);
 
   const loadAgentExceptions = useCallback(async () => {
-    if (!agentPanelOpen) {
+    if (!triageAvailable) {
       setAgentExceptions([]);
       return;
     }
@@ -128,7 +149,7 @@ export default function Orders() {
     } finally {
       setAgentLoading(false);
     }
-  }, [agentPanelOpen, dateFilterEnabled, date, dateField, statusFilter, query, offset]);
+  }, [triageAvailable, dateFilterEnabled, date, dateField, statusFilter, query, offset]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAgentExceptions);
@@ -219,11 +240,13 @@ export default function Orders() {
     setOffset(0);
   }
 
+  function openExceptionModal(initialId?: string) {
+    setExceptionModalInitialId(initialId);
+    setExceptionModalOpen(true);
+  }
+
   const filterStatusUI = statusFilter || "すべて";
   const todayStr = todayJst();
-  const agentScopeLabel = dateFilterEnabled
-    ? `${date} の${dateField === "order_date" ? "受注分" : "配送分"}`
-    : "現在表示中の受注";
 
   return (
     <>
@@ -246,33 +269,6 @@ export default function Orders() {
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {triageAvailable && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={agentPanelVisible}
-              onClick={() => setAgentPanelVisible((visible) => !visible)}
-              className={`btn-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                agentPanelVisible
-                  ? "border-brand-200 bg-brand-50 text-brand-700"
-                  : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <span
-                className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${
-                  agentPanelVisible ? "bg-brand-600" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
-                    agentPanelVisible ? "translate-x-3" : "translate-x-0"
-                  }`}
-                />
-              </span>
-              <span className="whitespace-nowrap">foogent ai</span>
-            </button>
-          )}
-
           {/* Date filter toggle */}
           <button
             type="button"
@@ -301,76 +297,21 @@ export default function Orders() {
 
           {dateFilterEnabled && (
             <>
-              {/* Date field toggle */}
               <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
-                <button
-                  type="button"
-                  onClick={() => changeDateField("delivery_date")}
-                  className={`px-3 py-2 transition-colors ${
-                    dateField === "delivery_date"
-                      ? "bg-brand-600 text-white"
-                      : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  配送日
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeDateField("order_date")}
-                  className={`px-3 py-2 border-l border-gray-200 transition-colors ${
-                    dateField === "order_date"
-                      ? "bg-brand-600 text-white"
-                      : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  受注日
-                </button>
+                <button type="button" onClick={() => changeDateField("delivery_date")} className={`px-3 py-2 transition-colors ${dateField === "delivery_date" ? "bg-brand-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}>配送日</button>
+                <button type="button" onClick={() => changeDateField("order_date")} className={`px-3 py-2 border-l border-gray-200 transition-colors ${dateField === "order_date" ? "bg-brand-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}>受注日</button>
               </div>
-
-              {/* Quick date buttons */}
               <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
-                <button
-                  type="button"
-                  onClick={() => changeDate(offsetDate(date, -1))}
-                  className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
-                >
-                  前日
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeDate(todayStr)}
-                  className={`px-3 py-2 border-l border-gray-200 transition-colors ${
-                    date === todayStr
-                      ? "bg-brand-50 text-brand-700 font-semibold"
-                      : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  本日
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeDate(offsetDate(date, 1))}
-                  className="px-3 py-2 border-l border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
-                >
-                  翌日
-                </button>
+                <button type="button" onClick={() => changeDate(offsetDate(date, -1))} className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors">前日</button>
+                <button type="button" onClick={() => changeDate(todayStr)} className={`px-3 py-2 border-l border-gray-200 transition-colors ${date === todayStr ? "bg-brand-50 text-brand-700 font-semibold" : "text-gray-500 hover:bg-gray-50"}`}>本日</button>
+                <button type="button" onClick={() => changeDate(offsetDate(date, 1))} className="px-3 py-2 border-l border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">翌日</button>
               </div>
-
-              {/* Date picker */}
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => changeDate(e.target.value)}
-                className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white"
-              />
+              <input type="date" value={date} onChange={(e) => changeDate(e.target.value)} className="input-field border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
             </>
           )}
 
           <button
-            onClick={() => {
-              load();
-              if (agentPanelOpen) loadAgentExceptions();
-            }}
+            onClick={() => { load(); loadAgentExceptions(); }}
             disabled={loading}
             className="btn-press bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 shadow-sm shadow-brand-600/20"
           >
@@ -382,11 +323,42 @@ export default function Orders() {
         </div>
       </div>
 
-      <div className={agentPanelOpen ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start" : ""}>
-        <div className="min-w-0">
+      {/* foogent AI banner */}
+      {triageAvailable && agentExceptions.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
+          <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-amber-900">
+                foogent AI: {agentExceptions.length}件の確認事項
+              </span>
+              {highExceptionCount > 0 && (
+                <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                  高 {highExceptionCount}
+                </span>
+              )}
+              {mediumExceptionCount > 0 && (
+                <span className="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                  中 {mediumExceptionCount}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-amber-700 mt-0.5">
+              数量異常・在庫不足など、担当者の確認が必要な受注を検出しました
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => openExceptionModal()}
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            詳細を確認
+          </button>
+        </div>
+      )}
+
       {/* Order table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {/* Filter bar */}
         <OrderFilterBar
           searchQuery={query}
           onSearchChange={(v) => { setQuery(v); setOffset(0); }}
@@ -418,11 +390,7 @@ export default function Orders() {
               <thead>
                 <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
-                      onClick={() => setSortKey(sortKey === "order_date_desc" ? "order_date_asc" : "order_date_desc")}
-                    >
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors" onClick={() => setSortKey(sortKey === "order_date_desc" ? "order_date_asc" : "order_date_desc")}>
                       受注日時
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {sortKey === "order_date_asc"
@@ -432,46 +400,44 @@ export default function Orders() {
                     </button>
                   </th>
                   <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
-                      onClick={() => setSortKey(sortKey === "customer_name" ? "order_date_desc" : "customer_name")}
-                    >
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors" onClick={() => setSortKey(sortKey === "customer_name" ? "order_date_desc" : "customer_name")}>
                       顧客名
                       {sortKey === "customer_name" && (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                       )}
                     </button>
                   </th>
                   <th className="px-5 py-3">商品（温度帯）</th>
                   <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors"
-                      onClick={() => setSortKey(sortKey === "status" ? "order_date_desc" : "status")}
-                    >
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-600 transition-colors" onClick={() => setSortKey(sortKey === "status" ? "order_date_desc" : "status")}>
                       ステータス
                       {sortKey === "status" && (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                       )}
                     </button>
                   </th>
                   <th className="px-5 py-3">配送日</th>
+                  {triageAvailable && agentExceptions.length > 0 && (
+                    <th className="px-5 py-3">
+                      <span className="inline-flex items-center gap-1">
+                        <img src="/favicon.png" alt="" className="w-3 h-3" />
+                        AI検知
+                      </span>
+                    </th>
+                  )}
                   <th className="px-5 py-3">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {displayOrders.map((o) => {
                   const items = o.items || [];
+                  const orderId = o.uid || o.id || "";
+                  const excList = exceptionsByOrderId.get(orderId);
                   return (
                     <tr
-                      key={o.uid || o.id}
+                      key={orderId}
                       className={`row-hover cursor-pointer group ${
-                        recentOrderIds.has(o.uid || o.id || "") ? "bg-green-50 animate-new-order" : ""
+                        recentOrderIds.has(orderId) ? "bg-green-50 animate-new-order" : ""
                       }`}
                       onClick={() => setSelected(o)}
                     >
@@ -501,6 +467,35 @@ export default function Orders() {
                           <div className="mt-0.5 text-xs text-gray-500 font-medium">{o.delivery_time_slot}</div>
                         )}
                       </td>
+                      {triageAvailable && agentExceptions.length > 0 && (
+                        <td className="px-5 py-3.5">
+                          {excList ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openExceptionModal(excList[0].id);
+                              }}
+                              className="flex flex-wrap gap-1 hover:opacity-80 transition-opacity"
+                            >
+                              {excList.map((exc) => (
+                                <span
+                                  key={exc.id}
+                                  className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                                    exc.severity === "high"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {TYPE_LABEL[exc.type] ?? exc.type}
+                                </span>
+                              ))}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-gray-400 text-xs truncate max-w-[80px]">{o.remarks || "-"}</span>
@@ -517,7 +512,6 @@ export default function Orders() {
           </div>
         )}
 
-        {/* Pagination */}
         {totalOrders > 0 && (
           <Pagination
             total={totalOrders}
@@ -529,19 +523,7 @@ export default function Orders() {
         )}
       </div>
 
-        </div>
-        {agentPanelOpen && (
-          <div className="xl:sticky xl:top-5">
-            <DashboardAgentPanel
-              exceptions={agentExceptions}
-              loading={agentLoading}
-              scopeLabel={agentScopeLabel}
-              executeEnabled={executeEnabled}
-            />
-          </div>
-        )}
-      </div>
-
+      {/* Order detail modal */}
       <OrderDetailModal
         order={selected}
         onClose={() => setSelected(null)}
@@ -552,6 +534,20 @@ export default function Orders() {
           setSelected(updated);
         }}
       />
+
+      {/* Exception review modal */}
+      {exceptionModalOpen && agentExceptions.length > 0 && (
+        <ExceptionModal
+          exceptions={agentExceptions}
+          orders={orders}
+          onClose={() => setExceptionModalOpen(false)}
+          onOpenOrder={(order) => {
+            setExceptionModalOpen(false);
+            setSelected(order);
+          }}
+          initialExceptionId={exceptionModalInitialId}
+        />
+      )}
     </>
   );
 }
