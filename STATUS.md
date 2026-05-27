@@ -39,6 +39,7 @@
 - [x] Resolution Agent プレビュー API（推奨アクション・顧客向け文面・確認待ち）
 - [x] `/api/agent/features`, `/api/agent/exceptions`, `/api/agent/resolutions/preview` の REST API
 - [x] 受注ステータスを5種に整理（要対応 / 受注済み / 配送中 / 完了 / キャンセル）。旧 `未処理`・`製造` は `受注済み`、旧 `配送` は `配送中`、旧 `返信待ち` は `要対応` に統合・自動マッピング（#64）
+- [x] Dashboard Agent の Exception Triage と受注一覧フィルタで、Cosmos DB に残る旧 `返信待ち` ステータスも `要対応` として取得
 - [x] 受注メモ欄（`Order.memo`）と更新 API `PUT /api/orders/{order_id}/memo`（#69）
 - [x] 顧客に納品グループ（`Customer.delivery_lead_time` = 当日 / 翌日 / 中1日 / 中2日）を追加。SQL スキーマも `infra/sql/003-add-delivery-lead-time.sql` で拡張（#65）
 - [x] 配送予定日の自動確定（顧客リードタイム・締め時間・定休日・臨時休業を考慮）。幅でなく確定日を受注確定メッセージに含める（#82）

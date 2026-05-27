@@ -11,6 +11,8 @@ from src.models.order import Order, OrderSource, OrderStatus
 from src.models.tenant import ConnectorConfig
 
 _EXCLUDED_ORDER_SOURCES = (OrderSource.FAX.value, OrderSource.MANUAL.value)
+_LEGACY_NEEDS_REVIEW_STATUSES = ("返信待ち",)
+_NEEDS_REVIEW_STATUS_VALUES = (OrderStatus.NEEDS_REVIEW.value, *_LEGACY_NEEDS_REVIEW_STATUSES)
 
 
 class CosmosOrderRepository:
@@ -46,7 +48,8 @@ class CosmosOrderRepository:
         query = (
             "SELECT * FROM c "
             "WHERE c.tenant_id = @tid "
-            "AND (c.delivery_date = @d OR (c.status = @needs_review AND c.order_date = @d)) "
+            "AND (c.delivery_date = @d OR "
+            "((c.status = @needs_review OR c.status = @legacy_awaiting_reply) AND c.order_date = @d)) "
             "AND c.source != @excluded_fax "
             "AND c.source != @excluded_manual "
             "ORDER BY c.customer_name"
@@ -55,6 +58,7 @@ class CosmosOrderRepository:
             {"name": "@tid", "value": tenant_id},
             {"name": "@d", "value": target_date.isoformat()},
             {"name": "@needs_review", "value": OrderStatus.NEEDS_REVIEW.value},
+            {"name": "@legacy_awaiting_reply", "value": "返信待ち"},
             {"name": "@excluded_fax", "value": _EXCLUDED_ORDER_SOURCES[0]},
             {"name": "@excluded_manual", "value": _EXCLUDED_ORDER_SOURCES[1]},
         ]
@@ -89,7 +93,11 @@ class CosmosOrderRepository:
             params.append({"name": "@d", "value": target_date.isoformat()})
 
         if status:
-            where.append("c.status = @status")
+            if status in _NEEDS_REVIEW_STATUS_VALUES:
+                where.append("(c.status = @status OR c.status = @legacy_awaiting_reply)")
+                params.append({"name": "@legacy_awaiting_reply", "value": "返信待ち"})
+            else:
+                where.append("c.status = @status")
             params.append({"name": "@status", "value": status})
         if source:
             where.append("c.source = @source")
