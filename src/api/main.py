@@ -434,7 +434,16 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
     )
 
     session_id = payload.session_id or f"web-local-{int(datetime.now(timezone.utc).timestamp())}"
-    line_user_id = f"WEB-{payload.customer_id}" if payload.customer_id else "WEB-TESTER"
+    known_customer_id = payload.customer_id
+    known_customer_name = payload.customer_name
+    if not known_customer_id:
+        fallback_customer_id = os.environ.get("LINE_TESTER_FALLBACK_CUSTOMER_ID", "C-011").strip() or "C-011"
+        customer_repo = tenant_ctx.get_connector("ICustomerRepository")
+        fallback_customer = await customer_repo.get_by_id(tenant_id, fallback_customer_id)
+        if fallback_customer:
+            known_customer_id = fallback_customer.id
+            known_customer_name = fallback_customer.name
+    line_user_id = f"WEB-{known_customer_id}" if known_customer_id else "WEB-TESTER"
 
     history = [MessageHistory(**item) for item in payload.conversation_history]
     current_order: Order | None = None
@@ -452,8 +461,8 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
         conversation_history=history,
         pending_order_draft=payload.pending_order_draft,
         session_id=session_id,
-        known_customer_id=payload.customer_id,
-        known_customer_name=payload.customer_name,
+        known_customer_id=known_customer_id,
+        known_customer_name=known_customer_name,
         current_order=current_order,
     )
 
