@@ -78,6 +78,11 @@
   - 受注一覧にSSEライブ更新を追加。`/api/orders/events` をCookie認証で購読し、新着・更新イベント受信時に一覧とDashboard Agentパネルを再取得、新着行を一時ハイライト
   - 電話発注（Web）ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。顧客選択ドロップダウンで発注元を指定可能。Agent処理・在庫確認・受注保存は実際の電話チャネルと同一コードパスを使用し、ACS電話番号取得後はそのまま本番電話受注に切替可能
   - ダッシュボードの日付初期値・前日/翌日移動・デモデータ日付をJST基準に統一し、受注日/配送日フィルターのUTCずれを解消
+  - Dashboard Agent の `foogent ai` ラベル表記と折り返しを調整
+  - 電話発注（Web）の通話 ID 表示をユーザー向け画面から非表示化
+  - 電話発注（Web）の発信時に短いコール音を追加し、音声入力ボタンの文言を電話デモ向けに調整
+  - 電話発注（Web）の説明文を審査員向けに変更し、内部情報寄りのターン数・音声基盤注記を非表示化
+  - 電話発注（Web）の自由テキスト入力欄を削除し、音声入力と定型文ボタンに整理
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
