@@ -357,19 +357,6 @@ export default function Orders() {
             </>
           )}
 
-          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                liveStatus === "live"
-                  ? "bg-green-500 pulse-dot"
-                  : liveStatus === "reconnecting"
-                    ? "bg-amber-500"
-                    : "bg-gray-300"
-              }`}
-            />
-            <span>{liveStatus === "live" ? "ライブ" : liveStatus === "reconnecting" ? "再接続中" : "接続中"}</span>
-          </div>
-
           <button
             onClick={() => {
               load();

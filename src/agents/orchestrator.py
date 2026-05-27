@@ -15,12 +15,12 @@ from semantic_kernel.agents import ChatCompletionAgent
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 
 from src.agents.definitions import (
-    PHONE_ORDER_AGENT_INSTRUCTIONS,
     get_communication_instructions,
     get_exception_instructions,
     get_intake_instructions,
     get_inventory_instructions,
     get_orchestrator_instructions,
+    get_phone_instructions,
 )
 from src.connectors.context import TenantContext
 from src.models.inbound import InboundMessage
@@ -214,7 +214,7 @@ class OrderOrchestrator:
         return ChatCompletionAgent(
             kernel=kernel,
             name="PhoneOrderAgent",
-            instructions=PHONE_ORDER_AGENT_INSTRUCTIONS,
+            instructions=get_phone_instructions(),
         )
 
     def _make_orchestrator_agent(self, channel: str = "line") -> ChatCompletionAgent:
