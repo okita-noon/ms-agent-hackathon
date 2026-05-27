@@ -53,7 +53,7 @@ export default function Orders() {
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentPanelVisible, setAgentPanelVisible] = useState(true);
-  const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
