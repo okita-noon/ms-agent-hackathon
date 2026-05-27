@@ -56,7 +56,7 @@ LINE・ECサイト・電話・メールから届く注文を **複数の専門 A
 | メール受信 | Microsoft Graph API (Office 365) | メールボックス監視（Change Notifications） |
 | メール送信 | Azure Communication Services | 受注確認・確認質問メールの送信 |
 | **AI Agent** | | |
-| Agent基盤 | Azure AI Agent Service | マルチAgent実行・Thread管理・会話セッション |
+| Agent基盤 | Semantic Kernel（ChatCompletionAgent） | マルチAgent実行・会話セッション |
 | LLM・Embedding | Azure AI Foundry | gpt-5.4-mini（意図判定・情報抽出・返信生成）、text-embedding-3-small（パターン類似検索） |
 | オーケストレーション | Semantic Kernel | Plugin管理・Agent間連携 |
 | 商品/顧客検索 | Azure AI Search | 商品名・顧客名のあいまいマッチング + パターンEmbeddingベクトル検索 |
