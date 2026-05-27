@@ -285,8 +285,12 @@ class OrderOrchestrator:
             if customer_id:
                 repo = self._ctx.get_connector("IOrderRepository")
                 customer_orders = await repo.list_by_customer(customer_id, limit=20)
+                today = today_jst()
                 open_orders = [
-                    o for o in customer_orders if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                    o
+                    for o in customer_orders
+                    if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                    and (o.delivery_date is None or o.delivery_date >= today)
                 ]
                 if open_orders:
                     response_text = _build_line_from_template(
@@ -356,7 +360,7 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source)
+        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source, current_order)
         if inventory_inquiry_result:
             response_text = inventory_inquiry_result["response"]
             result.update(inventory_inquiry_result)
@@ -787,7 +791,7 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
-                delivery_estimate=delivery_estimate_text,
+                delivery_estimate=delivery_estimate_text if not inventory_needs_review else None,
                 current_order=current_order,
             )
         if source == OrderSource.LINE and saved_order and not needs_confirmation:
@@ -1051,7 +1055,7 @@ class OrderOrchestrator:
                 exception_text=exception_text,
                 inventory_text=inventory_text,
                 processing_note=processing_note,
-                delivery_estimate=delivery_estimate_text,
+                delivery_estimate=delivery_estimate_text if not inventory_needs_review else None,
                 current_order=current_order,
             )
         if source == OrderSource.LINE and saved_order and not needs_confirmation:
@@ -1380,13 +1384,22 @@ class OrderOrchestrator:
         except Exception:
             logger.exception("Learning failed for order %s — order flow unaffected", order.id)
 
-    async def _try_handle_inventory_inquiry(self, message: str, source: OrderSource) -> dict | None:
+    async def _try_handle_inventory_inquiry(
+        self, message: str, source: OrderSource, current_order: Order | None = None
+    ) -> dict | None:
         if not _is_inventory_inquiry(message):
             return None
 
         product_master = self._ctx.get_connector("IProductMaster")
         inventory = self._ctx.get_connector("IInventoryService")
         inquiry_items = await _extract_inventory_inquiry_items(self._ctx.tenant_id, product_master, message)
+
+        # 商品名を抽出できなかった場合、現在の注文の商品で在庫照会
+        if not inquiry_items and current_order and current_order.items:
+            for item in current_order.items:
+                product = await product_master.get_by_id(self._ctx.tenant_id, item.product_id)
+                if product:
+                    inquiry_items.append({"product": product, "required_qty": item.quantity})
 
         if not inquiry_items:
             response = _format_inventory_inquiry_response([], source=source, needs_product_clarification=True)
@@ -1664,7 +1677,11 @@ INVENTORY_INQUIRY_KEYWORDS = (
     "ありますか",
     "ある?",
     "ある？",
+    "あるの?",
+    "あるの？",
     "ございますか",
+    "在庫不足",
+    "配送可能",
 )
 
 ORDER_REQUEST_KEYWORDS = (
@@ -1775,6 +1792,8 @@ def _format_inventory_inquiry_response(
                 lines.append(
                     f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。"
                 )
+            elif available_qty <= 0:
+                lines.append(f"{product_name}は現在在庫切れです。{required_qty:g}{unit}ご用意できません。")
             else:
                 shortage = max(required_qty - available_qty, 0)
                 lines.append(
@@ -1782,7 +1801,10 @@ def _format_inventory_inquiry_response(
                     f"{required_qty:g}{unit}には{shortage:g}{unit}不足しています。"
                 )
         else:
-            lines.append(f"{product_name}は現在{available_qty:g}{unit}在庫があります。")
+            if available_qty <= 0:
+                lines.append(f"{product_name}は現在在庫切れです。")
+            else:
+                lines.append(f"{product_name}は現在{available_qty:g}{unit}在庫があります。")
 
     if source == OrderSource.PHONE:
         return " ".join(lines)
@@ -1979,18 +2001,25 @@ def _format_open_orders_summary(orders: list[Order]) -> str:
     lines: list[str] = []
     for delivery_date in sorted(grouped.keys(), key=_date_key):
         day_orders = grouped[delivery_date]
-        item_texts: list[str] = []
+        # 同一商品名+単位の数量を合算
+        merged: dict[str, float] = {}
+        unit_map: dict[str, str] = {}
         for order in day_orders:
             for item in order.items:
-                qty = int(item.quantity) if float(item.quantity).is_integer() else item.quantity
-                item_texts.append(f"・{item.product_name} {qty}{item.unit}")
-        if not item_texts:
+                key = f"{item.product_name}|{item.unit}"
+                merged[key] = merged.get(key, 0) + item.quantity
+                unit_map[key] = item.unit
+        if not merged:
             continue
         if delivery_date:
             lines.append(f"【{delivery_date.month}/{delivery_date.day}配送予定】")
         else:
             lines.append("【配送日未定】")
-        lines.extend(item_texts)
+        for key, total_qty in merged.items():
+            product_name = key.split("|")[0]
+            unit = unit_map[key]
+            qty = int(total_qty) if float(total_qty).is_integer() else total_qty
+            lines.append(f"・{product_name} {qty}{unit}")
     return "\n".join(lines)
 
 
