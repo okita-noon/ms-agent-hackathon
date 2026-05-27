@@ -86,7 +86,7 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
 
 
 def _insert_order_id(response_text: str, order_id: str) -> str:
-    """LINE・電話の返信テキスト末尾に受注Noを付与する。"""
+    """電話の返信テキスト末尾に受注Noを付与する。LINEでは使わない。"""
     return f"{response_text}\n\n受注No: {order_id}"
 
 
@@ -285,8 +285,12 @@ class OrderOrchestrator:
             if customer_id:
                 repo = self._ctx.get_connector("IOrderRepository")
                 customer_orders = await repo.list_by_customer(customer_id, limit=20)
+                today = today_jst()
                 open_orders = [
-                    o for o in customer_orders if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                    o
+                    for o in customer_orders
+                    if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                    and (o.delivery_date is None or o.delivery_date >= today)
                 ]
                 if open_orders:
                     response_text = _build_line_from_template(
@@ -356,7 +360,7 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source)
+        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source, current_order)
         if inventory_inquiry_result:
             response_text = inventory_inquiry_result["response"]
             result.update(inventory_inquiry_result)
@@ -673,49 +677,81 @@ class OrderOrchestrator:
             anomaly_confirmation_needed = True
             needs_confirmation = True
 
-        # ── Step 3: Inventory Agent ────────────────────────────────────────────
-        inventory_text: str | None = None
-        inventory_result: dict | None = None
+        # ── Step 3: Inventory check (code-based) ─────────────────────────────
+        checked_items: list[dict] = []
         inventory_needs_review = False
+        inventory_shortage_response: str | None = None
+        has_partial_stock = False
+        has_only_out_of_stock = False
         if not anomaly_confirmation_needed and items:
-            inventory_agent = self._make_inventory_agent(channel)
-            items_summary = json.dumps(items, ensure_ascii=False)
-            inventory_prompt = (
-                f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
-                f"注文アイテム: {items_summary}\n"
-                f"各アイテムに対して check_inventory を実行し、"
-                f"在庫が足りない場合は find_alternatives を検索し、"
-                f"在庫が確保できたアイテムは reserve_inventory で引当を行ってください。"
-                f"結果をJSON形式で返してください。"
-            )
-            inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
-            logger.info("Inventory result: %s", inventory_text[:500])
-            inventory_result = self._extract_json(inventory_text)
-            inventory_needs_review = _inventory_requires_operator_review(inventory_result)
-            if inventory_needs_review:
-                needs_confirmation = True
+            draft_for_check = _build_draft_from_intake(intake_draft) or {}
+            checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
+            out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
+            if out_of_stock or partial_stock:
+                inventory_needs_review = True
+                inventory_shortage_response = _build_inventory_shortage_response(
+                    checked_items,
+                    source=source,
+                )
+                has_partial_stock = bool(partial_stock)
+                has_only_out_of_stock = bool(out_of_stock) and not partial_stock
+                if has_partial_stock:
+                    needs_confirmation = True
+                logger.info(
+                    "Inventory shortage: out_of_stock=%d, partial=%d",
+                    len(out_of_stock),
+                    len(partial_stock),
+                )
 
-        # ── Step 4: Save order if no confirmation needed ───────────────────────
+        # ── Step 4a: Estimate delivery date ────────────────────────────────
+        delivery_estimate_text: str | None = None
+        estimated_delivery_date: date | None = None
+        if not needs_confirmation and not inventory_needs_review:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+            estimated_delivery_date = min_d
+
+        # ── Step 4b: Save order ──────────────────────────────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
+        if has_only_out_of_stock:
+            # 全品在庫切れ → NEEDS_REVIEWで保存（需要把握用）、配送日なし
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    oos_items = [
+                        i for i in checked_items if not i.get("is_sufficient") and (i.get("available_qty") or 0) <= 0
+                    ]
+                    shortage_remarks = "; ".join(
+                        f"{item.get('product_name', '商品')}: "
+                        f"注文{_format_qty(item.get('required_qty'))}{item.get('unit', '')}, 在庫0"
+                        for item in oos_items
+                    )
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
                         status=OrderStatus.NEEDS_REVIEW,
-                        remarks=_build_inventory_review_remarks(inventory_result),
+                        remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
-                    logger.info("Created review order %s from inventory result", saved_order.id)
+                    logger.info("Created review order %s (out of stock)", saved_order.id)
                     result["review_order_id"] = saved_order.id
             except Exception:
-                logger.exception("Failed to save review order from inventory result")
+                logger.exception("Failed to save review order (out of stock)")
+        elif has_partial_stock:
+            pass  # 部分在庫 → 顧客確認待ち、まだ保存しない
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -733,20 +769,11 @@ class OrderOrchestrator:
             except Exception:
                 logger.exception("Failed to save order from single-agent pipeline")
 
-        # ── Step 4.5: Estimate delivery date ─────────────────────────────────
-        delivery_estimate_text: str | None = None
-        if not needs_confirmation:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
-            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(
-                route,
-                lead_time=lead_time,
-                tenant_config=self._ctx.config,
-            )
-            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
-
         # ── Step 5: Generate final response ─────────────────────────────────
-        if source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+        if inventory_shortage_response:
+            # 在庫不足 → テンプレート返答（LLMを通さない）
+            response_text = inventory_shortage_response
+        elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
             response_text = _build_email_from_template(
                 "メール返信_受注確定.txt",
                 intake_draft,
@@ -763,11 +790,11 @@ class OrderOrchestrator:
                 line_user_id=line_user_id,
                 intake_text=intake_text,
                 exception_text=exception_text,
-                inventory_text=inventory_text,
+                inventory_text=None,
                 source=OrderSource.LINE,
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
-                processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+                processing_note=_build_processing_note(needs_confirmation, False),
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
             )
@@ -782,22 +809,23 @@ class OrderOrchestrator:
                 line_user_id=line_user_id,
                 intake_text=intake_text,
                 exception_text=exception_text,
-                inventory_text=inventory_text,
+                inventory_text=None,
                 source=source,
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
-                processing_note=_build_processing_note(needs_confirmation, inventory_needs_review),
+                processing_note=_build_processing_note(needs_confirmation, False),
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
             )
-        if source == OrderSource.LINE and saved_order and not needs_confirmation:
-            response_text = _build_line_from_template(
-                "order_update_confirm.txt" if current_order else "order_confirm.txt",
-                items=saved_order.items,
-                delivery_estimate=delivery_estimate_text,
-            )
-        elif source != OrderSource.EMAIL and saved_order:
-            response_text = _insert_order_id(response_text, saved_order.id)
+        if not inventory_shortage_response:
+            if source == OrderSource.LINE and saved_order and not needs_confirmation:
+                response_text = _build_line_from_template(
+                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    items=saved_order.items,
+                    delivery_estimate=delivery_estimate_text,
+                )
+            elif source == OrderSource.PHONE and saved_order:
+                response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── Step 6: Send response ─────────────────────────────────────────────
@@ -808,7 +836,10 @@ class OrderOrchestrator:
 
         if needs_confirmation:
             result["session_status"] = "awaiting_reply"
-            result["pending_order_draft"] = _build_draft_from_intake(intake_draft)
+            draft = _build_draft_from_intake(intake_draft)
+            if has_partial_stock and draft:
+                draft["inventory_checked"] = checked_items
+            result["pending_order_draft"] = draft
 
         return result
 
@@ -929,49 +960,80 @@ class OrderOrchestrator:
                 anomaly_confirmation_needed = True
                 needs_confirmation = True
 
-        # ── Chain Step 3: Inventory Agent ──────────────────────────────────────
-        inventory_text: str | None = None
-        inventory_result: dict | None = None
+        # ── Chain Step 3: Inventory check (code-based) ────────────────────────
+        checked_items: list[dict] = []
         inventory_needs_review = False
+        inventory_shortage_response: str | None = None
+        has_partial_stock = False
+        has_only_out_of_stock = False
         if not anomaly_confirmation_needed and items:
-            inventory_agent = self._make_inventory_agent(channel)
-            items_summary = json.dumps(items, ensure_ascii=False)
-            inventory_prompt = (
-                f"以下の注文アイテムの在庫確認と引当を行ってください。\n"
-                f"注文アイテム: {items_summary}\n"
-                f"各アイテムに対して check_inventory を実行し、"
-                f"在庫が足りない場合は find_alternatives を検索し、"
-                f"在庫が確保できたアイテムは reserve_inventory で引当を行ってください。"
-                f"結果をJSON形式で返してください。"
+            draft_for_check = _build_draft_from_intake(intake_draft) or {}
+            checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
+            out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
+            if out_of_stock or partial_stock:
+                inventory_needs_review = True
+                inventory_shortage_response = _build_inventory_shortage_response(
+                    checked_items,
+                    source=source,
+                )
+                has_partial_stock = bool(partial_stock)
+                has_only_out_of_stock = bool(out_of_stock) and not partial_stock
+                if has_partial_stock:
+                    needs_confirmation = True
+                logger.info(
+                    "[multi-agent] Inventory shortage: out_of_stock=%d, partial=%d",
+                    len(out_of_stock),
+                    len(partial_stock),
+                )
+
+        # ── 配送予定日推定 ────────────────────────────────────────────────────
+        delivery_estimate_text: str | None = None
+        estimated_delivery_date: date | None = None
+        if not needs_confirmation and not inventory_needs_review:
+            route = _resolve_delivery_route(intake_draft, self._ctx)
+            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
             )
-            inventory_text = await self._invoke_agent(inventory_agent, inventory_prompt)
-            logger.info("[multi-agent] Inventory result: %s", inventory_text[:500])
-            inventory_result = self._extract_json(inventory_text)
-            inventory_needs_review = _inventory_requires_operator_review(inventory_result)
-            if inventory_needs_review:
-                needs_confirmation = True
+            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+            estimated_delivery_date = min_d
 
         # ── 注文保存 ──────────────────────────────────────────────────────────
         saved_order: Order | None = None
-        if inventory_needs_review and not (source == OrderSource.LINE and current_order):
+        if has_only_out_of_stock:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    oos_items = [
+                        i for i in checked_items if not i.get("is_sufficient") and (i.get("available_qty") or 0) <= 0
+                    ]
+                    shortage_remarks = "; ".join(
+                        f"{item.get('product_name', '商品')}: "
+                        f"注文{_format_qty(item.get('required_qty'))}{item.get('unit', '')}, 在庫0"
+                        for item in oos_items
+                    )
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
                         status=OrderStatus.NEEDS_REVIEW,
-                        remarks=_build_inventory_review_remarks(inventory_result),
+                        remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
-                    logger.info("[multi-agent] Created review order %s", saved_order.id)
+                    logger.info("[multi-agent] Created review order %s (out of stock)", saved_order.id)
                     result["review_order_id"] = saved_order.id
             except Exception:
-                logger.exception("[multi-agent] Failed to save review order")
+                logger.exception("[multi-agent] Failed to save review order (out of stock)")
+        elif has_partial_stock:
+            pass  # 部分在庫 → 顧客確認待ち、まだ保存しない
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
                 if draft:
+                    if estimated_delivery_date and not draft.get("delivery_date"):
+                        draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -989,21 +1051,10 @@ class OrderOrchestrator:
             except Exception:
                 logger.exception("[multi-agent] Failed to save order")
 
-        # ── 配送予定日推定 ────────────────────────────────────────────────────
-        delivery_estimate_text: str | None = None
-        if not needs_confirmation:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
-            lead_time = await _resolve_lead_time(intake_draft, self._ctx)
-            min_d, max_d = delivery_estimator.estimate(
-                route,
-                lead_time=lead_time,
-                tenant_config=self._ctx.config,
-            )
-            delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
-
         # ── Chain Step 4: Communication Agent ─────────────────────────────────
-        processing_note = _build_processing_note(needs_confirmation, inventory_needs_review)
-        if source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+        if inventory_shortage_response:
+            response_text = inventory_shortage_response
+        elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
             response_text = _build_email_from_template(
                 "メール返信_受注確定.txt",
                 intake_draft,
@@ -1015,6 +1066,7 @@ class OrderOrchestrator:
                     f"ご注文を承りました。（受注No: {saved_order.id}）",
                 )
         elif source == OrderSource.EMAIL and needs_confirmation and intake_draft:
+            processing_note = _build_processing_note(needs_confirmation, False)
             agent_body = await self._communication_agent_reply(
                 message=message,
                 line_user_id=line_user_id,
@@ -1023,7 +1075,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 intake_text=intake_text,
                 exception_text=exception_text,
-                inventory_text=inventory_text,
+                inventory_text=None,
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
@@ -1034,6 +1086,7 @@ class OrderOrchestrator:
                 body=agent_body,
             )
         else:
+            processing_note = _build_processing_note(needs_confirmation, False)
             response_text = await self._communication_agent_reply(
                 message=message,
                 line_user_id=line_user_id,
@@ -1042,19 +1095,20 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 intake_text=intake_text,
                 exception_text=exception_text,
-                inventory_text=inventory_text,
+                inventory_text=None,
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
             )
-        if source == OrderSource.LINE and saved_order and not needs_confirmation:
-            response_text = _build_line_from_template(
-                "order_update_confirm.txt" if current_order else "order_confirm.txt",
-                items=saved_order.items,
-                delivery_estimate=delivery_estimate_text,
-            )
-        elif source != OrderSource.EMAIL and saved_order:
-            response_text = _insert_order_id(response_text, saved_order.id)
+        if not inventory_shortage_response:
+            if source == OrderSource.LINE and saved_order and not needs_confirmation:
+                response_text = _build_line_from_template(
+                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    items=saved_order.items,
+                    delivery_estimate=delivery_estimate_text,
+                )
+            elif source == OrderSource.PHONE and saved_order:
+                response_text = _insert_order_id(response_text, saved_order.id)
         result["response"] = response_text
 
         # ── 返信送信 ──────────────────────────────────────────────────────────
@@ -1065,7 +1119,10 @@ class OrderOrchestrator:
 
         if needs_confirmation:
             result["session_status"] = "awaiting_reply"
-            result["pending_order_draft"] = _build_draft_from_intake(intake_draft)
+            draft = _build_draft_from_intake(intake_draft)
+            if has_partial_stock and draft:
+                draft["inventory_checked"] = checked_items
+            result["pending_order_draft"] = draft
 
         return result
 
@@ -1373,13 +1430,22 @@ class OrderOrchestrator:
         except Exception:
             logger.exception("Learning failed for order %s — order flow unaffected", order.id)
 
-    async def _try_handle_inventory_inquiry(self, message: str, source: OrderSource) -> dict | None:
+    async def _try_handle_inventory_inquiry(
+        self, message: str, source: OrderSource, current_order: Order | None = None
+    ) -> dict | None:
         if not _is_inventory_inquiry(message):
             return None
 
         product_master = self._ctx.get_connector("IProductMaster")
         inventory = self._ctx.get_connector("IInventoryService")
         inquiry_items = await _extract_inventory_inquiry_items(self._ctx.tenant_id, product_master, message)
+
+        # 商品名を抽出できなかった場合、現在の注文の商品で在庫照会
+        if not inquiry_items and current_order and current_order.items:
+            for item in current_order.items:
+                product = await product_master.get_by_id(self._ctx.tenant_id, item.product_id)
+                if product:
+                    inquiry_items.append({"product": product, "required_qty": item.quantity})
 
         if not inquiry_items:
             response = _format_inventory_inquiry_response([], source=source, needs_product_clarification=True)
@@ -1635,6 +1701,76 @@ def _build_inventory_review_remarks(inventory_result: dict | None) -> str:
     return "在庫不足または引当不可のため担当者確認"
 
 
+def _classify_inventory_shortage(checked_items: list[dict]) -> tuple[list[dict], list[dict]]:
+    """在庫チェック結果を「在庫0（完全欠品）」と「一部在庫あり」に分類する。"""
+    out_of_stock: list[dict] = []
+    partial_stock: list[dict] = []
+    for item in checked_items:
+        if item.get("is_sufficient"):
+            continue
+        available = item.get("available_qty") or 0
+        if available <= 0:
+            out_of_stock.append(item)
+        else:
+            partial_stock.append(item)
+    return out_of_stock, partial_stock
+
+
+def _build_inventory_shortage_response(
+    checked_items: list[dict],
+    *,
+    source: OrderSource,
+) -> str | None:
+    """在庫不足時のテンプレート返答を生成する。全品在庫OKならNoneを返す。"""
+    out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
+    if not out_of_stock and not partial_stock:
+        return None
+
+    lines: list[str] = []
+
+    # 在庫0の商品
+    for item in out_of_stock:
+        name = item.get("product_name", "商品")
+        unit = item.get("unit", "")
+        qty = _format_qty(item.get("required_qty"))
+        lines.append(f"{name}は在庫が0{unit}のため{qty}{unit}の注文を受け付けられません。")
+
+    # 一部在庫の商品
+    for item in partial_stock:
+        name = item.get("product_name", "商品")
+        unit = item.get("unit", "")
+        available = _format_qty(item.get("available_qty"))
+        required = _format_qty(item.get("required_qty"))
+        shortage = _format_qty(max((item.get("required_qty") or 0) - (item.get("available_qty") or 0), 0))
+        lines.append(f"{name}は在庫が{available}{unit}です。{required}{unit}には{shortage}{unit}不足しています。")
+
+    if partial_stock and not out_of_stock:
+        # 一部在庫のみ → 部分提案
+        available_parts = []
+        for item in partial_stock:
+            name = item.get("product_name", "商品")
+            unit = item.get("unit", "")
+            available = _format_qty(item.get("available_qty"))
+            available_parts.append(f"{name} {available}{unit}")
+        available_text = "・".join(available_parts)
+        lines.append(f"{available_text}でよろしいですか？")
+    elif out_of_stock and not partial_stock:
+        # 完全欠品のみ
+        lines.append("ご了承ください。")
+    else:
+        # 混在
+        available_parts = []
+        for item in partial_stock:
+            name = item.get("product_name", "商品")
+            unit = item.get("unit", "")
+            available = _format_qty(item.get("available_qty"))
+            available_parts.append(f"{name} {available}{unit}")
+        available_text = "・".join(available_parts)
+        lines.append(f"在庫がある商品は{available_text}です。こちらでよろしいですか？")
+
+    return "\n".join(lines)
+
+
 def _build_processing_note(needs_confirmation: bool, inventory_needs_review: bool) -> str | None:
     if inventory_needs_review:
         return (
@@ -1657,7 +1793,11 @@ INVENTORY_INQUIRY_KEYWORDS = (
     "ありますか",
     "ある?",
     "ある？",
+    "あるの?",
+    "あるの？",
     "ございますか",
+    "在庫不足",
+    "配送可能",
 )
 
 ORDER_REQUEST_KEYWORDS = (
@@ -1768,6 +1908,8 @@ def _format_inventory_inquiry_response(
                 lines.append(
                     f"{product_name}は在庫が{available_qty:g}{unit}あります。{required_qty:g}{unit}ご用意できます。"
                 )
+            elif available_qty <= 0:
+                lines.append(f"{product_name}は現在在庫切れです。{required_qty:g}{unit}ご用意できません。")
             else:
                 shortage = max(required_qty - available_qty, 0)
                 lines.append(
@@ -1775,7 +1917,10 @@ def _format_inventory_inquiry_response(
                     f"{required_qty:g}{unit}には{shortage:g}{unit}不足しています。"
                 )
         else:
-            lines.append(f"{product_name}は現在{available_qty:g}{unit}在庫があります。")
+            if available_qty <= 0:
+                lines.append(f"{product_name}は現在在庫切れです。")
+            else:
+                lines.append(f"{product_name}は現在{available_qty:g}{unit}在庫があります。")
 
     if source == OrderSource.PHONE:
         return " ".join(lines)
@@ -1969,22 +2114,29 @@ def _format_open_orders_summary(orders: list[Order]) -> str:
     def _date_key(d: date | None) -> tuple[int, date]:
         return (1, date.max) if d is None else (0, d)
 
-    chunks: list[str] = []
+    lines: list[str] = []
     for delivery_date in sorted(grouped.keys(), key=_date_key):
         day_orders = grouped[delivery_date]
-        item_texts: list[str] = []
+        # 同一商品名+単位の数量を合算
+        merged: dict[str, float] = {}
+        unit_map: dict[str, str] = {}
         for order in day_orders:
             for item in order.items:
-                qty = int(item.quantity) if float(item.quantity).is_integer() else item.quantity
-                item_texts.append(f"{item.product_name} {qty}{item.unit}")
-        if not item_texts:
+                key = f"{item.product_name}|{item.unit}"
+                merged[key] = merged.get(key, 0) + item.quantity
+                unit_map[key] = item.unit
+        if not merged:
             continue
-        items_joined = "、".join(item_texts)
         if delivery_date:
-            chunks.append(f"{items_joined} が{delivery_date.month}月{delivery_date.day}日配送予定")
+            lines.append(f"【{delivery_date.month}/{delivery_date.day}配送予定】")
         else:
-            chunks.append(f"{items_joined} が配送日未定")
-    return "、".join(chunks)
+            lines.append("【配送日未定】")
+        for key, total_qty in merged.items():
+            product_name = key.split("|")[0]
+            unit = unit_map[key]
+            qty = int(total_qty) if float(total_qty).is_integer() else total_qty
+            lines.append(f"・{product_name} {qty}{unit}")
+    return "\n".join(lines)
 
 
 def _is_affirmative_reply(message: str) -> bool:

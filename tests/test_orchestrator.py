@@ -192,8 +192,10 @@ class TestCurrentOrderInquiry:
             ),
         ]
         summary = _format_open_orders_summary(orders)
-        assert "りんご 2箱 が5月28日配送予定" in summary
-        assert "バナナ 5kg が5月29日配送予定" in summary
+        assert "【5/28配送予定】" in summary
+        assert "・りんご 2箱" in summary
+        assert "【5/29配送予定】" in summary
+        assert "・バナナ 5kg" in summary
 
     @pytest.mark.asyncio
     async def test_inquiry_returns_open_order_summary(self, mock_tenant_ctx):
@@ -230,8 +232,8 @@ class TestCurrentOrderInquiry:
                 known_customer_id="C-001",
             )
 
-        assert "現在の注文は" in result["response"]
-        assert "りんご 2箱 が5月28日配送予定" in result["response"]
+        assert "現在のご注文内容" in result["response"]
+        assert "・りんご 2箱" in result["response"]
         mock_send.assert_awaited_once()
 
     def test_item_reserve_failure_requires_review(self):
@@ -714,14 +716,25 @@ class TestProcessOrderMessageSendsOnce:
                 return f"```json\n{intake_json}\n```"
             if call_count == 2:
                 return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            if call_count == 3:
-                return '```json\n{"all_available": false, "items": [{"product_id": "P-001", "available": false}], "message": "在庫不足です"}\n```'
-            assert "受注確定していません" in message
-            return "在庫確認が必要なため、担当者が確認いたします。"
+            return "OK"
+
+        # 在庫0 → 完全欠品
+        mock_checked_items = [
+            {
+                "product_id": "P-001",
+                "product_name": "りんご",
+                "required_qty": 10.0,
+                "unit": "箱",
+                "available_qty": 0,
+                "is_sufficient": False,
+                "needs_confirmation": True,
+            }
+        ]
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
             patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=mock_checked_items),
         ):
             result = await orch.process_order_message(
                 message="りんご10箱",
@@ -733,14 +746,15 @@ class TestProcessOrderMessageSendsOnce:
 
             assert result["review_order_id"] == "ORD-REVIEW"
             assert "order_id" not in result
-            assert result["session_status"] == "awaiting_reply"
             assert saved_orders[0].status == OrderStatus.NEEDS_REVIEW
-            assert saved_orders[0].remarks == "在庫不足です"
+            assert "在庫切れ" in saved_orders[0].remarks
             assert saved_orders[0].session_id == "sess-review"
             assert mock_send.call_count == 1
+            assert "在庫が0箱" in result["response"]
 
     @pytest.mark.asyncio
-    async def test_inventory_shortage_sanitizes_unsafe_agent_reply(self, mock_tenant_ctx):
+    async def test_inventory_shortage_uses_template_not_llm(self, mock_tenant_ctx):
+        """在庫不足時はテンプレート返答が使われ、LLM生成の不安全な返答は出力されない。"""
         orch = _make_orchestrator(mock_tenant_ctx)
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
         order_repo.save = AsyncMock(return_value="ORD-REVIEW")
@@ -763,13 +777,25 @@ class TestProcessOrderMessageSendsOnce:
                 return f"```json\n{intake_json}\n```"
             if call_count == 2:
                 return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            if call_count == 3:
-                return '```json\n{"all_reserved": false, "message": "在庫引当できません"}\n```'
-            return "ご注文承りました。りんご10箱で確定しました。"
+            return "OK"
+
+        # 部分在庫 → テンプレート返答で「よろしいですか？」
+        mock_checked_items = [
+            {
+                "product_id": "P-001",
+                "product_name": "りんご",
+                "required_qty": 10.0,
+                "unit": "箱",
+                "available_qty": 5,
+                "is_sufficient": False,
+                "needs_confirmation": True,
+            }
+        ]
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
             patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=mock_checked_items),
         ):
             result = await orch.process_order_message(
                 message="りんご10箱",
@@ -779,9 +805,9 @@ class TestProcessOrderMessageSendsOnce:
             )
 
             normalized = result["response"].replace(" ", "")
-            assert result["review_order_id"] == "ORD-REVIEW"
             assert all(pattern not in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS)
-            assert "担当者が確認" in result["response"]
+            assert "よろしいですか" in result["response"]
+            assert "5箱" in result["response"]
 
 
 class TestEndToEndMessageFlow:
@@ -1048,14 +1074,25 @@ class TestLearningIntegration:
                 return f"```json\n{intake_json}\n```"
             if call_count == 2:
                 return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            if call_count == 3:
-                return '```json\n{"all_available": false, "items": [{"product_id": "P-001", "available": false}]}\n```'
-            return "担当者が確認いたします。"
+            return "OK"
+
+        mock_checked_items = [
+            {
+                "product_id": "P-001",
+                "product_name": "りんご",
+                "required_qty": 10.0,
+                "unit": "箱",
+                "available_qty": 0,
+                "is_sufficient": False,
+                "needs_confirmation": True,
+            }
+        ]
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
             patch.object(orch, "_send_line_message", new_callable=AsyncMock),
             patch.object(orch, "_run_learning", new_callable=AsyncMock) as mock_learn,
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=mock_checked_items),
         ):
             await orch.process_order_message(
                 message="りんご10箱",
