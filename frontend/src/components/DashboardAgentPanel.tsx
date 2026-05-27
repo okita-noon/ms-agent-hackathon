@@ -10,7 +10,7 @@ import {
 interface DashboardAgentPanelProps {
   exceptions: AgentExceptionCase[];
   loading: boolean;
-  date: string;
+  scopeLabel: string;
   executeEnabled?: boolean;
 }
 
@@ -37,7 +37,7 @@ const TYPE_LABEL: Record<AgentExceptionType, string> = {
 export default function DashboardAgentPanel({
   exceptions,
   loading,
-  date,
+  scopeLabel,
   executeEnabled = false,
 }: DashboardAgentPanelProps) {
   const [previewById, setPreviewById] = useState<Record<string, AgentResolutionPreview>>({});
@@ -86,7 +86,7 @@ export default function DashboardAgentPanel({
           </p>
           <h3 className="text-sm font-bold text-gray-900 mt-1">受注異常チェック</h3>
           <p className="text-[11px] text-gray-400 mt-0.5">
-            {date} の配送分から担当者の判断が必要な受注を抽出
+            {scopeLabel}から担当者の判断が必要な受注を抽出
           </p>
         </div>
       </div>
