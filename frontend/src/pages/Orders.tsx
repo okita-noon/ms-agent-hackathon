@@ -269,7 +269,7 @@ export default function Orders() {
                   }`}
                 />
               </span>
-              foogent AI
+              <span className="whitespace-nowrap">foogent ai</span>
             </button>
           )}
 

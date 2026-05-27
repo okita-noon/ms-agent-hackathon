@@ -81,8 +81,8 @@ export default function DashboardAgentPanel({
       <div className="px-4 py-3 border-b border-gray-100 flex items-start gap-3">
         <img src="/favicon.png" alt="foogent" className="w-9 h-9 mt-0.5 shrink-0" />
         <div>
-          <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wider">
-            foogent AI
+          <p className="text-[11px] font-semibold text-brand-600 whitespace-nowrap">
+            foogent ai
           </p>
           <h3 className="text-sm font-bold text-gray-900 mt-1">受注異常チェック</h3>
           <p className="text-[11px] text-gray-400 mt-0.5">

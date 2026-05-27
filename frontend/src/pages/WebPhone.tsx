@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   fetchSpeechToken,
   fetchCustomers,
@@ -36,6 +36,47 @@ function playBase64Audio(base64: string): Promise<void> {
   });
 }
 
+function playRingbackTone(): Promise<void> {
+  return new Promise((resolve) => {
+    const audioWindow = window as Window & {
+      webkitAudioContext?: typeof AudioContext;
+    };
+    const AudioContextCtor = window.AudioContext || audioWindow.webkitAudioContext;
+    if (!AudioContextCtor) {
+      resolve();
+      return;
+    }
+
+    const ctx = new AudioContextCtor();
+    const gain = ctx.createGain();
+    const toneA = ctx.createOscillator();
+    const toneB = ctx.createOscillator();
+    const startAt = ctx.currentTime;
+    const stopAt = startAt + 0.9;
+
+    toneA.frequency.value = 440;
+    toneB.frequency.value = 480;
+    toneA.type = "sine";
+    toneB.type = "sine";
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.045, startAt + 0.04);
+    gain.gain.setValueAtTime(0.045, startAt + 0.62);
+    gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+
+    toneA.connect(gain);
+    toneB.connect(gain);
+    gain.connect(ctx.destination);
+    toneA.start(startAt);
+    toneB.start(startAt);
+    toneA.stop(stopAt);
+    toneB.stop(stopAt);
+    toneB.onended = () => {
+      ctx.close().catch(() => {});
+      resolve();
+    };
+  });
+}
+
 type CallPhase = "idle" | "starting" | "connected" | "listening" | "processing";
 
 export default function WebPhone() {
@@ -43,12 +84,10 @@ export default function WebPhone() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [callConnectionId, setCallConnectionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expandedRaw, setExpandedRaw] = useState<number | null>(null);
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [interimText, setInterimText] = useState("");
-  const [isComposing, setIsComposing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -90,13 +129,16 @@ export default function WebPhone() {
     setPhase("starting");
     setError(null);
     try {
-      const res = await webPhoneGreeting({
-        caller_number: DEFAULT_CALLER,
-        called_number: DEFAULT_CALLED,
-        customer_id: selectedCustomerId,
-      });
+      const [res] = await Promise.all([
+        webPhoneGreeting({
+          caller_number: DEFAULT_CALLER,
+          called_number: DEFAULT_CALLED,
+          customer_id: selectedCustomerId,
+        }),
+        playRingbackTone().catch(() => {}),
+      ]);
       setCallConnectionId(res.call_connection_id);
-      addSystemTurn(`通話開始 — Call ID: ${res.call_connection_id}`);
+      addSystemTurn("通話開始");
       setTurns((prev) => [
         ...prev,
         { role: "assistant", text: res.text, ts: now() },
@@ -123,7 +165,7 @@ export default function WebPhone() {
     setError(null);
     try {
       await webPhoneDisconnect(callConnectionId);
-      addSystemTurn(`通話終了 — Call ID: ${callConnectionId}`);
+      addSystemTurn("通話終了");
       setCallConnectionId(null);
       setPhase("idle");
     } catch (e) {
@@ -140,7 +182,6 @@ export default function WebPhone() {
     }
     setCallConnectionId(null);
     setTurns([]);
-    setInput("");
     setError(null);
     setExpandedRaw(null);
     setInterimText("");
@@ -184,7 +225,6 @@ export default function WebPhone() {
       ...prev,
       { role: "user", text: messageText.trim(), ts: now() },
     ]);
-    setInput("");
 
     try {
       const res = await webPhoneSendMessage({
@@ -276,26 +316,6 @@ export default function WebPhone() {
     }
   }, [phase, callConnectionId, selectedCustomerId, ensureSpeechToken, processResponse]);
 
-  const stopListening = useCallback(() => {
-    if (recognizerRef.current) {
-      try {
-        recognizerRef.current.stopContinuousRecognitionAsync?.();
-      } catch { /* ignore */ }
-    }
-  }, []);
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    sendTextMessage(input);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      sendTextMessage(input);
-    }
-  }
-
   const QUICK_MESSAGES = [
     "りんご10箱お願いします",
     "バナナ20kgとみかん50個",
@@ -316,7 +336,7 @@ export default function WebPhone() {
             電話発注（Web）
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Azure Speech Services による音声発注デモ
+            電話注文を想定した音声対話で、AIによる受注処理をその場で体験できます
           </p>
         </div>
         <button
@@ -377,10 +397,6 @@ export default function WebPhone() {
             </span>
           ) : null;
         })()}
-        {callConnectionId && (
-          <span className="text-gray-400 font-mono truncate max-w-xs">ID: {callConnectionId}</span>
-        )}
-        <span className="text-gray-400">{turns.filter((t) => t.role === "user").length} ターン</span>
       </div>
 
       {/* Chat area */}
@@ -497,12 +513,8 @@ export default function WebPhone() {
           </button>
         ) : (
           <>
-            {/* Push-to-talk mic button */}
             <button
-              onMouseDown={startListening}
-              onMouseUp={stopListening}
-              onTouchStart={startListening}
-              onTouchEnd={stopListening}
+              onClick={startListening}
               disabled={phase !== "connected" && phase !== "listening"}
               className={`flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-xl transition-all ${
                 phase === "listening"
@@ -513,7 +525,7 @@ export default function WebPhone() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
-              {phase === "listening" ? "認識中..." : "長押しして話す"}
+              {phase === "listening" ? "聞き取り中..." : "音声で注文する"}
             </button>
 
             <button
@@ -524,7 +536,7 @@ export default function WebPhone() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              終了
+              通話を終了
             </button>
           </>
         )}
@@ -553,34 +565,6 @@ export default function WebPhone() {
         </div>
       )}
 
-      {/* Text input (fallback) */}
-      {isActive && (
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            disabled={loading}
-            rows={1}
-            placeholder="テキスト入力（Enter で送信）"
-            className="flex-1 text-sm border border-gray-300 rounded-xl px-4 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50"
-          />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="px-4 py-2 text-sm font-medium rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            送信
-          </button>
-        </form>
-      )}
-
-      {/* Azure Speech credit */}
-      <p className="mt-2 text-[10px] text-gray-400 text-center">
-        音声認識・合成: Azure Speech Services (ja-JP-NanamiNeural)
-      </p>
     </div>
   );
 }
