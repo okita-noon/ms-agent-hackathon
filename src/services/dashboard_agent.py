@@ -166,7 +166,7 @@ def _classify_status(order: Order) -> list[ExceptionCase]:
                 case_type="needs_review",
                 severity="high",
                 title="担当者確認が必要な受注",
-                summary="Orchestrator が確定できず「要対応」となっています。",
+                summary="AIが自動処理できず「要対応」となっています。",
                 suggested_action="注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
                 evidence=[Evidence(label="ステータス", value=order.status.value)],
             )
@@ -388,7 +388,7 @@ def _preview_quantity_anomaly(case: ExceptionCase) -> ResolutionPreview:
     actions: list[str] = []
     if has_proposal:
         actions.append(f"数量を {ordered_label} → {proposed_label} に修正する案を顧客へ確認")
-    actions.append("顧客の意図を再確認したうえで Orchestrator に再投入")
+    actions.append("顧客の意図を再確認したうえで受注処理をやり直す")
 
     message_lines = [
         f"{product}を{ordered_label}で承りました。",
@@ -432,7 +432,7 @@ def _preview_unit_anomaly(case: ExceptionCase) -> ResolutionPreview:
         confidence=0.6,
         recommended_actions=[
             f"単位を「{ordered_unit}」→「{typical_unit}」に置換するかを顧客へ確認",
-            "Intake Agent に修正後の単位で再解釈させる",
+            "修正後の単位で受注内容を再処理する",
         ],
         customer_message=(
             f"{product}は通常「{typical_unit}」単位でご注文いただいておりますが、"
@@ -458,7 +458,7 @@ def _preview_inventory_shortage_body(case: ExceptionCase, alternatives: list[dic
         actions.append(f"代替品として {alt_label} を提案")
     if not actions:
         actions.append("代替品が見つからないため、分納または納期調整を顧客と相談")
-    actions.append("顧客返信に応じて Communication Agent で正式回答を送信")
+    actions.append("顧客の返信に応じて正式回答を送信する")
 
     message_lines = [
         f"{product}を{_format_qty(required, unit)}で承りましたが、現在の在庫は{_format_qty(available, unit)}です。",
@@ -487,7 +487,7 @@ def _preview_needs_review(case: ExceptionCase) -> ResolutionPreview:
     return ResolutionPreview(
         exception_id=case.id,
         title="要対応受注の確認文案",
-        summary="Orchestrator が判断を保留した受注を担当者と共に確認します。",
+        summary="AIが自動処理を保留した受注です。担当者の確認が必要です。",
         confidence=0.5,
         recommended_actions=[
             "会話履歴と注文内容を確認し、必要な情報を整理",

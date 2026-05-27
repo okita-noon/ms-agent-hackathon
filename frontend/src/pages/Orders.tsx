@@ -260,7 +260,7 @@ export default function Orders() {
                   }`}
                 />
               </span>
-              Dashboard Agent
+              foogent AI
             </button>
           )}
 
