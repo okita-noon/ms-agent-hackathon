@@ -2106,16 +2106,44 @@ class OrderOrchestrator:
         order_id = await repo.save(order)
         order.id = order_id
 
-        # 受注確定時に在庫引当を実行
+        # 在庫引当（新規注文 or 更新で差分処理）
         if status == OrderStatus.ACCEPTED:
             inventory_svc = self._ctx.get_connector("IInventoryService")
-            for item in order.items:
-                if item.product_id and item.quantity:
-                    try:
-                        await inventory_svc.reserve(self._ctx.tenant_id, item.product_id, item.quantity)
-                        logger.info("Reserved %s x %s for order %s", item.quantity, item.product_id, order.id)
-                    except Exception:
-                        logger.warning("Failed to reserve inventory for %s (order %s)", item.product_id, order.id)
+            if not is_existing_order:
+                # 新規注文: 全商品を引当
+                for item in order.items:
+                    if item.product_id and item.quantity:
+                        try:
+                            await inventory_svc.reserve(self._ctx.tenant_id, item.product_id, item.quantity)
+                            logger.info("Reserved %s x %s for order %s", item.quantity, item.product_id, order.id)
+                        except Exception:
+                            logger.warning("Failed to reserve inventory for %s (order %s)", item.product_id, order.id)
+            else:
+                # 更新: 差分だけ引当・解除（重複引当を防ぐ）
+                old_qty: dict[str, float] = {}
+                if existing_order:
+                    for item in existing_order.items:
+                        if item.product_id:
+                            old_qty[item.product_id] = old_qty.get(item.product_id, 0) + (item.quantity or 0)
+                new_qty: dict[str, float] = {}
+                for item in order.items:
+                    if item.product_id:
+                        new_qty[item.product_id] = new_qty.get(item.product_id, 0) + (item.quantity or 0)
+                all_ids = set(old_qty) | set(new_qty)
+                for pid in all_ids:
+                    diff = new_qty.get(pid, 0) - old_qty.get(pid, 0)
+                    if diff > 0:
+                        try:
+                            await inventory_svc.reserve(self._ctx.tenant_id, pid, diff)
+                            logger.info("Reserved diff +%s x %s for order %s", diff, pid, order.id)
+                        except Exception:
+                            logger.warning("Failed to reserve diff for %s (order %s)", pid, order.id)
+                    elif diff < 0:
+                        try:
+                            await inventory_svc.release(self._ctx.tenant_id, pid, abs(diff))
+                            logger.info("Released diff %s x %s for order %s", abs(diff), pid, order.id)
+                        except Exception:
+                            logger.warning("Failed to release diff for %s (order %s)", pid, order.id)
 
         await dashboard_event_broker.publish(
             "order_updated" if is_existing_order else "order_created",
