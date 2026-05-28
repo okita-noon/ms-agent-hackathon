@@ -85,11 +85,35 @@ tr.row-hover:hover {
 }
 
 .animate-new-order {
-  animation: newOrderHighlight 6s ease-out;
+  animation: newOrderHighlight 6s ease-out, newOrderSlideIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: inset 3px 0 0 #22c55e;
 }
 @keyframes newOrderHighlight {
-  0%, 35% { background-color: #dcfce7; }
+  0%, 40% { background-color: #dcfce7; }
   100% { background-color: transparent; }
+}
+@keyframes newOrderSlideIn {
+  from { transform: translateX(-6px); opacity: 0.6; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* Toast progress bar */
+.animate-toast-progress {
+  animation: toastProgress 4.5s linear forwards;
+}
+@keyframes toastProgress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* NEW badge bounce */
+.animate-bounce-once {
+  animation: badgeBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes badgeBounce {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
 }
 
 /* Tab active indicator slide */

@@ -20,6 +20,7 @@ import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import ExceptionModal from "../components/ExceptionModal";
 import AgentLoadingBanner from "../components/AgentLoadingBanner";
+import NewOrderToast, { type ToastItem } from "../components/NewOrderToast";
 import { offsetDate, todayJst } from "../lib/date";
 
 const PAGE_SIZE = 50;
@@ -63,6 +64,7 @@ export default function Orders() {
   const [agentLoading, setAgentLoading] = useState(false);
   const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
@@ -163,37 +165,56 @@ export default function Orders() {
       setLiveStatus("live");
     }
 
-    function handleOrderEvent(event: MessageEvent<string>) {
-      setLiveStatus("live");
-      const payload = JSON.parse(event.data || "{}") as OrderEventPayload;
-      if (dateFilterEnabled) {
-        const eventDate = dateField === "order_date" ? payload.order_date : payload.delivery_date;
-        if (eventDate && eventDate !== date) return;
-      }
+    function handleOrderEvent(eventType: "created" | "updated") {
+      return (event: MessageEvent<string>) => {
+        setLiveStatus("live");
+        const payload = JSON.parse(event.data || "{}") as OrderEventPayload;
+        if (dateFilterEnabled) {
+          const eventDate = dateField === "order_date" ? payload.order_date : payload.delivery_date;
+          if (eventDate && eventDate !== date) return;
+        }
 
-      if (payload.order_id) {
-        setRecentOrderIds((current) => new Set(current).add(payload.order_id || ""));
-        window.setTimeout(() => {
-          setRecentOrderIds((current) => {
-            const next = new Set(current);
-            next.delete(payload.order_id || "");
-            return next;
-          });
-        }, 6000);
-      }
-      void load();
-      void loadAgentExceptions();
+        if (payload.order_id) {
+          setRecentOrderIds((current) => new Set(current).add(payload.order_id || ""));
+          window.setTimeout(() => {
+            setRecentOrderIds((current) => {
+              const next = new Set(current);
+              next.delete(payload.order_id || "");
+              return next;
+            });
+          }, 6000);
+
+          const toastId = `${payload.order_id}-${Date.now()}`;
+          const toast: ToastItem = {
+            id: toastId,
+            order_id: payload.order_id,
+            customer_name: payload.customer_name,
+            source: payload.source,
+            order_date: payload.order_date,
+            type: eventType,
+          };
+          setToasts((current) => [...current.slice(-3), toast]);
+          window.setTimeout(() => {
+            setToasts((current) => current.filter((t) => t.id !== toastId));
+          }, 5000);
+        }
+        void load();
+        void loadAgentExceptions();
+      };
     }
 
+    const handleCreated = handleOrderEvent("created");
+    const handleUpdated = handleOrderEvent("updated");
+
     events.addEventListener("connected", handleConnected);
-    events.addEventListener("order_created", handleOrderEvent);
-    events.addEventListener("order_updated", handleOrderEvent);
+    events.addEventListener("order_created", handleCreated);
+    events.addEventListener("order_updated", handleUpdated);
     events.onerror = () => setLiveStatus("reconnecting");
 
     return () => {
       events.removeEventListener("connected", handleConnected);
-      events.removeEventListener("order_created", handleOrderEvent);
-      events.removeEventListener("order_updated", handleOrderEvent);
+      events.removeEventListener("order_created", handleCreated);
+      events.removeEventListener("order_updated", handleUpdated);
       events.close();
       setLiveStatus("offline");
     };
@@ -309,16 +330,6 @@ export default function Orders() {
             </>
           )}
 
-          <button
-            onClick={() => { load(); loadAgentExceptions(); }}
-            disabled={loading}
-            className="btn-press bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 shadow-sm shadow-brand-600/20"
-          >
-            <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            更新
-          </button>
         </div>
       </div>
 
@@ -449,7 +460,14 @@ export default function Orders() {
                         <div className="mt-1.5"><ChannelBadge source={o.source} /></div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{o.customer_name}</span>
+                          {recentOrderIds.has(orderId) && (
+                            <span className="inline-flex items-center rounded-full bg-green-500 px-1.5 py-0.5 text-[9px] font-extrabold tracking-widest text-white uppercase animate-bounce-once">
+                              NEW
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 max-w-xs">
                         <div className="flex flex-col gap-1">
@@ -538,7 +556,6 @@ export default function Orders() {
           exceptions={agentExceptions}
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
-          onOpenOrder={(order) => setSelected(order)}
           onMemoUpdated={(updated) => {
             setOrders((current) =>
               current.map((o) => ((o.uid || o.id) === (updated.uid || updated.id) ? updated : o))
@@ -546,6 +563,11 @@ export default function Orders() {
           }}
         />
       )}
+
+      <NewOrderToast
+        toasts={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))}
+      />
     </>
   );
 }
