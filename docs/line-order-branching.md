@@ -373,6 +373,10 @@ LINE メッセージ受信時に、少なくとも以下を判別できる必要
 | `order_revision_log` | 追加・変更・取消の履歴 |
 | `escalation_reason` | 人手対応に送った理由 |
 
+Intent は `src/services/intent_understanding.py` で、まず `new_order` / `modify_current_order` / `partial_cancel` / `full_cancel` / `repeat_previous_order` / `repeat_usual_order` / `inventory_inquiry` / `order_status_inquiry` / `unclear` に分類する。
+明確な全体キャンセル文言は即時ルールで分類し、現在注文がある状態で「やめとこうかな」のようにルールだけでは曖昧な文言は LLM に JSON Intent 分類させる。
+LINE セッションの `pending_action_type` は、この分類済み Intent から導出する。`repeat_usual_order` / `repeat_previous_order` は `OrderMemoryService` で注文ドラフトへ復元し、在庫確認後に通常の受注確定フローへ流す。
+
 ### 6.5. 状態管理要件
 
 | レイヤー | 状態 | 意味 |

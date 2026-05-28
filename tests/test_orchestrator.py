@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,12 +17,17 @@ from src.agents.orchestrator import (
     _inventory_requires_operator_review,
     _is_affirmative_reply,
     _is_current_order_inquiry,
+    _is_full_order_cancel,
     _is_inventory_inquiry,
     _parse_order_items,
+    _resolve_line_action_type,
 )
 from src.connectors.interfaces.inventory_service import InventoryStatus
+from src.models.inbound import InboundMessage
+from src.models.intelligence import OrderPattern, ResolvedItem
 from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.models.session import OrderSession
 
 
 def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
@@ -30,6 +35,28 @@ def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
         tenant_ctx=mock_tenant_ctx,
         azure_openai_endpoint="https://test.openai.azure.com/",
         azure_openai_key="test-key",
+    )
+
+
+def _make_current_order(status: OrderStatus = OrderStatus.ACCEPTED) -> Order:
+    return Order(
+        uid="ORD-CURRENT",
+        tenant_id="T-TEST",
+        customer_id="C-001",
+        customer_name="テスト社",
+        order_date=date.today(),
+        delivery_date=date.today(),
+        source=OrderSource.LINE,
+        status=status,
+        items=[
+            OrderItem(
+                product_id="P-001",
+                product_name="りんご",
+                quantity=1,
+                unit="箱",
+                temperature_zone=TemperatureZone.CHILLED,
+            )
+        ],
     )
 
 
@@ -315,6 +342,237 @@ class TestInventoryInquiry:
         mock_invoke.assert_not_called()
 
 
+class TestLineCancelPhrases:
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "全部キャンセルでお願いします",
+            "全てキャンセルしてください",
+            "すべてキャンセルで",
+            "注文キャンセルお願いします",
+            "さっきの注文キャンセルで",
+            "キャンセルでお願いします",
+            "前の注文をキャンセルしてください",
+            "やっぱりやめます",
+            "今の注文なしでお願いします",
+            "全部なしでお願いします",
+            "全キャンセルで",
+        ],
+    )
+    def test_full_cancel_phrase_is_classified_without_llm(self, message):
+        assert _is_full_order_cancel(message)
+        assert _resolve_line_action_type(message, current_order=_make_current_order()) == "full_cancel"
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "キャンセルでお願いします",
+            "前の注文をキャンセルしてください",
+            "やっぱりやめます",
+            "今の注文なしでお願いします",
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_natural_full_cancel_phrase_updates_current_order_without_agent_call(self, mock_tenant_ctx, message):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.update_status = AsyncMock()
+        current_order = _make_current_order()
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message=message,
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                current_order=current_order,
+            )
+
+        order_repo.update_status.assert_awaited_once_with("T-TEST", "ORD-CURRENT", OrderStatus.CANCELLED)
+        mock_invoke.assert_not_called()
+        mock_send.assert_awaited_once()
+        assert result["current_order_cleared"] is True
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_cancel_phrase_uses_llm_intent_for_current_order(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.update_status = AsyncMock()
+        current_order = _make_current_order()
+
+        with (
+            patch.object(orch, "_make_orchestrator_agent", return_value=object()) as mock_make_agent,
+            patch.object(
+                orch,
+                "_invoke_agent",
+                new_callable=AsyncMock,
+                return_value=(
+                    '{"intent":"full_cancel","confidence":0.82,"requires_confirmation":false,"reason":"cancel"}',
+                    0.1,
+                ),
+            ) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="やめとこうかな",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                current_order=current_order,
+            )
+
+        mock_make_agent.assert_called_once()
+        prompt = mock_invoke.await_args.args[1]
+        assert "intent JSON" in prompt
+        assert "やめとこうかな" in prompt
+        order_repo.update_status.assert_awaited_once_with("T-TEST", "ORD-CURRENT", OrderStatus.CANCELLED)
+        mock_send.assert_awaited_once()
+        assert result["current_order_cleared"] is True
+
+    @pytest.mark.asyncio
+    async def test_email_full_cancel_uses_current_order_from_session(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        current_order = _make_current_order()
+        order_repo.find_by_id.return_value = current_order
+        order_repo.update_status = AsyncMock()
+        replies = []
+
+        async def reply_callback(subject: str, body: str, reply_to_message_id: str | None) -> None:
+            replies.append((subject, body, reply_to_message_id))
+
+        inbound = InboundMessage(
+            tenant_id="T-TEST",
+            channel="email",
+            channel_user_id="buyer@example.com",
+            customer_id="C-001",
+            customer_name="テスト社",
+            subject="注文変更",
+            text="前の注文をキャンセルしてください",
+            received_at=datetime.now(),
+            external_message_id="email-001",
+            reply_to_message_id="email-root",
+        )
+        session = OrderSession(
+            id="email-session",
+            tenant_id="T-TEST",
+            channel="email",
+            channel_user_id="buyer@example.com",
+            customer_id="C-001",
+            current_order_id="ORD-CURRENT",
+        )
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_email(inbound, session, reply_callback)
+
+        order_repo.find_by_id.assert_awaited_once_with("T-TEST", "ORD-CURRENT")
+        order_repo.update_status.assert_awaited_once_with("T-TEST", "ORD-CURRENT", OrderStatus.CANCELLED)
+        mock_invoke.assert_not_called()
+        assert result["current_order_cleared"] is True
+        assert replies
+        assert replies[0][0] == "Re: 注文変更 【受注No: ORD-CURRENT】"
+        assert "キャンセルいたしました" in replies[0][1]
+
+
+class TestMemoryOrderIntents:
+    @pytest.mark.asyncio
+    async def test_line_previous_order_creates_order_without_intake_llm(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = [_make_current_order(status=OrderStatus.COMPLETED)]
+        order_repo.save = AsyncMock(return_value="ORD-REPEAT")
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=10,
+            unit="箱",
+            is_sufficient=True,
+        )
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="前と同じでお願いします",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                known_customer_id="C-001",
+                known_customer_name="テスト社",
+            )
+
+        mock_invoke.assert_not_called()
+        order_repo.list_by_customer.assert_awaited_once_with("C-001", limit=10)
+        order_repo.save.assert_awaited_once()
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
+        mock_send.assert_awaited_once()
+        assert result["order_id"] == "ORD-REPEAT"
+        assert result["current_order_id"] == "ORD-REPEAT"
+
+    @pytest.mark.asyncio
+    async def test_email_usual_order_creates_order_from_pattern(self, mock_tenant_ctx, sample_product):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        store = mock_tenant_ctx.get_connector("IOrderIntelligenceStore")
+        store.find_pattern_exact.return_value = OrderPattern(
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            input_expression="いつもの",
+            input_expression_normalized="いつもの",
+            resolved_items=[ResolvedItem(product_id="P-001", product_name="りんご", qty=2, unit="箱")],
+            confidence=0.95,
+        )
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.get_by_id.return_value = sample_product
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-USUAL")
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=10,
+            unit="箱",
+            is_sufficient=True,
+        )
+        replies = []
+
+        async def reply_callback(subject: str, body: str, reply_to_message_id: str | None) -> None:
+            replies.append((subject, body, reply_to_message_id))
+
+        inbound = InboundMessage(
+            tenant_id="T-TEST",
+            channel="email",
+            channel_user_id="buyer@example.com",
+            customer_id="C-001",
+            customer_name="テスト社",
+            subject="注文",
+            text="いつものお願いします",
+            received_at=datetime.now(),
+            external_message_id="email-002",
+        )
+        session = OrderSession(
+            id="email-session",
+            tenant_id="T-TEST",
+            channel="email",
+            channel_user_id="buyer@example.com",
+            customer_id="C-001",
+        )
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_email(inbound, session, reply_callback)
+
+        mock_invoke.assert_not_called()
+        store.find_pattern_exact.assert_awaited_once_with("T-TEST", "C-001", "いつものお願いします")
+        order_repo.save.assert_awaited_once()
+        assert result["order_id"] == "ORD-USUAL"
+        assert replies[0][0] == "Re: 注文 【受注No: ORD-USUAL】"
+        assert "受注No: ORD-USUAL" in replies[0][1]
+
+
 class TestPhoneOrderWithInventory:
     @pytest.mark.asyncio
     async def test_checks_inventory_after_phone_order_agent_extracts_items(self, mock_tenant_ctx):
@@ -390,6 +648,118 @@ class TestPhoneOrderWithInventory:
         assert result["session_status"] == "awaiting_reply"
         assert result["order_accepted"] is False
         assert "担当者が確認" in result["response"]
+
+    @pytest.mark.asyncio
+    async def test_quantity_only_reply_resolves_pending_partial_stock_without_llm(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="バナナ",
+            available_qty=1,
+            unit="kg",
+            is_sufficient=True,
+        )
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "バナナ",
+                    "quantity": 5,
+                    "unit": "kg",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "inventory_checked": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "バナナ",
+                    "required_qty": 5,
+                    "unit": "kg",
+                    "available_qty": 1,
+                    "is_sufficient": False,
+                    "needs_confirmation": True,
+                }
+            ],
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_phone_order_with_inventory(
+                message="じゃあ1kg",
+                caller_number="+81312345678",
+                pending_order_draft=pending_draft,
+            )
+
+        mock_invoke.assert_not_called()
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
+        assert result["order_accepted"] is True
+        assert "在庫は確認できました" in result["response"]
+
+    @pytest.mark.asyncio
+    async def test_usual_order_resolves_pattern_without_llm(self, mock_tenant_ctx, sample_product):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        store = mock_tenant_ctx.get_connector("IOrderIntelligenceStore")
+        store.find_pattern_exact.return_value = OrderPattern(
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            input_expression="いつもの",
+            input_expression_normalized="いつもの",
+            resolved_items=[ResolvedItem(product_id="P-001", product_name="りんご", qty=2, unit="箱")],
+            confidence=0.95,
+        )
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.get_by_id.return_value = sample_product
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=10,
+            unit="箱",
+            is_sufficient=True,
+        )
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_phone_order_with_inventory(
+                message="いつものお願いします",
+                caller_number="+81312345678",
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        mock_invoke.assert_not_called()
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 2.0)
+        assert result["order_accepted"] is True
+        assert "りんご2箱" in result["response"]
+
+    @pytest.mark.asyncio
+    async def test_previous_order_resolves_recent_order_without_llm(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = [_make_current_order(status=OrderStatus.COMPLETED)]
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=10,
+            unit="箱",
+            is_sufficient=True,
+        )
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_phone_order_with_inventory(
+                message="前と同じでお願いします",
+                caller_number="+81312345678",
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        mock_invoke.assert_not_called()
+        order_repo.list_by_customer.assert_awaited_once_with("C-001", limit=10)
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
+        assert result["order_accepted"] is True
+        assert "りんご1箱" in result["response"]
 
 
 class TestResponsePolicy:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -40,6 +41,10 @@ from src.services.line_template_renderer import (
     format_line_order_items,
     render_line_template,
 )
+from src.services.intent_understanding import IntentResult, IntentUnderstandingService, OrderIntent, is_rule_full_cancel
+from src.services.inventory_application import InventoryApplicationService
+from src.services.order_application import EDITABLE_ORDER_STATUSES, OrderApplicationService
+from src.services.order_memory import OrderMemoryService
 from src.utils.business_date import today_jst
 
 logger = logging.getLogger(__name__)
@@ -134,6 +139,30 @@ def _build_line_from_template(
         body=body or "",
         summary=summary or "",
     )
+
+
+def _build_order_cancel_response(source: OrderSource, order: Order) -> str:
+    if source == OrderSource.EMAIL:
+        return _build_email_from_template(
+            "メール返信_異常時.txt",
+            {"customer_name": order.customer_name},
+            body="現在のご注文をキャンセルいたしました。",
+        )
+    if source == OrderSource.LINE:
+        return _build_line_from_template("order_full_cancel_confirm.txt")
+    return "現在のご注文をキャンセルいたしました。"
+
+
+def _build_order_locked_response(source: OrderSource, order: Order) -> str:
+    if source == OrderSource.EMAIL:
+        return _build_email_from_template(
+            "メール返信_異常時.txt",
+            {"customer_name": order.customer_name},
+            body="このご注文はすでに処理が進んでいるため、自動で変更・キャンセルできません。担当者が確認いたします。",
+        )
+    if source == OrderSource.LINE:
+        return _build_line_from_template("order_locked_need_review.txt")
+    return "このご注文はすでに処理が進んでいるため、自動で変更・キャンセルできません。担当者が確認いたします。"
 
 
 class OrderOrchestrator:
@@ -287,11 +316,15 @@ class OrderOrchestrator:
             debug_log.append("[ドラフト] 確認待ち注文ドラフトあり")
         if current_order:
             debug_log.append(f"[現在注文] {current_order.id} (status={current_order.status.value})")
-        line_action_type = _resolve_line_action_type(message, current_order=current_order)
+        intent_result = await self._classify_intent(message, source=source, has_current_order=current_order is not None)
+        line_action_type = _line_action_type_from_intent(intent_result.intent, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
-        debug_log.append(f"[分類] action_type={line_action_type}, editable={current_order_editable}")
+        debug_log.append(
+            f"[分類] intent={intent_result.intent.value}, action_type={line_action_type}, "
+            f"confidence={intent_result.confidence}, editable={current_order_editable}"
+        )
 
-        if source == OrderSource.LINE and _is_current_order_inquiry(message):
+        if source == OrderSource.LINE and intent_result.intent == OrderIntent.ORDER_STATUS_INQUIRY:
             debug_log.append("[判定] 現在注文の問い合わせと判定")
             customer_id = known_customer_id or (current_order.customer_id if current_order else None)
             if not customer_id:
@@ -402,27 +435,29 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        if source == OrderSource.LINE and current_order:
-            if _is_full_order_cancel(message):
+        memory_order_result = await self._try_handle_memory_order(
+            intent=intent_result.intent,
+            message=message,
+            source=source,
+            line_user_id=line_user_id,
+            reply_token=reply_token,
+            response_callback=response_callback,
+            session_id=session_id,
+            known_customer_id=known_customer_id,
+            known_customer_name=known_customer_name,
+            debug_log=debug_log,
+        )
+        if memory_order_result:
+            result.update(memory_order_result)
+            return result
+
+        if current_order:
+            if intent_result.intent == OrderIntent.FULL_CANCEL:
                 debug_log.append("[判定] 全注文取消と判定")
-                if current_order_editable:
-                    repo = self._ctx.get_connector("IOrderRepository")
-                    await repo.update_status(self._ctx.tenant_id, current_order.id, OrderStatus.CANCELLED)
-                    await dashboard_event_broker.publish(
-                        "order_updated",
-                        self._ctx.tenant_id,
-                        {
-                            "order_id": current_order.id,
-                            "status": OrderStatus.CANCELLED.value,
-                            "reason": "status_updated",
-                            "delivery_date": current_order.delivery_date.isoformat()
-                            if current_order.delivery_date
-                            else None,
-                            "order_date": current_order.order_date.isoformat(),
-                        },
-                    )
+                cancel_result = await OrderApplicationService(self._ctx).cancel_order(current_order)
+                if cancel_result.cancelled:
                     debug_log.append(f"[取消] 注文キャンセル実行: {current_order.id}")
-                    response_text = _build_line_from_template("order_full_cancel_confirm.txt")
+                    response_text = _build_order_cancel_response(source, current_order)
                     result.update(
                         {
                             "response": response_text,
@@ -441,7 +476,7 @@ class OrderOrchestrator:
                     return result
 
                 debug_log.append("[取消] 注文ロック済み → 変更不可")
-                response_text = _build_line_from_template("order_locked_need_review.txt")
+                response_text = _build_order_locked_response(source, current_order)
                 result.update(
                     {
                         "response": response_text,
@@ -457,9 +492,9 @@ class OrderOrchestrator:
                     await self._send_line_message(response_text, reply_token, line_user_id)
                 return result
 
-            if not current_order_editable and _looks_like_order_update_request(message):
+            if source == OrderSource.LINE and not current_order_editable and _looks_like_order_update_request(message):
                 debug_log.append("[判定] 変更要求だが注文ロック済み → 変更不可")
-                response_text = _build_line_from_template("order_locked_need_review.txt")
+                response_text = _build_order_locked_response(source, current_order)
                 result.update(
                     {
                         "response": response_text,
@@ -524,6 +559,15 @@ class OrderOrchestrator:
         result["debug_log"] = debug_log
         return result
 
+    async def _classify_intent(self, message: str, *, source: OrderSource, has_current_order: bool) -> IntentResult:
+        async def llm_classifier(prompt: str) -> str:
+            agent = self._make_orchestrator_agent(_source_to_channel(source))
+            text, _elapsed = await self._invoke_agent(agent, prompt)
+            return text
+
+        classifier = llm_classifier if has_current_order else None
+        return await IntentUnderstandingService(classifier).classify(message, has_current_order=has_current_order)
+
     async def process_phone_order_with_inventory(
         self,
         message: str,
@@ -548,6 +592,35 @@ class OrderOrchestrator:
             )
         else:
             prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{customer_ctx}{memory_ctx}発話内容: {message}\n"
+
+        if pending_order_draft:
+            quantity_reply = _extract_quantity_only_reply(message)
+            target = _find_single_partial_inventory_target(pending_order_draft)
+            if quantity_reply and target:
+                quantity, unit = quantity_reply
+                target_unit = target.get("unit") or ""
+                if not unit or not target_unit or unit == target_unit:
+                    draft = copy.deepcopy(pending_order_draft)
+                    for item in draft.get("items", []) or []:
+                        if item.get("product_id") == target.get("product_id"):
+                            item["quantity"] = quantity
+                            if unit:
+                                item["unit"] = unit
+                            break
+                    draft.pop("inventory_checked", None)
+                    return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
+
+        if known_customer_id and (_is_usual_order_request(message) or _is_previous_order_request(message)):
+            memory_service = OrderMemoryService(self._ctx)
+            draft = (
+                await memory_service.resolve_previous_order(known_customer_id)
+                if _is_previous_order_request(message)
+                else await memory_service.resolve_usual_order(known_customer_id, message)
+            )
+            if draft:
+                if known_customer_name and not draft.get("customer_name"):
+                    draft["customer_name"] = known_customer_name
+                return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
 
         phone_agent = self._make_phone_order_agent()
         intake_text, _elapsed = await self._invoke_agent(phone_agent, prompt)
@@ -577,26 +650,188 @@ class OrderOrchestrator:
                 "session_status": "awaiting_reply",
             }
 
+        return await self._build_phone_sync_inventory_result(
+            draft=draft,
+            intake_text=intake_text,
+            intake_draft=intake_draft,
+        )
+
+    async def _build_phone_sync_inventory_result(
+        self,
+        *,
+        draft: dict,
+        intake_text: str,
+        intake_draft: dict | None = None,
+    ) -> dict:
+        invalid_quantity_items = _find_non_positive_quantity_items(draft)
+        if invalid_quantity_items:
+            response = _format_invalid_quantity_response(invalid_quantity_items, source=OrderSource.PHONE)
+            return {
+                "response": response,
+                "phone_sync_status": "needs_confirmation",
+                "intake_text": intake_text,
+                "pending_order_draft": draft,
+                "session_status": "awaiting_reply",
+                "order_accepted": False,
+            }
+
         inventory_results = await _check_draft_inventory(self._ctx, draft)
-        needs_confirmation = bool(intake_draft.get("needs_confirmation")) or any(
+        needs_confirmation = bool((intake_draft or {}).get("needs_confirmation")) or any(
             item.get("needs_confirmation") for item in inventory_results
         )
         response = _format_phone_inventory_response(
             items=inventory_results,
             needs_confirmation=needs_confirmation,
-            confirmation_message=intake_draft.get("confirmation_message"),
+            confirmation_message=(intake_draft or {}).get("confirmation_message"),
         )
 
         result = {
             "response": response,
             "phone_sync_status": "inventory_checked",
-            "intake_draft": intake_draft,
+            "intake_draft": intake_draft or {},
             "pending_order_draft": draft,
             "inventory": inventory_results,
             "order_accepted": not needs_confirmation,
         }
         if needs_confirmation:
             result["session_status"] = "awaiting_reply"
+            partial_stock = [
+                item for item in inventory_results if item.get("available_qty") and not item.get("is_sufficient")
+            ]
+            if partial_stock:
+                draft["inventory_checked"] = inventory_results
+        return result
+
+    async def _try_handle_memory_order(
+        self,
+        *,
+        intent: OrderIntent,
+        message: str,
+        source: OrderSource,
+        line_user_id: str,
+        reply_token: str | None,
+        response_callback: Callable[[str], Awaitable[None]] | None,
+        session_id: str | None,
+        known_customer_id: str | None,
+        known_customer_name: str | None,
+        debug_log: list[str] | None = None,
+    ) -> dict | None:
+        if intent not in {OrderIntent.REPEAT_PREVIOUS_ORDER, OrderIntent.REPEAT_USUAL_ORDER}:
+            return None
+        if not known_customer_id:
+            if debug_log is not None:
+                debug_log.append("[記憶注文] 顧客未特定のためスキップ")
+            return None
+
+        memory_service = OrderMemoryService(self._ctx)
+        draft = (
+            await memory_service.resolve_previous_order(known_customer_id)
+            if intent == OrderIntent.REPEAT_PREVIOUS_ORDER
+            else await memory_service.resolve_usual_order(known_customer_id, message)
+        )
+        if not draft:
+            if debug_log is not None:
+                debug_log.append(f"[記憶注文] {intent.value} に該当する注文パターンなし")
+            return None
+
+        draft["customer_id"] = known_customer_id
+        if known_customer_name and not draft.get("customer_name"):
+            draft["customer_name"] = known_customer_name
+        if debug_log is not None:
+            debug_log.append(f"[記憶注文] {intent.value} をドラフト復元: {len(draft.get('items', []))}件")
+
+        invalid_quantity_items = _find_non_positive_quantity_items(draft)
+        if invalid_quantity_items:
+            response_text = _format_invalid_quantity_response(invalid_quantity_items, source=source)
+            result = {
+                "response": response_text,
+                "customer_id": known_customer_id,
+                "pending_order_draft": draft,
+                "session_status": "awaiting_reply",
+            }
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        checked_items = await _check_draft_inventory(self._ctx, draft)
+        out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
+        if out_of_stock or partial_stock:
+            response_text = _build_inventory_shortage_response(
+                checked_items,
+                source=source,
+            ) or _format_phone_inventory_response(
+                checked_items,
+                needs_confirmation=True,
+            )
+            result = {
+                "response": response_text,
+                "customer_id": known_customer_id,
+                "pending_order_draft": draft,
+                "inventory": checked_items,
+            }
+            if partial_stock:
+                draft["inventory_checked"] = checked_items
+                result["session_status"] = "awaiting_reply"
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        route = _resolve_delivery_route(draft, self._ctx)
+        lead_time = await _resolve_lead_time(draft, self._ctx)
+        min_d, max_d = delivery_estimator.estimate(
+            route,
+            lead_time=lead_time,
+            tenant_config=self._ctx.config,
+        )
+        delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+        if not draft.get("delivery_date"):
+            draft["delivery_date"] = min_d
+
+        saved_order = await self.create_order_from_draft(
+            draft,
+            source=source,
+            session_id=session_id,
+            status=OrderStatus.ACCEPTED,
+        )
+        asyncio.create_task(self._run_learning(saved_order, message))
+
+        if source == OrderSource.EMAIL:
+            response_text = _build_email_from_template(
+                "メール返信_受注確定.txt",
+                draft,
+                delivery_estimate=delivery_estimate_text,
+            ).replace(
+                "ご注文を承りました。",
+                f"ご注文を承りました。（受注No: {saved_order.id}）",
+            )
+        elif source == OrderSource.LINE:
+            response_text = _build_line_from_template(
+                "order_confirm.txt",
+                items=saved_order.items,
+                delivery_estimate=delivery_estimate_text,
+            )
+        else:
+            response_text = _insert_order_id(
+                _format_phone_inventory_response(checked_items, needs_confirmation=False),
+                saved_order.id,
+            )
+
+        result = {
+            "response": response_text,
+            "order_id": saved_order.id,
+            "customer_id": saved_order.customer_id,
+            "current_order_id": saved_order.id,
+            "current_order_snapshot": _build_current_order_snapshot(saved_order),
+            "current_order_editable": _is_order_editable(saved_order),
+        }
+        if response_callback:
+            await response_callback(response_text)
+        else:
+            await self._send_line_message(response_text, reply_token, line_user_id)
         return result
 
     async def _run_single_agent(
@@ -1419,6 +1654,11 @@ class OrderOrchestrator:
         async def capture_callback(body: str) -> None:
             captured_body.append(body)
 
+        current_order = None
+        if session.current_order_id:
+            repo = self._ctx.get_connector("IOrderRepository")
+            current_order = await repo.find_by_id(self._ctx.tenant_id, session.current_order_id)
+
         result = await self.process_order_message(
             message=inbound.text,
             line_user_id=inbound.channel_user_id,
@@ -1429,6 +1669,7 @@ class OrderOrchestrator:
             session_id=session.id,
             known_customer_id=inbound.customer_id,
             known_customer_name=inbound.customer_name,
+            current_order=current_order,
         )
 
         if captured_body:
@@ -1821,67 +2062,67 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
     }
 
 
-async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
-    inventory = ctx.get_connector("IInventoryService")
-    checked_items: list[dict] = []
+def _find_non_positive_quantity_items(draft: dict | None) -> list[dict]:
+    if not draft:
+        return []
+
+    invalid_items: list[dict] = []
     for item in draft.get("items", []) or []:
-        product_id = item.get("product_id")
         quantity = item.get("quantity")
-        product_name = item.get("product_name") or product_id or "商品"
-        unit = item.get("unit") or ""
-
-        if not product_id or quantity is None:
-            checked_items.append(
-                {
-                    "product_id": product_id,
-                    "product_name": product_name,
-                    "required_qty": quantity,
-                    "unit": unit,
-                    "available_qty": None,
-                    "is_sufficient": False,
-                    "needs_confirmation": True,
-                    "message": "商品または数量を確認できませんでした",
-                }
-            )
+        if quantity is None:
             continue
-
         try:
-            required_qty = float(quantity)
-            status = await inventory.check(ctx.tenant_id, product_id, required_qty)
-            status_product_name = status.product_name
-            if isinstance(status_product_name, str) and status_product_name.strip() in {
-                "",
-                "不明",
-                "unknown",
-                "UNKNOWN",
-            }:
-                status_product_name = None
-            checked_items.append(
-                {
-                    "product_id": product_id,
-                    "product_name": status_product_name or product_name,
-                    "required_qty": required_qty,
-                    "unit": status.unit or unit,
-                    "available_qty": status.available_qty,
-                    "is_sufficient": status.is_sufficient,
-                    "needs_confirmation": not status.is_sufficient,
-                }
-            )
-        except Exception:
-            logger.exception("Phone inventory check failed for product %s", product_id)
-            checked_items.append(
-                {
-                    "product_id": product_id,
-                    "product_name": product_name,
-                    "required_qty": quantity,
-                    "unit": unit,
-                    "available_qty": None,
-                    "is_sufficient": False,
-                    "needs_confirmation": True,
-                    "message": "在庫確認でエラーが発生しました",
-                }
-            )
-    return checked_items
+            if float(quantity) <= 0:
+                invalid_items.append(item)
+        except (TypeError, ValueError):
+            invalid_items.append(item)
+    return invalid_items
+
+
+def _format_invalid_quantity_response(items: list[dict], *, source: OrderSource) -> str:
+    names = [item.get("product_name") or item.get("product_id") or "商品" for item in items]
+    target = "、".join(names)
+    if source == OrderSource.PHONE:
+        return f"{target}の数量が0以下になっています。数量は1以上でお願いいたします。"
+    return f"{target}の数量が0以下になっています。数量は1以上で指定してください。"
+
+
+def _extract_quantity_only_reply(message: str) -> tuple[float, str | None] | None:
+    normalized = re.sub(r"\s+", "", message)
+    normalized = re.sub(r"^(じゃあ|では|それなら|なら|それでは|やっぱり)", "", normalized)
+    normalized = re.sub(r"(でお願いします|お願いします|で|にします|に変更|ください|下さい|。|！|!)$", "", normalized)
+    match = re.fullmatch(r"(?P<qty>\d+(?:\.\d+)?)(?P<unit>kg|キロ|箱|個|本|袋|ケース|パック|玉|枚)?", normalized)
+    if not match:
+        return None
+    unit = match.group("unit")
+    if unit == "キロ":
+        unit = "kg"
+    return float(match.group("qty")), unit
+
+
+def _find_single_partial_inventory_target(draft: dict) -> dict | None:
+    targets = [
+        item
+        for item in draft.get("inventory_checked", []) or []
+        if not item.get("is_sufficient") and (item.get("available_qty") or 0) > 0
+    ]
+    if len(targets) != 1:
+        return None
+    return targets[0]
+
+
+def _is_usual_order_request(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message)
+    return any(keyword in normalized for keyword in ("いつもの", "何時もの", "定番"))
+
+
+def _is_previous_order_request(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message)
+    return any(keyword in normalized for keyword in ("前と同じ", "前回と同じ", "前の注文と同じ", "この前と同じ"))
+
+
+async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
+    return await InventoryApplicationService(ctx).check_draft_availability(draft)
 
 
 def _format_phone_inventory_response(
@@ -2301,17 +2542,28 @@ def _build_current_order_snapshot(order: Order) -> dict:
 def _is_order_editable(order: Order | None) -> bool:
     if not order:
         return False
-    return order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+    return order.status in EDITABLE_ORDER_STATUSES
+
+
+def _line_action_type_from_intent(intent: OrderIntent, current_order: Order | None) -> str:
+    if intent == OrderIntent.FULL_CANCEL:
+        return "full_cancel"
+    if intent in {OrderIntent.MODIFY_CURRENT_ORDER, OrderIntent.PARTIAL_CANCEL}:
+        return "update" if current_order else "no_current_order"
+    return "new_order"
 
 
 def _resolve_line_action_type(message: str, current_order: Order | None) -> str:
+    normalized = re.sub(r"\s+", "", message)
     if _is_full_order_cancel(message):
-        return "full_cancel"
-    if _looks_like_change_only_message(message):
-        return "update" if current_order else "no_current_order"
-    if current_order and _looks_like_order_update_request(message):
-        return "update"
-    return "new_order"
+        intent = OrderIntent.FULL_CANCEL
+    elif any(keyword in normalized for keyword in ("なしで", "外して", "抜いて")):
+        intent = OrderIntent.PARTIAL_CANCEL
+    elif _looks_like_change_only_message(message) or (current_order and _looks_like_order_update_request(message)):
+        intent = OrderIntent.MODIFY_CURRENT_ORDER
+    else:
+        intent = OrderIntent.NEW_ORDER
+    return _line_action_type_from_intent(intent, current_order)
 
 
 def _looks_like_order_update_request(message: str) -> bool:
@@ -2342,20 +2594,13 @@ def _looks_like_change_only_message(message: str) -> bool:
 
 
 def _is_full_order_cancel(message: str) -> bool:
-    normalized = re.sub(r"\s+", "", message)
-    keywords = (
-        "全部キャンセル",
-        "全てキャンセル",
-        "すべてキャンセル",
-        "注文キャンセル",
-        "全部なし",
-        "全キャンセル",
-    )
-    return any(keyword in normalized for keyword in keywords)
+    return is_rule_full_cancel(message)
 
 
 def _is_current_order_inquiry(message: str) -> bool:
     normalized = re.sub(r"\s+", "", message)
+    if _is_full_order_cancel(message) or _looks_like_change_only_message(message):
+        return False
     keywords = (
         "今の注文",
         "現在の注文",
