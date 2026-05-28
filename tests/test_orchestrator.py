@@ -9,6 +9,7 @@ import pytest
 from src.agents.orchestrator import (
     FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS,
     OrderOrchestrator,
+    _check_draft_inventory,
     _build_draft_from_intake,
     _enforce_response_policy,
     _format_open_orders_summary,
@@ -113,6 +114,33 @@ class TestBuildDraftFromIntake:
 
         assert draft is not None
         assert draft["delivery_date"] == date(2026, 5, 26)
+
+
+@pytest.mark.asyncio
+async def test_check_draft_inventory_falls_back_when_status_name_unknown():
+    inventory = AsyncMock()
+    inventory.check.return_value = InventoryStatus(
+        product_id="P-001",
+        product_name="不明",
+        available_qty=0.0,
+        unit="箱",
+        is_sufficient=False,
+    )
+
+    class DummyCtx:
+        tenant_id = "T-001"
+
+        def get_connector(self, name: str):
+            assert name == "IInventoryService"
+            return inventory
+
+    draft = {
+        "items": [
+            {"product_id": "P-001", "product_name": "卵", "quantity": 1, "unit": "箱"},
+        ]
+    }
+    checked = await _check_draft_inventory(DummyCtx(), draft)
+    assert checked[0]["product_name"] == "卵"
 
 
 class TestExtractJson:
@@ -315,7 +343,7 @@ class TestPhoneOrderWithInventory:
         }
 
         with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
-            mock_invoke.return_value = json.dumps(intake_draft, ensure_ascii=False)
+            mock_invoke.return_value = (json.dumps(intake_draft, ensure_ascii=False), 0.5)
             result = await orch.process_phone_order_with_inventory(
                 message="りんご10箱",
                 caller_number="+81312345678",
@@ -353,7 +381,7 @@ class TestPhoneOrderWithInventory:
         }
 
         with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
-            mock_invoke.return_value = json.dumps(intake_draft, ensure_ascii=False)
+            mock_invoke.return_value = (json.dumps(intake_draft, ensure_ascii=False), 0.5)
             result = await orch.process_phone_order_with_inventory(
                 message="りんご10箱",
                 caller_number="+81312345678",
@@ -477,7 +505,7 @@ class TestProcessOrderMessageSendsOnce:
             patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
             patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
-            mock_invoke.return_value = "すみません、理解できませんでした。"
+            mock_invoke.return_value = ("すみません、理解できませんでした。", 0.5)
 
             result = await orch.process_order_message(
                 message="キャビアとりんご1個お願い。",
@@ -516,13 +544,13 @@ class TestProcessOrderMessageSendsOnce:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             elif call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
             elif call_count == 3:
-                return '```json\n{"all_reserved": true}\n```'
+                return ('```json\n{"all_reserved": true}\n```', 0.3)
             else:
-                return "ご注文承りました。りんご1個ですね。"
+                return ("ご注文承りました。りんご1個ですね。", 0.5)
 
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
         saved_orders = []
@@ -576,11 +604,11 @@ class TestProcessOrderMessageSendsOnce:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             elif call_count == 2:
-                return '```json\n{"anomalies": [{"type": "quantity"}], "confirmation_needed": true}\n```'
+                return ('```json\n{"anomalies": [{"type": "quantity"}], "confirmation_needed": true}\n```', 0.3)
             else:
-                return "りんご150kgは通常より多いですが、よろしいですか？"
+                return ("りんご150kgは通常より多いですが、よろしいですか？", 0.5)
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
@@ -627,7 +655,7 @@ class TestProcessOrderMessageSendsOnce:
             patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
             patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
         ):
-            mock_invoke.return_value = "ご注文を確定しました。"
+            mock_invoke.return_value = ("ご注文を確定しました。", 0.5)
 
             result = await orch.process_order_message(
                 message="OK",
@@ -713,10 +741,10 @@ class TestProcessOrderMessageSendsOnce:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             if call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            return "OK"
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
+            return ("OK", 0.1)
 
         # 在庫0 → 完全欠品
         mock_checked_items = [
@@ -774,10 +802,10 @@ class TestProcessOrderMessageSendsOnce:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             if call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            return "OK"
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
+            return ("OK", 0.1)
 
         # 部分在庫 → テンプレート返答で「よろしいですか？」
         mock_checked_items = [
@@ -850,13 +878,13 @@ class TestEndToEndMessageFlow:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             elif call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
             elif call_count == 3:
-                return '```json\n{"all_reserved": true}\n```'
+                return ('```json\n{"all_reserved": true}\n```', 0.3)
             else:
-                return "りんご1個、承りました。"
+                return ("りんご1個、承りました。", 0.5)
 
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
         order_repo.save = AsyncMock(return_value="ORD-001")
@@ -989,7 +1017,7 @@ class TestLearningIntegration:
         }
 
         with (
-            patch.object(orch, "_invoke_agent", new_callable=AsyncMock, return_value="ご注文を確定しました。"),
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock, return_value=("ご注文を確定しました。", 0.5)),
             patch.object(orch, "_send_line_message", new_callable=AsyncMock),
             patch.object(orch, "_run_learning", new_callable=AsyncMock) as mock_learn,
         ):
@@ -1026,13 +1054,13 @@ class TestLearningIntegration:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             elif call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
             elif call_count == 3:
-                return '```json\n{"all_reserved": true}\n```'
+                return ('```json\n{"all_reserved": true}\n```', 0.3)
             else:
-                return "りんご1個、承りました。"
+                return ("りんご1個、承りました。", 0.5)
 
         with (
             patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
@@ -1071,10 +1099,10 @@ class TestLearningIntegration:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return f"```json\n{intake_json}\n```"
+                return (f"```json\n{intake_json}\n```", 0.5)
             if call_count == 2:
-                return '```json\n{"anomalies": [], "confirmation_needed": false}\n```'
-            return "OK"
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.3)
+            return ("OK", 0.1)
 
         mock_checked_items = [
             {

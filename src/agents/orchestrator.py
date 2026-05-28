@@ -246,13 +246,18 @@ class OrderOrchestrator:
         except json.JSONDecodeError:
             return None
 
-    async def _invoke_agent(self, agent: ChatCompletionAgent, message: str) -> str:
+    async def _invoke_agent(self, agent: ChatCompletionAgent, message: str) -> tuple[str, float]:
+        """Agent を呼び出し、(応答テキスト, 所要秒数) を返す."""
+        import time
+
+        t0 = time.monotonic()
         result_text = ""
         thread = None
         async for response in agent.invoke(messages=message, thread=thread):
             result_text = str(response.content)
             thread = response.thread
-        return result_text
+        elapsed = round(time.monotonic() - t0, 2)
+        return result_text, elapsed
 
     async def process_order_message(
         self,
@@ -273,10 +278,21 @@ class OrderOrchestrator:
             "line_user_id": line_user_id,
             "reply_token": reply_token,
         }
+        debug_log: list[str] = []
+        result["debug_log"] = debug_log
+        debug_log.append(f"[入力] source={source.value}, session={session_id}, message={message!r}")
+        if conversation_history:
+            debug_log.append(f"[履歴] {len(conversation_history)}件の会話履歴あり")
+        if pending_order_draft:
+            debug_log.append("[ドラフト] 確認待ち注文ドラフトあり")
+        if current_order:
+            debug_log.append(f"[現在注文] {current_order.id} (status={current_order.status.value})")
         line_action_type = _resolve_line_action_type(message, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
+        debug_log.append(f"[分類] action_type={line_action_type}, editable={current_order_editable}")
 
         if source == OrderSource.LINE and _is_current_order_inquiry(message):
+            debug_log.append("[判定] 現在注文の問い合わせと判定")
             customer_id = known_customer_id or (current_order.customer_id if current_order else None)
             if not customer_id:
                 customer_repo = self._ctx.get_connector("ICustomerRepository")
@@ -311,7 +327,15 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        if pending_order_draft and _is_affirmative_reply(message):
+        if pending_order_draft:
+            _affirmative = _is_affirmative_reply(message)
+            if _affirmative:
+                debug_log.append(f"[判定] 肯定返答 → ドラフト受注確定 (message={message!r})")
+            else:
+                debug_log.append(f"[判定] ドラフトあるが肯定返答ではない (message={message!r})")
+        else:
+            _affirmative = False
+        if pending_order_draft and _affirmative:
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
                 source=source,
@@ -339,6 +363,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 delivery_estimate=affirm_delivery_estimate,
                 current_order=current_order,
+                debug_log=debug_log,
             )
             if source == OrderSource.LINE:
                 response_text = _build_line_from_template(
@@ -349,6 +374,7 @@ class OrderOrchestrator:
             elif source != OrderSource.EMAIL:
                 response_text = _insert_order_id(response_text, saved_order.id)
             result["response"] = response_text
+            debug_log.append(f"[確定] ドラフト受注確定: {saved_order.id}")
             result["order_id"] = saved_order.id
             result["customer_id"] = saved_order.customer_id
             result["current_order_id"] = saved_order.id
@@ -360,7 +386,13 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        inventory_inquiry_result = await self._try_handle_inventory_inquiry(message, source, current_order)
+        inventory_inquiry_result = await self._try_handle_inventory_inquiry(
+            message, source, current_order, debug_log=debug_log
+        )
+        if inventory_inquiry_result:
+            debug_log.append("[判定] 在庫問い合わせと判定 → 在庫照会で回答")
+        else:
+            debug_log.append("[判定] 在庫問い合わせではない")
         if inventory_inquiry_result:
             response_text = inventory_inquiry_result["response"]
             result.update(inventory_inquiry_result)
@@ -372,6 +404,7 @@ class OrderOrchestrator:
 
         if source == OrderSource.LINE and current_order:
             if _is_full_order_cancel(message):
+                debug_log.append("[判定] 全注文取消と判定")
                 if current_order_editable:
                     repo = self._ctx.get_connector("IOrderRepository")
                     await repo.update_status(self._ctx.tenant_id, current_order.id, OrderStatus.CANCELLED)
@@ -388,6 +421,7 @@ class OrderOrchestrator:
                             "order_date": current_order.order_date.isoformat(),
                         },
                     )
+                    debug_log.append(f"[取消] 注文キャンセル実行: {current_order.id}")
                     response_text = _build_line_from_template("order_full_cancel_confirm.txt")
                     result.update(
                         {
@@ -406,6 +440,7 @@ class OrderOrchestrator:
                         await self._send_line_message(response_text, reply_token, line_user_id)
                     return result
 
+                debug_log.append("[取消] 注文ロック済み → 変更不可")
                 response_text = _build_line_from_template("order_locked_need_review.txt")
                 result.update(
                     {
@@ -423,6 +458,7 @@ class OrderOrchestrator:
                 return result
 
             if not current_order_editable and _looks_like_order_update_request(message):
+                debug_log.append("[判定] 変更要求だが注文ロック済み → 変更不可")
                 response_text = _build_line_from_template("order_locked_need_review.txt")
                 result.update(
                     {
@@ -440,6 +476,7 @@ class OrderOrchestrator:
                 return result
 
         if source == OrderSource.LINE and not current_order and _looks_like_change_only_message(message):
+            debug_log.append("[判定] 変更/取消要求だが現在注文なし")
             response_text = _build_line_from_template("order_no_current_order.txt")
             result.update({"response": response_text, "pending_action_type": line_action_type})
             if response_callback:
@@ -450,7 +487,7 @@ class OrderOrchestrator:
 
         # ── Agent処理の分岐 ───────────────────────────────────────────────────
         if self._use_multi_agent:
-            logger.info("Using multi-agent chain pipeline")
+            debug_log.append("[パイプライン] マルチエージェント")
             agent_result = await self._run_multi_agent_chain(
                 message=message,
                 line_user_id=line_user_id,
@@ -465,7 +502,7 @@ class OrderOrchestrator:
                 current_order=current_order,
             )
         else:
-            logger.info("Using single-agent pipeline")
+            debug_log.append("[パイプライン] シングルエージェント")
             agent_result = await self._run_single_agent(
                 message=message,
                 line_user_id=line_user_id,
@@ -481,7 +518,10 @@ class OrderOrchestrator:
             )
         if source == OrderSource.LINE:
             agent_result.setdefault("pending_action_type", line_action_type)
+        agent_debug = agent_result.pop("debug_log", [])
+        debug_log.extend(agent_debug)
         result.update(agent_result)
+        result["debug_log"] = debug_log
         return result
 
     async def process_phone_order_with_inventory(
@@ -510,7 +550,8 @@ class OrderOrchestrator:
             prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{customer_ctx}{memory_ctx}発話内容: {message}\n"
 
         phone_agent = self._make_phone_order_agent()
-        intake_text = await self._invoke_agent(phone_agent, prompt)
+        intake_text, _elapsed = await self._invoke_agent(phone_agent, prompt)
+        logger.info("Phone agent responded in %.2fs", _elapsed)
         intake_draft = self._extract_json(intake_text) or {}
 
         if intake_draft.get("is_farewell"):
@@ -574,6 +615,8 @@ class OrderOrchestrator:
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
+        debug_log: list[str] = []
+        result["debug_log"] = debug_log
         channel = _source_to_channel(source)
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
@@ -595,7 +638,12 @@ class OrderOrchestrator:
             user_label = f"LINE User ID: {line_user_id}"
 
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
+        debug_log.append(
+            f"[コンテキスト] 履歴={len(conversation_history) if conversation_history else 0}件, "
+            f"memory_ctx={len(memory_ctx)}文字"
+        )
         if pending_order_draft:
+            intake_mode = "ドラフト反映"
             intake_prompt = (
                 f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
                 f"チャネル: {source.value}\n"
@@ -606,6 +654,7 @@ class OrderOrchestrator:
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
             )
         elif source == OrderSource.LINE and current_order:
+            intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
                 "更新後の注文全体をJSON形式で返してください。\n"
@@ -617,6 +666,7 @@ class OrderOrchestrator:
                 "会話履歴と現在注文を踏まえて、更新後の注文全体を返してください。"
             )
         else:
+            intake_mode = "新規注文"
             intake_prompt = (
                 f"以下の注文メッセージを処理してください。\n"
                 f"チャネル: {source.value}\n"
@@ -627,11 +677,15 @@ class OrderOrchestrator:
                 f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
                 f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
             )
-        intake_text = await self._invoke_agent(intake_agent, intake_prompt)
+        debug_log.append(f"[Intake] プロンプト種別: {intake_mode}")
+        intake_text, intake_elapsed = await self._invoke_agent(intake_agent, intake_prompt)
         logger.info("Intake result: %s", intake_text[:500])
+        debug_log.append(f"[Intake] Agent応答 ({len(intake_text)}文字, {intake_elapsed}s)")
 
         intake_draft = self._extract_json(intake_text)
         if not intake_draft or not intake_draft.get("items"):
+            debug_log.append("[Intake] JSON抽出失敗 → フォールバック応答")
+            debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
             logger.warning("Intake agent returned no parseable draft; falling back to orchestrator")
             response_text = await self._generate_final_response(
                 message=message,
@@ -643,6 +697,7 @@ class OrderOrchestrator:
                 conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 current_order=current_order,
+                debug_log=debug_log,
             )
             result["response"] = response_text
             if response_callback:
@@ -654,6 +709,15 @@ class OrderOrchestrator:
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
+        debug_log.append(
+            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+        )
+        for it in items:
+            debug_log.append(
+                f"[Intake]   → {it.get('product_name', '?')} "
+                f"{it.get('quantity', '?')}{it.get('unit', '?')}"
+                f" (product_id={it.get('product_id', 'N/A')})"
+            )
 
         # ── Step 2: Exception Agent ────────────────────────────────────────────
         exception_text: str | None = None
@@ -668,9 +732,16 @@ class OrderOrchestrator:
                 f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
                 f"結果をJSON形式で返してください。"
             )
-            exception_text = await self._invoke_agent(exception_agent, exception_prompt)
+            exception_text, exc_elapsed = await self._invoke_agent(exception_agent, exception_prompt)
             logger.info("Exception result: %s", exception_text[:500])
             exception_result = self._extract_json(exception_text)
+            debug_log.append(
+                f"[Exception] confirmation_needed="
+                f"{exception_result.get('confirmation_needed') if exception_result else 'N/A'}"
+                f" ({exc_elapsed}s)"
+            )
+        else:
+            debug_log.append("[Exception] スキップ（items or customer_id なし）")
 
         anomaly_confirmation_needed = False
         if exception_result and exception_result.get("confirmation_needed"):
@@ -686,6 +757,13 @@ class OrderOrchestrator:
         if not anomaly_confirmation_needed and items:
             draft_for_check = _build_draft_from_intake(intake_draft) or {}
             checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
+            for ci in checked_items:
+                suf = "OK" if ci.get("is_sufficient") else "NG"
+                debug_log.append(
+                    f"[在庫]   {ci.get('product_name', '?')}: "
+                    f"要求={_format_qty(ci.get('required_qty'))}{ci.get('unit', '')}, "
+                    f"在庫={_format_qty(ci.get('available_qty'))}{ci.get('unit', '')} → {suf}"
+                )
             out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
             if out_of_stock or partial_stock:
                 inventory_needs_review = True
@@ -697,11 +775,18 @@ class OrderOrchestrator:
                 has_only_out_of_stock = bool(out_of_stock) and not partial_stock
                 if has_partial_stock:
                     needs_confirmation = True
+                debug_log.append(f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件")
                 logger.info(
                     "Inventory shortage: out_of_stock=%d, partial=%d",
                     len(out_of_stock),
                     len(partial_stock),
                 )
+            else:
+                debug_log.append(f"[在庫] 全品在庫OK ({len(checked_items)}件チェック)")
+        elif anomaly_confirmation_needed:
+            debug_log.append("[在庫] スキップ（異常検知で確認待ち）")
+        else:
+            debug_log.append("[在庫] スキップ（itemsなし）")
 
         # ── Step 4a: Estimate delivery date ────────────────────────────────
         delivery_estimate_text: str | None = None
@@ -709,6 +794,7 @@ class OrderOrchestrator:
         if not needs_confirmation and not inventory_needs_review:
             route = _resolve_delivery_route(intake_draft, self._ctx)
             lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            debug_log.append(f"[配送] 入力: route={route}, lead_time={lead_time}")
             min_d, max_d = delivery_estimator.estimate(
                 route,
                 lead_time=lead_time,
@@ -716,6 +802,9 @@ class OrderOrchestrator:
             )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
             estimated_delivery_date = min_d
+            debug_log.append(f"[配送] 推定配送日: {delivery_estimate_text}")
+        else:
+            debug_log.append("[配送] 配送日推定スキップ（確認待ち or 在庫不足）")
 
         # ── Step 4b: Save order ──────────────────────────────────────────────
         saved_order: Order | None = None
@@ -740,16 +829,27 @@ class OrderOrchestrator:
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
+                    debug_log.append(f"[保存] 要対応注文として保存: {saved_order.id}")
                     logger.info("Created review order %s (out of stock)", saved_order.id)
                     result["review_order_id"] = saved_order.id
-            except Exception:
+            except Exception as exc:
+                debug_log.append(f"[保存] 要対応注文の保存失敗: {exc}")
                 logger.exception("Failed to save review order (out of stock)")
         elif has_partial_stock:
-            pass  # 部分在庫 → 顧客確認待ち、まだ保存しない
+            debug_log.append("[保存] 部分在庫 → 顧客確認待ち、保存しない")
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
+                if not draft:
+                    debug_log.append("[保存] _build_draft_from_intake → None（ドラフト構築失敗）")
                 if draft:
+                    draft_items_summary = ", ".join(
+                        f"{it.get('product_name', '?')} {it.get('quantity', '?')}{it.get('unit', '?')}"
+                        for it in draft.get("items", [])
+                    )
+                    debug_log.append(
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                    )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
@@ -760,20 +860,23 @@ class OrderOrchestrator:
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
+                    debug_log.append(f"[保存] 受注確定: {saved_order.id}")
                     logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
                     result["current_order_editable"] = _is_order_editable(saved_order)
-            except Exception:
+            except Exception as exc:
+                debug_log.append(f"[保存] 受注保存失敗: {exc}")
                 logger.exception("Failed to save order from single-agent pipeline")
 
         # ── Step 5: Generate final response ─────────────────────────────────
         if inventory_shortage_response:
-            # 在庫不足 → テンプレート返答（LLMを通さない）
+            debug_log.append("[応答] 在庫不足テンプレート返答")
             response_text = inventory_shortage_response
         elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+            debug_log.append("[応答] メール受注確定テンプレート")
             response_text = _build_email_from_template(
                 "メール返信_受注確定.txt",
                 intake_draft,
@@ -785,6 +888,7 @@ class OrderOrchestrator:
                     f"ご注文を承りました。（受注No: {saved_order.id}）",
                 )
         elif source == OrderSource.EMAIL and needs_confirmation and intake_draft:
+            debug_log.append("[応答] メール異常時テンプレート（LLM生成本文）")
             agent_body = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -797,6 +901,7 @@ class OrderOrchestrator:
                 processing_note=_build_processing_note(needs_confirmation, False),
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
+                debug_log=debug_log,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -804,6 +909,7 @@ class OrderOrchestrator:
                 body=agent_body,
             )
         else:
+            debug_log.append("[応答] LLM生成（_generate_final_response）")
             response_text = await self._generate_final_response(
                 message=message,
                 line_user_id=line_user_id,
@@ -816,16 +922,21 @@ class OrderOrchestrator:
                 processing_note=_build_processing_note(needs_confirmation, False),
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
+                debug_log=debug_log,
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
+                template_name = "order_update_confirm.txt" if current_order else "order_confirm.txt"
+                debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
                 response_text = _build_line_from_template(
-                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    template_name,
                     items=saved_order.items,
                     delivery_estimate=delivery_estimate_text,
                 )
             elif source == OrderSource.PHONE and saved_order:
+                debug_log.append("[応答] 電話応答に受注No挿入")
                 response_text = _insert_order_id(response_text, saved_order.id)
+        debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
 
         # ── Step 6: Send response ─────────────────────────────────────────────
@@ -835,11 +946,14 @@ class OrderOrchestrator:
             await self._send_line_message(response_text, reply_token, line_user_id)
 
         if needs_confirmation:
+            debug_log.append("[セッション] 確認待ち → awaiting_reply")
             result["session_status"] = "awaiting_reply"
             draft = _build_draft_from_intake(intake_draft)
             if has_partial_stock and draft:
                 draft["inventory_checked"] = checked_items
             result["pending_order_draft"] = draft
+        else:
+            debug_log.append("[セッション] 確認不要 → 完了")
 
         return result
 
@@ -859,6 +973,8 @@ class OrderOrchestrator:
     ) -> dict:
         """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
         result: dict = {}
+        debug_log: list[str] = []
+        result["debug_log"] = debug_log
         channel = _source_to_channel(source)
 
         if known_customer_id and known_customer_name:
@@ -878,10 +994,15 @@ class OrderOrchestrator:
             user_label = f"LINE User ID: {line_user_id}"
 
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
+        debug_log.append(
+            f"[コンテキスト] 履歴={len(conversation_history) if conversation_history else 0}件, "
+            f"memory_ctx={len(memory_ctx)}文字"
+        )
 
         # ── Chain Step 1: Intake Agent ─────────────────────────────────────────
         intake_agent = self._make_intake_agent(channel)
         if pending_order_draft:
+            intake_mode = "ドラフト反映"
             intake_prompt = (
                 f"以下は確認質問への顧客の回答です。確認待ち注文ドラフトに回答内容を反映してください。\n"
                 f"チャネル: {source.value}\n"
@@ -892,6 +1013,7 @@ class OrderOrchestrator:
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
             )
         elif source == OrderSource.LINE and current_order:
+            intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
                 "更新後の注文全体をJSON形式で返してください。\n"
@@ -903,6 +1025,7 @@ class OrderOrchestrator:
                 "会話履歴と現在注文を踏まえて、更新後の注文全体を返してください。"
             )
         else:
+            intake_mode = "新規注文"
             intake_prompt = (
                 f"以下の注文メッセージを処理してください。\n"
                 f"チャネル: {source.value}\n"
@@ -913,11 +1036,15 @@ class OrderOrchestrator:
                 f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
                 f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
             )
-        intake_text = await self._invoke_agent(intake_agent, intake_prompt)
+        debug_log.append(f"[Intake] プロンプト種別: {intake_mode}")
+        intake_text, intake_elapsed = await self._invoke_agent(intake_agent, intake_prompt)
         logger.info("[multi-agent] Intake result: %s", intake_text[:500])
+        debug_log.append(f"[Intake] Agent応答 ({len(intake_text)}文字, {intake_elapsed}s)")
 
         intake_draft = self._extract_json(intake_text)
         if not intake_draft or not intake_draft.get("items"):
+            debug_log.append("[Intake] JSON抽出失敗 → Communication Agentフォールバック")
+            debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
             logger.warning("[multi-agent] Intake returned no parseable draft; using Communication Agent for reply")
             response_text = await self._communication_agent_reply(
                 message=message,
@@ -927,6 +1054,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 intake_text=intake_text,
                 current_order=current_order,
+                debug_log=debug_log,
             )
             result["response"] = response_text
             if response_callback:
@@ -938,6 +1066,15 @@ class OrderOrchestrator:
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
+        debug_log.append(
+            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+        )
+        for it in items:
+            debug_log.append(
+                f"[Intake]   → {it.get('product_name', '?')} "
+                f"{it.get('quantity', '?')}{it.get('unit', '?')}"
+                f" (product_id={it.get('product_id', 'N/A')})"
+            )
 
         # ── Chain Step 2: Exception Agent ──────────────────────────────────────
         exception_text: str | None = None
@@ -953,12 +1090,19 @@ class OrderOrchestrator:
                 f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
                 f"結果をJSON形式で返してください。"
             )
-            exception_text = await self._invoke_agent(exception_agent, exception_prompt)
+            exception_text, exc_elapsed = await self._invoke_agent(exception_agent, exception_prompt)
             logger.info("[multi-agent] Exception result: %s", exception_text[:500])
             exception_result = self._extract_json(exception_text)
+            debug_log.append(
+                f"[Exception] confirmation_needed="
+                f"{exception_result.get('confirmation_needed') if exception_result else 'N/A'}"
+                f" ({exc_elapsed}s)"
+            )
             if exception_result and exception_result.get("confirmation_needed"):
                 anomaly_confirmation_needed = True
                 needs_confirmation = True
+        else:
+            debug_log.append("[Exception] スキップ（items or customer_id なし）")
 
         # ── Chain Step 3: Inventory check (code-based) ────────────────────────
         checked_items: list[dict] = []
@@ -969,6 +1113,13 @@ class OrderOrchestrator:
         if not anomaly_confirmation_needed and items:
             draft_for_check = _build_draft_from_intake(intake_draft) or {}
             checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
+            for ci in checked_items:
+                suf = "OK" if ci.get("is_sufficient") else "NG"
+                debug_log.append(
+                    f"[在庫]   {ci.get('product_name', '?')}: "
+                    f"要求={_format_qty(ci.get('required_qty'))}{ci.get('unit', '')}, "
+                    f"在庫={_format_qty(ci.get('available_qty'))}{ci.get('unit', '')} → {suf}"
+                )
             out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
             if out_of_stock or partial_stock:
                 inventory_needs_review = True
@@ -980,11 +1131,18 @@ class OrderOrchestrator:
                 has_only_out_of_stock = bool(out_of_stock) and not partial_stock
                 if has_partial_stock:
                     needs_confirmation = True
+                debug_log.append(f"[在庫] 不足あり: 在庫切れ={len(out_of_stock)}件, 部分在庫={len(partial_stock)}件")
                 logger.info(
                     "[multi-agent] Inventory shortage: out_of_stock=%d, partial=%d",
                     len(out_of_stock),
                     len(partial_stock),
                 )
+            else:
+                debug_log.append(f"[在庫] 全品在庫OK ({len(checked_items)}件チェック)")
+        elif anomaly_confirmation_needed:
+            debug_log.append("[在庫] スキップ（異常検知で確認待ち）")
+        else:
+            debug_log.append("[在庫] スキップ（itemsなし）")
 
         # ── 配送予定日推定 ────────────────────────────────────────────────────
         delivery_estimate_text: str | None = None
@@ -992,6 +1150,7 @@ class OrderOrchestrator:
         if not needs_confirmation and not inventory_needs_review:
             route = _resolve_delivery_route(intake_draft, self._ctx)
             lead_time = await _resolve_lead_time(intake_draft, self._ctx)
+            debug_log.append(f"[配送] 入力: route={route}, lead_time={lead_time}")
             min_d, max_d = delivery_estimator.estimate(
                 route,
                 lead_time=lead_time,
@@ -999,6 +1158,9 @@ class OrderOrchestrator:
             )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
             estimated_delivery_date = min_d
+            debug_log.append(f"[配送] 推定配送日: {delivery_estimate_text}")
+        else:
+            debug_log.append("[配送] 配送日推定スキップ（確認待ち or 在庫不足）")
 
         # ── 注文保存 ──────────────────────────────────────────────────────────
         saved_order: Order | None = None
@@ -1022,16 +1184,27 @@ class OrderOrchestrator:
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
+                    debug_log.append(f"[保存] 要対応注文として保存: {saved_order.id}")
                     logger.info("[multi-agent] Created review order %s (out of stock)", saved_order.id)
                     result["review_order_id"] = saved_order.id
-            except Exception:
+            except Exception as exc:
+                debug_log.append(f"[保存] 要対応注文の保存失敗: {exc}")
                 logger.exception("[multi-agent] Failed to save review order (out of stock)")
         elif has_partial_stock:
-            pass  # 部分在庫 → 顧客確認待ち、まだ保存しない
+            debug_log.append("[保存] 部分在庫 → 顧客確認待ち、保存しない")
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
+                if not draft:
+                    debug_log.append("[保存] _build_draft_from_intake → None（ドラフト構築失敗）")
                 if draft:
+                    draft_items_summary = ", ".join(
+                        f"{it.get('product_name', '?')} {it.get('quantity', '?')}{it.get('unit', '?')}"
+                        for it in draft.get("items", [])
+                    )
+                    debug_log.append(
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                    )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
                     saved_order = await self.create_order_from_draft(
@@ -1042,19 +1215,23 @@ class OrderOrchestrator:
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
+                    debug_log.append(f"[保存] 受注確定: {saved_order.id}")
                     logger.info("[multi-agent] Created order %s", saved_order.id)
                     result["order_id"] = saved_order.id
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
                     result["current_order_editable"] = _is_order_editable(saved_order)
-            except Exception:
+            except Exception as exc:
+                debug_log.append(f"[保存] 受注保存失敗: {exc}")
                 logger.exception("[multi-agent] Failed to save order")
 
         # ── Chain Step 4: Communication Agent ─────────────────────────────────
         if inventory_shortage_response:
+            debug_log.append("[応答] 在庫不足テンプレート返答")
             response_text = inventory_shortage_response
         elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
+            debug_log.append("[応答] メール受注確定テンプレート")
             response_text = _build_email_from_template(
                 "メール返信_受注確定.txt",
                 intake_draft,
@@ -1066,6 +1243,7 @@ class OrderOrchestrator:
                     f"ご注文を承りました。（受注No: {saved_order.id}）",
                 )
         elif source == OrderSource.EMAIL and needs_confirmation and intake_draft:
+            debug_log.append("[応答] メール異常時テンプレート（Communication Agent本文）")
             processing_note = _build_processing_note(needs_confirmation, False)
             agent_body = await self._communication_agent_reply(
                 message=message,
@@ -1079,6 +1257,7 @@ class OrderOrchestrator:
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
+                debug_log=debug_log,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -1086,6 +1265,7 @@ class OrderOrchestrator:
                 body=agent_body,
             )
         else:
+            debug_log.append("[応答] Communication Agent生成")
             processing_note = _build_processing_note(needs_confirmation, False)
             response_text = await self._communication_agent_reply(
                 message=message,
@@ -1099,16 +1279,21 @@ class OrderOrchestrator:
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
+                debug_log=debug_log,
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
+                template_name = "order_update_confirm.txt" if current_order else "order_confirm.txt"
+                debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
                 response_text = _build_line_from_template(
-                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    template_name,
                     items=saved_order.items,
                     delivery_estimate=delivery_estimate_text,
                 )
             elif source == OrderSource.PHONE and saved_order:
+                debug_log.append("[応答] 電話応答に受注No挿入")
                 response_text = _insert_order_id(response_text, saved_order.id)
+        debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
 
         # ── 返信送信 ──────────────────────────────────────────────────────────
@@ -1118,11 +1303,14 @@ class OrderOrchestrator:
             await self._send_line_message(response_text, reply_token, line_user_id)
 
         if needs_confirmation:
+            debug_log.append("[セッション] 確認待ち → awaiting_reply")
             result["session_status"] = "awaiting_reply"
             draft = _build_draft_from_intake(intake_draft)
             if has_partial_stock and draft:
                 draft["inventory_checked"] = checked_items
             result["pending_order_draft"] = draft
+        else:
+            debug_log.append("[セッション] 確認不要 → 完了")
 
         return result
 
@@ -1139,6 +1327,7 @@ class OrderOrchestrator:
         processing_note: str | None = None,
         delivery_estimate: str | None = None,
         current_order: Order | None = None,
+        debug_log: list[str] | None = None,
     ) -> str:
         """Communication Agentで返信メッセージを生成する. 失敗時は既存のOrchestratorにフォールバック."""
         try:
@@ -1159,6 +1348,21 @@ class OrderOrchestrator:
                 context_parts.append(f"[配送予定]\n{delivery_estimate}")
             if processing_note:
                 context_parts.append(f"[処理ステータス]\n{processing_note}")
+            if debug_log is not None:
+                ctx_flags = []
+                if memory_context:
+                    ctx_flags.append("memory_ctx")
+                if intake_text:
+                    ctx_flags.append("intake")
+                if exception_text:
+                    ctx_flags.append("exception")
+                if inventory_text:
+                    ctx_flags.append("inventory")
+                if delivery_estimate:
+                    ctx_flags.append("delivery")
+                if processing_note:
+                    ctx_flags.append(f"note={processing_note!r}")
+                debug_log.append(f"[Communication] LLM入力要素: {', '.join(ctx_flags) or 'なし'}")
 
             if source == OrderSource.PHONE:
                 channel_instruction = "電話で読み上げるため、簡潔で自然な話し言葉にしてください。\n"
@@ -1173,15 +1377,22 @@ class OrderOrchestrator:
                 f"会話履歴がある場合は、前回の返信内容と矛盾しない自然な返信にしてください。\n"
                 f"返信メッセージのみを出力してください（JSON不要）。\n\n" + "\n\n".join(context_parts)
             )
-            response_text = await self._invoke_agent(comm_agent, comm_prompt)
-            logger.info("[multi-agent] Communication Agent reply generated")
+            response_text, comm_elapsed = await self._invoke_agent(comm_agent, comm_prompt)
+            logger.info("[multi-agent] Communication Agent reply generated (%.2fs)", comm_elapsed)
+            if debug_log is not None:
+                debug_log.append(f"[Communication] Agent応答 ({comm_elapsed}s, {len(response_text)}文字)")
 
-            return _enforce_response_policy(
+            enforced = _enforce_response_policy(
                 response_text,
                 needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
                 inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
             )
+            if debug_log is not None and enforced != response_text:
+                debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
+            return enforced
         except Exception:
+            if debug_log is not None:
+                debug_log.append("[Communication] Agent失敗 → Orchestratorフォールバック")
             logger.exception("[multi-agent] Communication Agent failed; falling back to orchestrator")
             return await self._generate_final_response(
                 message=message,
@@ -1244,6 +1455,7 @@ class OrderOrchestrator:
         processing_note: str | None = None,
         delivery_estimate: str | None = None,
         current_order: Order | None = None,
+        debug_log: list[str] | None = None,
     ) -> str:
         channel = _source_to_channel(source)
         orchestrator_agent = self._make_orchestrator_agent(channel)
@@ -1264,6 +1476,21 @@ class OrderOrchestrator:
             context_parts.append(f"[配送予定]\n{delivery_estimate}")
         if processing_note:
             context_parts.append(f"[処理ステータス]\n{processing_note}")
+        if debug_log is not None:
+            ctx_flags = []
+            if memory_context:
+                ctx_flags.append("memory_ctx")
+            if intake_text:
+                ctx_flags.append("intake")
+            if exception_text:
+                ctx_flags.append("exception")
+            if inventory_text:
+                ctx_flags.append("inventory")
+            if delivery_estimate:
+                ctx_flags.append("delivery")
+            if processing_note:
+                ctx_flags.append(f"note={processing_note!r}")
+            debug_log.append(f"[応答生成] LLM入力要素: {', '.join(ctx_flags) or 'なし'}")
 
         context_instruction = (
             "会話履歴がある場合は、前回の返信内容と矛盾しない自然な返信にしてください。\n"
@@ -1307,12 +1534,18 @@ class OrderOrchestrator:
             )
 
         final_prompt = channel_instruction + "\n\n".join(context_parts)
-        response_text = await self._invoke_agent(orchestrator_agent, final_prompt)
-        return _enforce_response_policy(
+        response_text, gen_elapsed = await self._invoke_agent(orchestrator_agent, final_prompt)
+        logger.info("Final response generated in %.2fs", gen_elapsed)
+        if debug_log is not None:
+            debug_log.append(f"[応答生成] Orchestrator Agent ({gen_elapsed}s, {len(response_text)}文字)")
+        enforced = _enforce_response_policy(
             response_text,
             needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
             inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
         )
+        if debug_log is not None and enforced != response_text:
+            debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
+        return enforced
 
     async def _send_line_message(
         self,
@@ -1431,23 +1664,33 @@ class OrderOrchestrator:
             logger.exception("Learning failed for order %s — order flow unaffected", order.id)
 
     async def _try_handle_inventory_inquiry(
-        self, message: str, source: OrderSource, current_order: Order | None = None
+        self,
+        message: str,
+        source: OrderSource,
+        current_order: Order | None = None,
+        debug_log: list[str] | None = None,
     ) -> dict | None:
         if not _is_inventory_inquiry(message):
             return None
+
+        if debug_log is not None:
+            debug_log.append("[在庫照会] 在庫問い合わせと判定")
 
         product_master = self._ctx.get_connector("IProductMaster")
         inventory = self._ctx.get_connector("IInventoryService")
         inquiry_items = await _extract_inventory_inquiry_items(self._ctx.tenant_id, product_master, message)
 
-        # 商品名を抽出できなかった場合、現在の注文の商品で在庫照会
         if not inquiry_items and current_order and current_order.items:
+            if debug_log is not None:
+                debug_log.append("[在庫照会] 商品名抽出失敗 → 現在注文の商品で照会")
             for item in current_order.items:
                 product = await product_master.get_by_id(self._ctx.tenant_id, item.product_id)
                 if product:
                     inquiry_items.append({"product": product, "required_qty": item.quantity})
 
         if not inquiry_items:
+            if debug_log is not None:
+                debug_log.append("[在庫照会] 照会対象商品なし → 商品名確認を要求")
             response = _format_inventory_inquiry_response([], source=source, needs_product_clarification=True)
             return {
                 "intent": "inventory_inquiry",
@@ -1470,6 +1713,12 @@ class OrderOrchestrator:
                     "is_sufficient": status.is_sufficient,
                 }
             )
+            if debug_log is not None:
+                suf = "OK" if status.is_sufficient else "NG"
+                debug_log.append(
+                    f"[在庫照会]   {product.display_name or product.name}: "
+                    f"在庫={status.available_qty}{status.unit} → {suf}"
+                )
 
         return {
             "intent": "inventory_inquiry",
@@ -1599,10 +1848,13 @@ async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
         try:
             required_qty = float(quantity)
             status = await inventory.check(ctx.tenant_id, product_id, required_qty)
+            status_product_name = status.product_name
+            if isinstance(status_product_name, str) and status_product_name.strip() in {"", "不明", "unknown", "UNKNOWN"}:
+                status_product_name = None
             checked_items.append(
                 {
                     "product_id": product_id,
-                    "product_name": status.product_name or product_name,
+                    "product_name": status_product_name or product_name,
                     "required_qty": required_qty,
                     "unit": status.unit or unit,
                     "available_qty": status.available_qty,
@@ -1955,8 +2207,13 @@ def _enforce_response_policy(
         return response_text
 
     if inventory_needs_review:
-        return "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
-    return "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+        replacement = "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
+    else:
+        replacement = (
+            "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
+        )
+    logger.info("[ポリシー] 応答を書き換え: %s → %s", response_text[:80], replacement[:80])
+    return replacement
 
 
 def _parse_order_items(message: str) -> list[dict]:

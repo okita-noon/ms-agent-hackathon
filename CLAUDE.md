@@ -42,6 +42,19 @@ Pull Request を作成する前に以下を**必ず**ローカルで実行し、
 - Agent のテストは Semantic Kernel のモック機能を使用
 - ダッシュボードは `https://ca-api-orderai-dev.thankfulstone-903cb4eb.japaneast.azurecontainerapps.io/dashboard/` で動作確認
 
+### LINE テスト
+LINE のテストには2種類ある:
+
+| 種類 | 目的 | 方法 |
+|---|---|---|
+| エンドポイント・チャネル接続テスト | LINE Webhook が正しく動くか | LINE Developers Console + 実機LINEアプリ |
+| Agent 動作・プロンプト設計テスト | Agent の脳みそ（応答品質・分岐判定）が正しいか | **Web の LINE Tester ページ（`/line-tester`）** |
+
+Agent の動作テスト（プロンプト調整・返信品質・分岐ロジック確認）は **LINE Tester**（`/line-tester`）で行う。
+実機 LINE は不要で、ブラウザ上で LINE チャネルと同じ処理パスを通せる。
+デバッグログ表示機能があり、Orchestrator の各処理ステップ（Agent応答時間・在庫チェック・配送日推定・保存結果など）を確認できる。
+詳細は `docs/debug-log-guide.md` を参照。
+
 ### フロントエンド UI 変更時のルール（必須）
 UI を変更したら **毎回** 以下を行うこと:
 1. ローカルで dev server を起動してスクリーンショットを撮影する

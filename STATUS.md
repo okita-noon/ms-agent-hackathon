@@ -187,7 +187,7 @@
 2. **Graph webhook subscriptionの蓄積**: subscriptionを作成するだけで削除しない運用だったため73件まで蓄積し、1通のメールに対して数十回webhookが発火していた。2026-05-24に全削除→1件に整理済み。subscription更新ジョブの自動化は未実装
 3. **Dockerfileに `_templates/` のCOPY漏れ**: メールテンプレート外部化（#113）後、`COPY _templates/ _templates/` がDockerfileに含まれておらず、メール返信時にFileNotFoundErrorが発生していた。#115で修正済み
 4. **~~メールテンプレートの顧客名がNone表示~~（修正済み）**: `InboundMessage.customer_name` を追加し、デモモードフォールバック時にも顧客名を正しく設定。Intake Agentに `known_customer_id` / `known_customer_name` として渡すことで解決
-5. **SQL アダプタの `product_aliases` 未活用**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索するが、テーブルにデータがない。商品エイリアスを投入すると表記ゆれ対応が改善する
+5. **SQL アダプタの `product_aliases` 運用未反映**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索する。`infra/sql/005-add-product-aliases.sql` を追加済みだが、各環境DBへの適用は別途実施が必要
 2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
 3. **Container Apps のスケール設定**: APIは min=1, max=5 で常時1台を維持するよう設定済み（2026-05-24適用）。アイドル課金は月$5〜10程度だが、コールドスタートを完全に回避できる
 4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある

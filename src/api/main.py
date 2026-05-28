@@ -278,6 +278,11 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
     .u .t{text-align:right}.a .t{text-align:left}
     .foot{padding:10px;background:#e8eef3;display:flex;gap:8px}
     .foot input{flex:1;padding:8px}
+    .debug-toggle{padding:6px 10px;background:#3d5a73;color:#fff;border:none;cursor:pointer;font-size:12px;border-radius:4px}
+    .debug-panel{max-height:200px;overflow:auto;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:12px;padding:8px;display:none}
+    .debug-panel.open{display:block}
+    .debug-panel .dl{padding:2px 0;border-bottom:1px solid #333}
+    .debug-panel .dl .tag{color:#569cd6}.debug-panel .dl .msg{color:#ce9178}
   </style>
 </head>
 <body>
@@ -292,12 +297,15 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
       <input id="msg" placeholder="メッセージを入力" />
       <button id="send">送信</button>
       <button id="reset">リセット</button>
+      <button id="dbgToggle" class="debug-toggle">Debug</button>
     </div>
+    <div id="debugPanel" class="debug-panel"></div>
   </div>
   <script>
     const st = {sessionId:newSessionId(), history:[], pending:null, currentOrderId:null, customerId:null, customerName:null, busy:false};
     const $ = (id)=>document.getElementById(id);
-    const chat=$("chat"), status=$("status"), msg=$("msg"), send=$("send"), reset=$("reset"), customer=$("customer");
+    const chat=$("chat"), status=$("status"), msg=$("msg"), send=$("send"), reset=$("reset"), customer=$("customer"), debugPanel=$("debugPanel"), dbgToggle=$("dbgToggle");
+    dbgToggle.addEventListener("click", ()=>{ debugPanel.classList.toggle("open"); });
     function newSessionId(){ return "web-local-"+Date.now(); }
     function nowLabel(){
       const d = new Date();
@@ -315,6 +323,20 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
       chat.scrollTop=chat.scrollHeight;
     }
     function setBusy(v){ st.busy=v; send.disabled=v; msg.disabled=v; status.textContent=v?"処理中...":"ready"; }
+    function showDebugLog(logs){
+      debugPanel.innerHTML="";
+      if(!logs.length){ debugPanel.innerHTML='<div class="dl" style="color:#666">（ログなし）</div>'; return; }
+      const ts = nowLabel();
+      const hdr = document.createElement("div"); hdr.className="dl"; hdr.innerHTML='<span class="tag">── '+ts+' ──</span>'; debugPanel.appendChild(hdr);
+      for(const line of logs){
+        const d=document.createElement("div"); d.className="dl";
+        const m=line.match(/^(\[[^\]]+\])\s*(.*)/);
+        if(m){ d.innerHTML='<span class="tag">'+m[1]+'</span> <span class="msg">'+m[2]+'</span>'; }
+        else{ d.textContent=line; }
+        debugPanel.appendChild(d);
+      }
+      debugPanel.scrollTop=debugPanel.scrollHeight;
+    }
     async function loadCustomers(){
       const res = await fetch("/api/line-tester/customers"); const data = await res.json();
       customer.innerHTML = "";
@@ -347,6 +369,7 @@ document.getElementById("unlock").addEventListener("click", async ()=>{
         st.pending = data.pending_order_draft || null;
         st.currentOrderId = data.current_order_id ?? st.currentOrderId;
         if (data.current_order_cleared === true) st.currentOrderId = null;
+        showDebugLog(data.debug_log || []);
       }catch(e){
         add("エラー: "+e, "assistant");
       }finally{ setBusy(false); msg.focus(); }
@@ -411,7 +434,16 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
     )
 
     session_id = payload.session_id or f"web-local-{int(datetime.now(timezone.utc).timestamp())}"
-    line_user_id = f"WEB-{payload.customer_id}" if payload.customer_id else "WEB-TESTER"
+    known_customer_id = payload.customer_id
+    known_customer_name = payload.customer_name
+    if not known_customer_id:
+        fallback_customer_id = os.environ.get("LINE_TESTER_FALLBACK_CUSTOMER_ID", "C-011").strip() or "C-011"
+        customer_repo = tenant_ctx.get_connector("ICustomerRepository")
+        fallback_customer = await customer_repo.get_by_id(tenant_id, fallback_customer_id)
+        if fallback_customer:
+            known_customer_id = fallback_customer.id
+            known_customer_name = fallback_customer.name
+    line_user_id = f"WEB-{known_customer_id}" if known_customer_id else "WEB-TESTER"
 
     history = [MessageHistory(**item) for item in payload.conversation_history]
     current_order: Order | None = None
@@ -429,8 +461,8 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
         conversation_history=history,
         pending_order_draft=payload.pending_order_draft,
         session_id=session_id,
-        known_customer_id=payload.customer_id,
-        known_customer_name=payload.customer_name,
+        known_customer_id=known_customer_id,
+        known_customer_name=known_customer_name,
         current_order=current_order,
     )
 
@@ -471,6 +503,7 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
         "order_saved": result.get("order_saved", False),
         "current_order_id": result.get("current_order_id"),
         "current_order_cleared": result.get("current_order_cleared", False),
+        "debug_log": result.get("debug_log", []),
     }
 
 
