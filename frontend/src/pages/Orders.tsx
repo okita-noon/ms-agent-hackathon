@@ -19,6 +19,7 @@ import OrderFilterBar from "../components/OrderFilterBar";
 import Pagination from "../components/Pagination";
 import OrderDetailModal from "../components/OrderDetailModal";
 import ExceptionModal from "../components/ExceptionModal";
+import AgentLoadingBanner from "../components/AgentLoadingBanner";
 import { offsetDate, todayJst } from "../lib/date";
 
 const PAGE_SIZE = 50;
@@ -59,7 +60,7 @@ export default function Orders() {
   const [selected, setSelected] = useState<Order | null>(null);
   const [agentFeatures, setAgentFeatures] = useState<AgentFeatures | null>(null);
   const [agentExceptions, setAgentExceptions] = useState<AgentExceptionCase[]>([]);
-  const [, setAgentLoading] = useState(false);
+  const [agentLoading, setAgentLoading] = useState(false);
   const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
@@ -321,9 +322,12 @@ export default function Orders() {
         </div>
       </div>
 
-      {/* foogent AI banner */}
+      {/* foogent AI banner: loading → result → hidden */}
+      {triageAvailable && agentLoading && agentExceptions.length === 0 && (
+        <AgentLoadingBanner />
+      )}
       {triageAvailable && agentExceptions.length > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3 fade-in">
           <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -415,10 +419,10 @@ export default function Orders() {
                     </button>
                   </th>
                   <th className="px-5 py-3">配送日</th>
-                  {triageAvailable && agentExceptions.length > 0 && (
+                  {triageAvailable && (agentExceptions.length > 0 || agentLoading) && (
                     <th className="px-5 py-3">
                       <span className="inline-flex items-center gap-1">
-                        <img src="/favicon.png" alt="" className="w-3 h-3" />
+                        <img src="/favicon.png" alt="" className={`w-3 h-3 ${agentLoading ? "ai-icon-glow" : ""}`} />
                         AI検知
                       </span>
                     </th>
@@ -465,11 +469,12 @@ export default function Orders() {
                           <div className="mt-0.5 text-xs text-gray-500 font-medium">{o.delivery_time_slot}</div>
                         )}
                       </td>
-                      {triageAvailable && agentExceptions.length > 0 && (
+                      {triageAvailable && (agentExceptions.length > 0 || agentLoading) && (
                         <td className="px-5 py-3.5">
-                          {excList ? (
+                          {agentLoading && !excList ? (
+                            <div className="ai-cell-shimmer h-5 w-16" />
+                          ) : excList ? (
                             <div className="flex flex-wrap gap-1">
-
                               {excList.map((exc) => (
                                 <span
                                   key={exc.id}
