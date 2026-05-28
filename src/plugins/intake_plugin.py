@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Annotated
 
 from semantic_kernel.functions import kernel_function
@@ -11,6 +12,39 @@ from src.models.intelligence import OrderPattern
 from src.models.product import Product
 
 logger = logging.getLogger(__name__)
+
+# 数字の直後に来る表記ゆれ単位のマッピング（数字+単位 のパターンのみ対象）
+_UNIT_ALIAS_MAP: dict[str, str] = {
+    "コ": "個",
+    "ケ": "個",
+    "ヶ": "個",
+    "ケース": "ケース",  # そのまま
+    "キロ": "kg",
+    "キログラム": "kg",
+    "グラム": "g",
+    "リットル": "L",
+    "ミリ": "ml",
+    "ミリリットル": "ml",
+    "本": "本",  # そのまま（変換不要だが明示）
+    "枚": "枚",
+    "袋": "袋",
+    "缶": "缶",
+}
+
+# 数字の直後に来る単位表記を正規化する正規表現
+_UNIT_NORMALIZE_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(" + "|".join(re.escape(k) for k in _UNIT_ALIAS_MAP) + r")\b")
+
+
+def normalize_unit_in_text(text: str) -> str:
+    """テキスト中の「数字+単位表記ゆれ」を正規化する。数字の直後の単位のみ対象。"""
+
+    def _replace(m: re.Match) -> str:
+        num = m.group(1)
+        raw_unit = m.group(2)
+        normalized = _UNIT_ALIAS_MAP.get(raw_unit, raw_unit)
+        return f"{num}{normalized}"
+
+    return _UNIT_NORMALIZE_PATTERN.sub(_replace, text)
 
 
 class PatternMatch:

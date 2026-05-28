@@ -35,7 +35,7 @@ from src.models.session import OrderSession
 from src.models.intelligence import ResolvedItem
 from src.plugins.communication_plugin import CommunicationPlugin
 from src.plugins.exception_plugin import ExceptionPlugin
-from src.plugins.intake_plugin import IntakePlugin
+from src.plugins.intake_plugin import IntakePlugin, normalize_unit_in_text
 from src.plugins.inventory_plugin import InventoryPlugin
 from src.services.dashboard_events import dashboard_event_broker
 from src.services.line_template_renderer import (
@@ -313,6 +313,11 @@ class OrderOrchestrator:
         debug_log: list[str] = []
         result["debug_log"] = debug_log
         self._ctx._debug_log = debug_log
+        # 数字の直後の単位表記ゆれを正規化（例: 10コ→10個、10キロ→10kg）
+        normalized_message = normalize_unit_in_text(message)
+        if normalized_message != message:
+            debug_log.append(f"[単位正規化] {message!r} → {normalized_message!r}")
+            message = normalized_message
         debug_log.append(f"[入力] source={source.value}, session={session_id}, message={message!r}")
         if known_customer_id:
             debug_log.append(f"[顧客] known渡し: customer_id={known_customer_id}, customer_name={known_customer_name}")
