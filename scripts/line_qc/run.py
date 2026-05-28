@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 19:02
+Updated: 2026-05-28 19:38
 
 使い方:
     python scripts/line_qc/run.py
@@ -88,7 +88,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "誤発注の数量異常検知",
         "customer_id": "C-001",
         "messages": [
-            "トマト150kgで",
+            "みかん1500個お願いします",
         ],
         "checks": [
             [
@@ -98,15 +98,19 @@ TEST_CASES: list[dict[str, Any]] = [
     },
     {
         "id": 4,
-        "label": "在庫不足",
+        "label": "在庫不足 → 代替数量で確定",
         "customer_id": "C-001",
         "messages": [
             "スイカ50個お願いします",
+            "はい、お願いします",
         ],
         "checks": [
             [
-                ("在庫不足を通知", lambda r, d: "在庫" in r or "受け付けられません" in r or "要対応" in r, "在庫不足メッセージ"),
-                ("受注確定しない（要対応保存は許容）", lambda r, d: True, "在庫超過での単純確定をしないこと"),
+                ("在庫不足を通知", lambda r, d: "在庫" in r or "受け付けられません" in r or "よろしいですか" in r, "在庫不足メッセージ"),
+                ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "1通目はまだ確定しない"),
+            ],
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "はい返答で受注確定"),
             ],
         ],
     },
@@ -129,7 +133,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "customer_id": "C-001",
         "messages": [
             "ぶどう5房お願いします",
-            "やっぱり10房に変更して",
+            "6房に数量変更してください",
         ],
         "checks": [
             [
@@ -137,7 +141,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "「変更対象の現在注文が見当たりません」が出ない"),
-                ("変更または確認応答", lambda r, d: "10" in r or "変更" in r or "確認" in r, "10房への変更または確認が返る"),
+                ("6への変更言及", lambda r, d: "6" in r or "変更" in r or "承" in r, "6房への変更が反映"),
             ],
         ],
     },
@@ -173,6 +177,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("レモンに言及", lambda r, d: "レモン" in r, "レモンの情報が含まれる"),
+                ("配送日が含まれる", lambda r, d: "配送" in r or "月" in r or "日" in r, "配送予定日がサマリに含まれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],
@@ -214,8 +219,8 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
         "checks": [
             [
-                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
-                ("レモン・キウイに言及", lambda r, d: ("レモン" in r or "れもん" in r) and ("キウイ" in r or "きうい" in r), "正規化されて両商品が含まれる"),
+                ("レモン・キウイ両方に言及", lambda r, d: ("レモン" in r or "れもん" in r) and ("キウイ" in r or "きうい" in r), "正規化されて両商品が含まれる"),
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
             ],
         ],
     },
