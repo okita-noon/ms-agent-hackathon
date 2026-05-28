@@ -8,6 +8,7 @@ import pytest
 
 from src.agents.orchestrator import (
     FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS,
+    _apply_known_customer_to_intake,
     OrderOrchestrator,
     _check_draft_inventory,
     _build_draft_from_intake,
@@ -149,6 +150,32 @@ class TestBuildDraftFromIntake:
 
         assert draft is not None
         assert draft["delivery_date"] == date(2026, 5, 26)
+
+
+class TestApplyKnownCustomerToIntake:
+    def test_fills_missing_customer_fields_from_known_context(self):
+        draft = _apply_known_customer_to_intake(
+            {"items": [{"product_id": "P-001"}]},
+            known_customer_id="C-001",
+            known_customer_name="ビストロ青葉",
+        )
+
+        assert draft["customer_id"] == "C-001"
+        assert draft["customer_name"] == "ビストロ青葉"
+
+    def test_keeps_agent_customer_fields_when_present(self):
+        draft = _apply_known_customer_to_intake(
+            {
+                "customer_id": "C-999",
+                "customer_name": "別顧客",
+                "items": [{"product_id": "P-001"}],
+            },
+            known_customer_id="C-001",
+            known_customer_name="ビストロ青葉",
+        )
+
+        assert draft["customer_id"] == "C-999"
+        assert draft["customer_name"] == "別顧客"
 
 
 @pytest.mark.asyncio
@@ -621,6 +648,83 @@ class TestPhoneOrderWithInventory:
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
 
     @pytest.mark.asyncio
+    async def test_phone_small_talk_returns_conversational_response_without_order_processing(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_phone_order_with_inventory(
+                message="今日はいい天気ですね",
+                caller_number="+81312345678",
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        assert result["phone_sync_status"] == "small_talk"
+        assert result["order_accepted"] is False
+        assert "ご注文がありましたら" in result["response"]
+        mock_invoke.assert_not_called()
+        inventory.check.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_phone_status_inquiry_resolves_customer_by_phone_number(self, mock_tenant_ctx, sample_customer):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.find_by_identifier.return_value = sample_customer
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = [_make_current_order()]
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_phone_order_with_inventory(
+                message="今の注文は？",
+                caller_number="+81312345678",
+            )
+
+        customer_repo.find_by_identifier.assert_awaited_once_with("T-TEST", "+81312345678")
+        order_repo.list_by_customer.assert_awaited_once_with("C-001", limit=50)
+        assert result["phone_sync_status"] == "order_status_inquiry"
+        assert "現在のご注文内容" in result["response"]
+        mock_invoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_known_customer_fills_missing_customer_id_from_phone_agent(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="キウイ",
+            available_qty=12,
+            unit="個",
+            is_sufficient=True,
+        )
+        intake_draft = {
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "キウイ",
+                    "quantity": 10,
+                    "unit": "個",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = (json.dumps(intake_draft, ensure_ascii=False), 0.5)
+            result = await orch.process_phone_order_with_inventory(
+                message="キウイ10個",
+                caller_number="+81312345678",
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        assert result["order_accepted"] is True
+        assert result["pending_order_draft"]["customer_id"] == "C-001"
+        assert result["pending_order_draft"]["customer_name"] == "ビストロ青葉"
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
+
+    @pytest.mark.asyncio
     async def test_asks_confirmation_when_inventory_is_short(self, mock_tenant_ctx):
         orch = _make_orchestrator(mock_tenant_ctx)
         inventory = mock_tenant_ctx.get_connector("IInventoryService")
@@ -768,6 +872,108 @@ class TestPhoneOrderWithInventory:
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
         assert result["order_accepted"] is True
         assert "りんご1箱" in result["response"]
+
+
+class TestKnownCustomerOrderSave:
+    @pytest.mark.asyncio
+    async def test_process_order_message_saves_when_known_customer_missing_from_agent_json(
+        self, mock_tenant_ctx, sample_product
+    ):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.list_all.return_value = [sample_product]
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="キウイ",
+            available_qty=12,
+            unit="個",
+            is_sufficient=True,
+        )
+        inventory.reserve.return_value = True
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-KIWI")
+
+        intake_draft = {
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "キウイ",
+                    "quantity": 10,
+                    "unit": "個",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            mock_invoke.side_effect = [
+                (json.dumps(intake_draft, ensure_ascii=False), 0.5),
+                (json.dumps({"confirmation_needed": False}, ensure_ascii=False), 0.2),
+            ]
+            result = await orch.process_order_message(
+                message="キウイ10個",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        saved_order = order_repo.save.call_args.args[0]
+        assert saved_order.customer_id == "C-001"
+        assert saved_order.customer_name == "ビストロ青葉"
+        assert result["order_id"] == "ORD-KIWI"
+        inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
+        mock_send.assert_awaited_once()
+
+
+class TestConversationBranching:
+    @pytest.mark.asyncio
+    async def test_email_small_talk_replies_without_order_agent(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        callback = AsyncMock()
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_order_message(
+                message="お世話になっております。今日はいい天気ですね。",
+                line_user_id="aoba@example.com",
+                source=OrderSource.EMAIL,
+                response_callback=callback,
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        assert result["intent"] == "small_talk"
+        assert "商品名と数量" in result["response"]
+        callback.assert_awaited_once()
+        mock_invoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_phone_order_status_inquiry_uses_common_branching(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.list_by_customer.return_value = [_make_current_order()]
+        callback = AsyncMock()
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_order_message(
+                message="今の注文は？",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+                response_callback=callback,
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
+
+        assert "現在のご注文内容" in result["response"]
+        assert "りんご" in result["response"]
+        order_repo.list_by_customer.assert_awaited_once_with("C-001", limit=50)
+        callback.assert_awaited_once()
+        mock_invoke.assert_not_called()
 
 
 class TestLineOrderCorrections:
