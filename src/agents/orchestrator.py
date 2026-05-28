@@ -309,13 +309,24 @@ class OrderOrchestrator:
         }
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         debug_log.append(f"[入力] source={source.value}, session={session_id}, message={message!r}")
+        if known_customer_id:
+            debug_log.append(f"[顧客] known渡し: customer_id={known_customer_id}, customer_name={known_customer_name}")
+        else:
+            debug_log.append(f"[顧客] known未渡し: line_user_id={line_user_id} で解決を試みる")
         if conversation_history:
             debug_log.append(f"[履歴] {len(conversation_history)}件の会話履歴あり")
         if pending_order_draft:
-            debug_log.append("[ドラフト] 確認待ち注文ドラフトあり")
+            draft_items = pending_order_draft.get("items", [])
+            draft_cid = pending_order_draft.get("customer_id", "なし")
+            debug_log.append(
+                f"[ドラフト] 確認待ち注文ドラフトあり: customer_id={draft_cid}, items={len(draft_items)}件"
+            )
         if current_order:
-            debug_log.append(f"[現在注文] {current_order.id} (status={current_order.status.value})")
+            debug_log.append(
+                f"[現在注文] {current_order.id} (status={current_order.status.value}, customer_id={current_order.customer_id})"
+            )
         intent_result = await self._classify_intent(message, source=source, has_current_order=current_order is not None)
         line_action_type = _line_action_type_from_intent(intent_result.intent, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
@@ -327,10 +338,14 @@ class OrderOrchestrator:
         if source == OrderSource.LINE and intent_result.intent == OrderIntent.ORDER_STATUS_INQUIRY:
             debug_log.append("[判定] 現在注文の問い合わせと判定")
             customer_id = known_customer_id or (current_order.customer_id if current_order else None)
+            if customer_id:
+                _cid_source = "known渡し" if known_customer_id else "current_order"
+                debug_log.append(f"[顧客解決] 経路={_cid_source}, customer_id={customer_id}")
             if not customer_id:
                 customer_repo = self._ctx.get_connector("ICustomerRepository")
                 customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
                 customer_id = customer.id if customer else None
+                debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={customer_id or '未特定'}")
             if customer_id:
                 repo = self._ctx.get_connector("IOrderRepository")
                 customer_orders = await repo.list_by_customer(customer_id, limit=20)
@@ -852,6 +867,7 @@ class OrderOrchestrator:
         result: dict = {}
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
@@ -862,15 +878,21 @@ class OrderOrchestrator:
                 f"customer_name={known_customer_name}）。顧客検索は不要です。"
             )
             user_label = f"メールアドレス: {line_user_id}"
+            debug_log.append(
+                f"[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: {known_customer_id} ({known_customer_name})"
+            )
         elif source == OrderSource.PHONE:
             lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
             user_label = f"電話番号: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=電話番号lookup → Agent内で解決: {line_user_id}")
         elif source == OrderSource.EMAIL:
             lookup_instruction = "lookup_customer でこの顧客をメールアドレスから特定し、"
             user_label = f"メールアドレス: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=メールlookup → Agent内で解決: {line_user_id}")
         else:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=LINE User ID lookup → Agent内で解決: {line_user_id}")
 
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
         debug_log.append(
@@ -944,9 +966,13 @@ class OrderOrchestrator:
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
+        nc_reason = intake_draft.get("confirmation_reason") or intake_draft.get("confirmation_message", "")
         debug_log.append(
-            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+            f"[Intake] customer_id={customer_id or '未特定'}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+            + (f", 理由={nc_reason!r}" if needs_confirmation and nc_reason else "")
         )
+        if needs_confirmation and not nc_reason:
+            debug_log.append(f"[Intake] needs_confirmation=true（理由不明 - Agentの生テキスト: {intake_text[:100]!r}）")
         for it in items:
             debug_log.append(
                 f"[Intake]   → {it.get('product_name', '?')} "
@@ -1083,7 +1109,9 @@ class OrderOrchestrator:
                         for it in draft.get("items", [])
                     )
                     debug_log.append(
-                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id') or '未特定'}"
+                        f"{'（known渡しと一致）' if draft.get('customer_id') == known_customer_id else '（known渡しと不一致 or known未渡し）'}"
+                        f", items=[{draft_items_summary}]"
                     )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
@@ -1210,6 +1238,7 @@ class OrderOrchestrator:
         result: dict = {}
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
 
         if known_customer_id and known_customer_name:
@@ -1218,15 +1247,21 @@ class OrderOrchestrator:
                 f"customer_name={known_customer_name}）。顧客検索は不要です。"
             )
             user_label = f"メールアドレス: {line_user_id}"
+            debug_log.append(
+                f"[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: {known_customer_id} ({known_customer_name})"
+            )
         elif source == OrderSource.PHONE:
             lookup_instruction = "lookup_customer でこの顧客を電話番号から特定し、"
             user_label = f"電話番号: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=電話番号lookup → Agent内で解決: {line_user_id}")
         elif source == OrderSource.EMAIL:
             lookup_instruction = "lookup_customer でこの顧客をメールアドレスから特定し、"
             user_label = f"メールアドレス: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=メールlookup → Agent内で解決: {line_user_id}")
         else:
             lookup_instruction = "lookup_customer_by_line_id でこの顧客を特定し、"
             user_label = f"LINE User ID: {line_user_id}"
+            debug_log.append(f"[顧客解決] 経路=LINE User ID lookup → Agent内で解決: {line_user_id}")
 
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft, current_order)
         debug_log.append(
@@ -1301,9 +1336,13 @@ class OrderOrchestrator:
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
+        nc_reason = intake_draft.get("confirmation_reason") or intake_draft.get("confirmation_message", "")
         debug_log.append(
-            f"[Intake] customer_id={customer_id}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+            f"[Intake] customer_id={customer_id or '未特定'}, items={len(items)}件, needs_confirmation={needs_confirmation}"
+            + (f", 理由={nc_reason!r}" if needs_confirmation and nc_reason else "")
         )
+        if needs_confirmation and not nc_reason:
+            debug_log.append(f"[Intake] needs_confirmation=true（理由不明 - Agentの生テキスト: {intake_text[:100]!r}）")
         for it in items:
             debug_log.append(
                 f"[Intake]   → {it.get('product_name', '?')} "
@@ -1438,7 +1477,9 @@ class OrderOrchestrator:
                         for it in draft.get("items", [])
                     )
                     debug_log.append(
-                        f"[保存] ドラフト: customer_id={draft.get('customer_id')}, items=[{draft_items_summary}]"
+                        f"[保存] ドラフト: customer_id={draft.get('customer_id') or '未特定'}"
+                        f"{'（known渡しと一致）' if draft.get('customer_id') == known_customer_id else '（known渡しと不一致 or known未渡し）'}"
+                        f", items=[{draft_items_summary}]"
                     )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date

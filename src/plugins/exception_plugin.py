@@ -48,6 +48,9 @@ class ExceptionPlugin:
     ) -> dict:
         store = self._ctx.get_connector("IOrderIntelligenceStore")
         profile = await store.get_customer_profile(self._ctx.tenant_id, customer_id)
+        self._ctx.append_debug(
+            f"[DB:Profile] detect_quantity_anomaly: customer_id={customer_id!r}, product_id={product_id!r} → profile={'あり' if profile else 'なし'}, stats={'あり' if profile and profile.product_stats.get(product_id) else 'なし'}"
+        )
         if not profile:
             return AnomalyResult(is_anomaly=False, reason="プロファイルなし").to_dict()
 
@@ -57,20 +60,24 @@ class ExceptionPlugin:
 
         if stats.std_dev == 0:
             is_anomaly = ordered_qty != stats.avg_qty
-            return AnomalyResult(
+            result = AnomalyResult(
                 is_anomaly=is_anomaly,
                 avg_qty=stats.avg_qty,
                 max_qty=stats.max_qty,
                 reason=f"通常{stats.avg_qty}{stats.typical_unit}のところ{ordered_qty}{stats.typical_unit}"
                 if is_anomaly
                 else "",
-            ).to_dict()
+            )
+            self._ctx.append_debug(
+                f"[DB:AnomalyCheck] detect_quantity_anomaly: ordered={ordered_qty}, avg={stats.avg_qty}, z_score=N/A, is_anomaly={result.is_anomaly}"
+            )
+            return result.to_dict()
 
         z_score = abs(ordered_qty - stats.avg_qty) / stats.std_dev
         threshold = profile.anomaly_thresholds.get("qty_z_score", 3.0)
         is_anomaly = z_score > threshold
 
-        return AnomalyResult(
+        result = AnomalyResult(
             is_anomaly=is_anomaly,
             z_score=z_score,
             avg_qty=stats.avg_qty,
@@ -80,7 +87,11 @@ class ExceptionPlugin:
                 if is_anomaly
                 else ""
             ),
-        ).to_dict()
+        )
+        self._ctx.append_debug(
+            f"[DB:AnomalyCheck] detect_quantity_anomaly: ordered={ordered_qty}, avg={stats.avg_qty}, z_score={round(z_score, 2)}, is_anomaly={result.is_anomaly}"
+        )
+        return result.to_dict()
 
     @kernel_function(
         name="detect_unit_anomaly",
@@ -95,13 +106,22 @@ class ExceptionPlugin:
         store = self._ctx.get_connector("IOrderIntelligenceStore")
         profile = await store.get_customer_profile(self._ctx.tenant_id, customer_id)
         if not profile:
+            self._ctx.append_debug(
+                f"[DB:Profile] detect_unit_anomaly: customer_id={customer_id!r}, product_id={product_id!r} → profile='なし', typical_unit='なし'"
+            )
             return {"is_anomaly": False, "reason": "プロファイルなし"}
 
         stats = profile.product_stats.get(product_id)
         if stats and stats.typical_unit != ordered_unit:
+            self._ctx.append_debug(
+                f"[DB:Profile] detect_unit_anomaly: customer_id={customer_id!r}, product_id={product_id!r} → profile='あり', typical_unit={stats.typical_unit}"
+            )
             return {
                 "is_anomaly": True,
                 "reason": f"通常は{stats.typical_unit}単位だが{ordered_unit}で注文",
                 "typical_unit": stats.typical_unit,
             }
+        self._ctx.append_debug(
+            f"[DB:Profile] detect_unit_anomaly: customer_id={customer_id!r}, product_id={product_id!r} → profile='あり', typical_unit={stats.typical_unit if stats else 'なし'}"
+        )
         return {"is_anomaly": False, "reason": ""}
