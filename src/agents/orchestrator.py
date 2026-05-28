@@ -1283,6 +1283,9 @@ class OrderOrchestrator:
                     )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
+                    debug_log.append(
+                        f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
+                    )
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -1291,7 +1294,7 @@ class OrderOrchestrator:
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
-                    debug_log.append(f"[保存] 受注確定: {saved_order.id}")
+                    debug_log.append(f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}")
                     logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
                     result["order_saved"] = True
@@ -1660,6 +1663,9 @@ class OrderOrchestrator:
                     )
                     if estimated_delivery_date and not draft.get("delivery_date"):
                         draft["delivery_date"] = estimated_delivery_date
+                    debug_log.append(
+                        f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
+                    )
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
@@ -1668,7 +1674,7 @@ class OrderOrchestrator:
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
-                    debug_log.append(f"[保存] 受注確定: {saved_order.id}")
+                    debug_log.append(f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}")
                     logger.info("[multi-agent] Created order %s", saved_order.id)
                     result["order_id"] = saved_order.id
                     result["order_saved"] = True

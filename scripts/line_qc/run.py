@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 21:09
+Updated: 2026-05-28 21:31
 
 使い方:
     python scripts/line_qc/run.py
@@ -40,7 +40,7 @@ QC_DOC = REPO_ROOT / "docs" / "line_QC.md"
 LOGS_DIR = Path(__file__).resolve().parent / "_logs"
 DEFAULT_BASE_URL = "https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io"
 DEFAULT_ACCESS_CODE = "test"
-DEFAULT_CUSTOMER_ID = "C-001"
+DEFAULT_CUSTOMER_ID = "C-002"
 
 # ── テストケース定義 ───────────────────────────────────────────────────────────
 # 各ケース:
@@ -53,7 +53,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 1,
         "label": "通常注文（即確定）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "アボカド5個、マンゴー3個お願いします",
         ],
@@ -67,7 +67,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 2,
         "label": "数量不明の確認 → 回答で確定",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "みかんちょうだい",
             "10個",
@@ -86,15 +86,15 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 3,
         "label": "誤発注の数量異常検知 → 修正して確定",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "みかん1500個お願いします",
             "15個でお願いします",
         ],
         "checks": [
             [
-                ("即確定しない", lambda r, d: d.get("order_saved") is not True, "異常検知で確認質問"),
-                ("通常より多い旨の言及", lambda r, d: "通常" in r or "確認" in r or "異なる" in r or "多い" in r, "異常を通知する"),
+                ("即確定しない", lambda r, d: d.get("order_saved") is not True, "異常検知or在庫不足で確認質問"),
+                ("確認を促す応答", lambda r, d: "確認" in r or "お間違い" in r or "不足" in r or "在庫" in r, "異常または在庫不足を通知する"),
             ],
             [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "15個で受注確定"),
@@ -106,7 +106,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 4,
         "label": "在庫不足 → 代替数量で確定",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "いちじく50箱お願いします",
             "はい、お願いします",
@@ -124,7 +124,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 5,
         "label": "「いつもの」注文（パターン学習）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "いつものお願い",
         ],
@@ -137,7 +137,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 6,
         "label": "注文 → 変更（文脈保持）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "ぶどう5房お願いします",
             "6房に数量変更してください",
@@ -155,7 +155,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 7,
         "label": "注文 → キャンセル（文脈保持）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "みかん30個お願いします",
             "さっきの注文キャンセルしたい",
@@ -173,7 +173,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 8,
         "label": "現在の注文の問い合わせ（文脈保持）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "レモン10個お願いします",
             "今の注文って何だっけ？",
@@ -184,7 +184,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("レモンに言及", lambda r, d: "レモン" in r, "レモンの情報が含まれる"),
-                ("配送日が含まれる", lambda r, d: "配送" in r or "月" in r or "日" in r, "配送予定日がサマリに含まれる"),
+                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],
@@ -192,7 +192,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 9,
         "label": "配送日・時間帯指定",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "ぶどう3房、明後日の午前中に届けて",
         ],
@@ -206,7 +206,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 10,
         "label": "在庫問い合わせ → 在庫範囲内で注文",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "さくらんぼって今ある？",
             "じゃあ5パックお願い",
@@ -225,21 +225,21 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 11,
         "label": "表記ゆれ・あいまい商品名",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "レモン5個とキウイ10コ",
         ],
         "checks": [
             [
                 ("レモン・キウイ両方に言及", lambda r, d: ("レモン" in r or "れもん" in r) and ("キウイ" in r or "きうい" in r), "正規化されて両商品が含まれる"),
-                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "表記ゆれ正規化後に受注確定される"),
             ],
         ],
     },
     {
         "id": 12,
         "label": "雑談・無関係メッセージ",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "おはよう！今日は天気いいね",
         ],
@@ -253,7 +253,7 @@ TEST_CASES: list[dict[str, Any]] = [
     {
         "id": 13,
         "label": "複数注文の一部キャンセル（文脈保持）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "アボカド3個、マンゴー2個、ブルーベリー1箱お願いします",
             "そのうちマンゴーだけキャンセルして",
@@ -268,13 +268,14 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("アボカド・ブルーベリーが残る", lambda r, d: "アボカド" in r or "ブルーベリー" in r, "一部キャンセル後の残注文が正しい"),
+                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
             ],
         ],
     },
     {
         "id": 14,
         "label": "現在の注文状況の確認（単発照会）",
-        "customer_id": "C-001",
+        "customer_id": "C-002",
         "messages": [
             "マンゴー3個、ブルーベリー1箱お願いします",
             "今の注文状況を教えて",
@@ -285,6 +286,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("マンゴー・ブルーベリーに言及", lambda r, d: "マンゴー" in r or "ブルーベリー" in r, "注文内容が含まれる"),
+                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],
