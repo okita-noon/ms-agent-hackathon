@@ -948,7 +948,7 @@ class TestConversationBranching:
             )
 
         assert result["intent"] == "small_talk"
-        assert "商品名と数量" in result["response"]
+        assert "商品名・数量" in result["response"]
         callback.assert_awaited_once()
         mock_invoke.assert_not_called()
 

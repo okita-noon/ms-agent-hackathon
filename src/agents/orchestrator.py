@@ -178,32 +178,63 @@ def _build_small_talk_response(
     pending_order_draft: dict | None = None,
     customer_name: str | None = None,
 ) -> str:
-    normalized = re.sub(r"\s+", "", message).lower()
-    weather_reply = "本当に気持ちのよいお天気ですね。"
-    thanks_reply = "こちらこそありがとうございます。"
-    greeting_reply = "お電話ありがとうございます。" if source == OrderSource.PHONE else "ご連絡ありがとうございます。"
-
-    if any(word in normalized for word in ("天気", "晴れ", "暑い", "寒い", "雨")):
-        base = weather_reply
-    elif "ありがとう" in normalized or "助かります" in normalized:
-        base = thanks_reply
-    elif source == OrderSource.EMAIL and customer_name:
-        base = f"{customer_name}様、ご連絡ありがとうございます。"
-    else:
-        base = greeting_reply
-
-    if pending_order_draft:
-        prompt = "先ほどの確認中のご注文について、よろしければ内容をお知らせください。"
-    else:
-        prompt = "ご注文がありましたら、商品名と数量をお知らせください。"
-
     if source == OrderSource.EMAIL:
-        return _build_email_from_template(
-            "メール返信_異常時.txt",
-            {"customer_name": customer_name or "お客"},
-            body=f"{base}\n\n{prompt}",
+        return _build_email_small_talk_response(
+            message,
+            pending_order_draft=pending_order_draft,
+            customer_name=customer_name,
         )
-    return f"{base}{prompt}"
+    if source == OrderSource.PHONE:
+        return _build_phone_small_talk_response(message, pending_order_draft=pending_order_draft)
+    return _build_line_small_talk_response(message, pending_order_draft=pending_order_draft)
+
+
+def _small_talk_base(message: str, *, channel: str) -> str:
+    normalized = re.sub(r"\s+", "", message).lower()
+    if any(word in normalized for word in ("天気", "晴れ", "暑い", "寒い", "雨")):
+        return "本当に気持ちのよいお天気ですね。"
+    if "ありがとう" in normalized or "助かります" in normalized:
+        return "こちらこそありがとうございます。"
+    if channel == "phone":
+        return "お電話ありがとうございます。"
+    return "ご連絡ありがとうございます。"
+
+
+def _build_line_small_talk_response(message: str, *, pending_order_draft: dict | None = None) -> str:
+    prompt = (
+        "先ほどの確認中のご注文について、内容を送ってください。"
+        if pending_order_draft
+        else "ご注文がありましたら、商品名と数量を送ってください。"
+    )
+    return f"{_small_talk_base(message, channel='line')}{prompt}"
+
+
+def _build_phone_small_talk_response(message: str, *, pending_order_draft: dict | None = None) -> str:
+    prompt = (
+        "先ほどの確認中のご注文について、お返事をお話しください。"
+        if pending_order_draft
+        else "ご注文がありましたら、商品名と数量をお話しください。"
+    )
+    return f"{_small_talk_base(message, channel='phone')}{prompt}"
+
+
+def _build_email_small_talk_response(
+    message: str,
+    *,
+    pending_order_draft: dict | None = None,
+    customer_name: str | None = None,
+) -> str:
+    base = _small_talk_base(message, channel="email")
+    prompt = (
+        "先ほど確認中のご注文について、内容をご返信ください。"
+        if pending_order_draft
+        else "ご注文がございましたら、商品名・数量・ご希望納品日をお知らせください。"
+    )
+    return _build_email_from_template(
+        "メール返信_異常時.txt",
+        {"customer_name": customer_name or "お客"},
+        body=f"{base}\n\n{prompt}",
+    )
 
 
 def _build_current_orders_response(source: OrderSource, summary: str, *, customer_name: str | None = None) -> str:
@@ -215,7 +246,7 @@ def _build_current_orders_response(source: OrderSource, summary: str, *, custome
             {"customer_name": customer_name or "お客"},
             body=f"現在のご注文内容です。\n\n{summary}",
         )
-    return f"現在のご注文内容です。\n{summary}"
+    return f"現在のご注文内容です。{summary}"
 
 
 def _build_no_current_order_response(source: OrderSource, *, customer_name: str | None = None) -> str:
