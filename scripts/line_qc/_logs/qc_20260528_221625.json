@@ -1,0 +1,494 @@
+{
+  "meta": {
+    "timestamp_jst": "2026-05-28T22:16:25.789970+09:00",
+    "branch": "main",
+    "max_pr": "#188",
+    "base_url": "https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io",
+    "total_cases": 2,
+    "ok_count": 0,
+    "ng_count": 2
+  },
+  "cases": [
+    {
+      "id": 4,
+      "label": "在庫不足 → 代替数量で確定",
+      "customer_id": "C-002",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "ブルーベリー50箱お願いします",
+          "response": "ブルーベリー50箱のご注文ですが、通常のご注文数量と大きく異なります。こちらの数量でお間違いないかご確認いただけますか？",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "在庫不足を通知",
+              "ok": false,
+              "desc": "在庫不足メッセージ"
+            },
+            {
+              "name": "受注確定しない",
+              "ok": true,
+              "desc": "1通目はまだ確定しない"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case4-1779974188, message='ブルーベリー50箱お願いします'",
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='ブルーベリー' → found=True, product_id=P-017, name=ブルーベリー",
+            "[Intake] Agent応答 (336文字, 3.61s)",
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-002', product_id='P-017' → profile='あり', typical_unit=箱",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-002', product_id='P-017' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=50.0, avg=1.0, z_score=611.14, is_anomaly=True",
+            "[Exception] confirmation_needed=True (3.4s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.15s, 60文字)",
+            "[応答] 最終応答 (60文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (336文字, 3.61s)",
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (336文字, 3.61s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-002, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (3.4s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "はい、お願いします",
+          "response": "ブルーベリー50箱のご注文ですが、通常1箱前後のご注文に対し数量が大きく異なっております。こちらの数量でお間違いないか、ご確認いただけますか？",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "はい返答で受注確定"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case4-1779974188, message='はい、お願いします'",
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善",
+            "[履歴] 2件の会話履歴あり",
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-002, items=1件",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] ドラフトあるが肯定返答ではない (message='はい、お願いします')",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)",
+            "[コンテキスト] 履歴=2件, memory_ctx=452文字",
+            "[Intake] プロンプト種別: ドラフト反映",
+            "[Intake] Agent応答 (506文字, 1.84s)",
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-002', product_id='P-017' → profile='あり', typical_unit=箱",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-002', product_id='P-017' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=50.0, avg=1.0, z_score=611.14, is_anomaly=True",
+            "[Exception] confirmation_needed=True (2.88s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: memory_ctx, intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.29s, 71文字)",
+            "[応答] 最終応答 (71文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: ドラフト反映",
+            "[Intake] Agent応答 (506文字, 1.84s)",
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] ドラフトあるが肯定返答ではない (message='はい、お願いします')",
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-002, items=1件"
+          ],
+          "needs_confirmation_logs": [
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-002, items=1件",
+            "[Intake] customer_id=C-002, items=1件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+            },
+            {
+              "agent": "System",
+              "step": "ドラフト確認",
+              "log": "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-002, items=1件"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] ドラフトあるが肯定返答ではない (message='はい、お願いします')"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: ドラフト反映"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (506文字, 1.84s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-002, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ブルーベリー 50.0箱 (product_id=P-017)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (2.88s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "label": "表記ゆれ・あいまい商品名",
+      "customer_id": "C-002",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "レモン5個とキウイ10コ",
+          "response": "レモン5個とキウイ10個のご注文ですが、キウイの単位の確認をお願いいたします。ご確認いただけますか？",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "レモン・キウイ両方に言及",
+              "ok": true,
+              "desc": "正規化されて両商品が含まれる"
+            },
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "表記ゆれ正規化後に受注確定される"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case11-1779974203, message='レモン5個とキウイ10コ'",
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='レモン' → found=True, product_id=P-014, name=レモン",
+            "[DB:Product] normalize_product: raw_name='キウイ' → found=True, product_id=P-011, name=キウイ",
+            "[Intake] Agent応答 (443文字, 3.25s)",
+            "[Intake] customer_id=C-002, items=2件, needs_confirmation=False",
+            "[Intake]   → レモン 5.0個 (product_id=P-014)",
+            "[Intake]   → キウイ 10.0個 (product_id=P-011)",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-002', product_id='P-011' → profile=あり, stats=あり",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-002', product_id='P-011' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-002', product_id='P-014' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-002', product_id='P-014' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=5.0, avg=8.125, z_score=1.26, is_anomaly=False",
+            "[Exception] confirmation_needed=True (3.85s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.2s, 50文字)",
+            "[応答] 最終応答 (50文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (443文字, 3.25s)",
+            "[Intake] customer_id=C-002, items=2件, needs_confirmation=False",
+            "[Intake]   → レモン 5.0個 (product_id=P-014)",
+            "[Intake]   → キウイ 10.0個 (product_id=P-011)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-002, items=2件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-002, customer_name=炭火焼鳥とり善"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-002 (炭火焼鳥とり善)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (443文字, 3.25s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-002, items=2件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → レモン 5.0個 (product_id=P-014)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → キウイ 10.0個 (product_id=P-011)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (3.85s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
