@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 20:43
+Updated: 2026-05-28 21:03
 
 使い方:
     python scripts/line_qc/run.py
@@ -98,6 +98,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "15個で受注確定"),
+                ("1500個ではなく15個", lambda r, d: "1500" not in r, "1500個ではなく修正後の数量で確定"),
                 ("みかんに言及", lambda r, d: "みかん" in r or "15" in r, "みかん15個が確定"),
             ],
         ],
