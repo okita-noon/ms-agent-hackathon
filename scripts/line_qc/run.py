@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 19:38
+Updated: 2026-05-28 20:05
 
 使い方:
     python scripts/line_qc/run.py
@@ -101,7 +101,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "在庫不足 → 代替数量で確定",
         "customer_id": "C-001",
         "messages": [
-            "スイカ50個お願いします",
+            "メロン50玉お願いします",
             "はい、お願いします",
         ],
         "checks": [
@@ -243,8 +243,8 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "複数注文の一部キャンセル（文脈保持）",
         "customer_id": "C-001",
         "messages": [
-            "いちご5パック、キウイ10個、みかん20個お願いします",
-            "そのうちキウイだけキャンセルして",
+            "アボカド3個、マンゴー2個、ブルーベリー1箱お願いします",
+            "そのうちマンゴーだけキャンセルして",
             "今の注文は？",
         ],
         "checks": [
@@ -252,11 +252,10 @@ TEST_CASES: list[dict[str, Any]] = [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
             ],
             [
-                ("全取消にしない", lambda r, d: "いちご" in r or "みかん" in r or "取消" in r, "キウイのみ取消・他は継続"),
+                ("全取消にしない", lambda r, d: "アボカド" in r or "ブルーベリー" in r or "取消" in r or "キャンセル" in r or "承知" in r, "マンゴーのみ取消・他は継続"),
             ],
             [
-                ("いちご・みかんが残る", lambda r, d: "いちご" in r or "みかん" in r, "一部キャンセル後の残注文が正しい"),
-                ("キウイが消える", lambda r, d: "キウイ" not in r or "取消" in r, "キウイは取消済み"),
+                ("アボカド・ブルーベリーが残る", lambda r, d: "アボカド" in r or "ブルーベリー" in r, "一部キャンセル後の残注文が正しい"),
             ],
         ],
     },
@@ -265,7 +264,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "現在の注文状況の確認（単発照会）",
         "customer_id": "C-001",
         "messages": [
-            "いちご3パック、キウイ5個お願いします",
+            "マンゴー3個、ブルーベリー1箱お願いします",
             "今の注文状況を教えて",
         ],
         "checks": [
@@ -273,7 +272,7 @@ TEST_CASES: list[dict[str, Any]] = [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
             ],
             [
-                ("いちご・キウイに言及", lambda r, d: "いちご" in r or "キウイ" in r, "注文内容が含まれる"),
+                ("マンゴー・ブルーベリーに言及", lambda r, d: "マンゴー" in r or "ブルーベリー" in r, "注文内容が含まれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],
