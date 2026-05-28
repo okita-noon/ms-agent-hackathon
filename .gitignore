@@ -73,8 +73,8 @@ CLAUDE.kio.md
 .DS_Store
 Thumbs.db
 
-# LINE QC ログ（ローカル解析用・コミット不要）
-scripts/line_qc/_logs/
+# LINE QC ログ（メンバー共有のためコミット対象）
+# scripts/line_qc/_logs/
 
 # Terraform / IaC
 *.tfstate

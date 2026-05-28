@@ -1,0 +1,1321 @@
+{
+  "meta": {
+    "timestamp_jst": "2026-05-28T18:47:17.717442+09:00",
+    "branch": "main",
+    "max_pr": "#169",
+    "base_url": "https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io",
+    "total_cases": 6,
+    "ok_count": 0,
+    "ng_count": 6
+  },
+  "cases": [
+    {
+      "id": 1,
+      "label": "通常注文（即確定）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "みかん10個、キウイ5個お願いします",
+          "response": "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            },
+            {
+              "name": "確認質問なし",
+              "ok": false,
+              "desc": "確認質問が出ていない"
+            },
+            {
+              "name": "配送予定日あり",
+              "ok": false,
+              "desc": "配送予定日が含まれる"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case1-1779961639, message='みかん10個、キウイ5個お願いします'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (472文字, 3.47s)",
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True",
+            "[Intake]   → みかん 10個 (product_id=P-003)",
+            "[Intake]   → キウイ 5個 (product_id=P-011)",
+            "[Exception] confirmation_needed=False (3.18s)",
+            "[在庫]   みかん: 要求=10個, 在庫=344個 → OK",
+            "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK",
+            "[在庫] 全品在庫OK (2件チェック)",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.61s, 33文字)",
+            "[ポリシー] 応答がポリシーにより書き換えられた",
+            "[応答] 最終応答 (51文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (472文字, 3.47s)",
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True",
+            "[Intake]   → みかん 10個 (product_id=P-003)",
+            "[Intake]   → キウイ 5個 (product_id=P-011)"
+          ],
+          "debug_在庫": [
+            "[在庫]   みかん: 要求=10個, 在庫=344個 → OK",
+            "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK",
+            "[在庫] 全品在庫OK (2件チェック)"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (472文字, 3.47s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=2件, needs_confirmation=True"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 10個 (product_id=P-003)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → キウイ 5個 (product_id=P-011)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (3.18s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   みかん: 要求=10個, 在庫=344個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (2件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "label": "注文 → 変更（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "ぶどう5房お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- ぶどう 5房\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-8C28045C",
+          "current_order_id": "ORD-8C28045C",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case6-1779961648, message='ぶどう5房お願いします'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (331文字, 4.73s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 5房 (product_id=P-004)",
+            "[Exception] confirmation_needed=False (2.57s)",
+            "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001, items=[ぶどう 5房]",
+            "[保存] 受注確定: ORD-8C28045C",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.24s, 26文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (54文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (331文字, 4.73s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 5房 (product_id=P-004)"
+          ],
+          "debug_在庫": [
+            "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001, items=[ぶどう 5房]",
+            "[保存] 受注確定: ORD-8C28045C"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (331文字, 4.73s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ぶどう 5房 (product_id=P-004)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.57s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001, items=[ぶどう 5房]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-8C28045C"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "やっぱり10房に変更して",
+          "response": "ぶどう10房のご注文でお間違いないか、ご確認をお願いいたします。",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": "ORD-8C28045C",
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "OK",
+          "checks": [
+            {
+              "name": "変更対象なしと返さない",
+              "ok": true,
+              "desc": "「変更対象の現在注文が見当たりません」が出ない"
+            },
+            {
+              "name": "10房への言及あり",
+              "ok": true,
+              "desc": "10房への変更が反映"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case6-1779961648, message='やっぱり10房に変更して'",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-8C28045C (status=受注済み)",
+            "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=2件, memory_ctx=393文字",
+            "[Intake] プロンプト種別: 現在注文更新",
+            "[Intake] Agent応答 (341文字, 1.81s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 10房 (product_id=P-004)",
+            "[Exception] confirmation_needed=True (2.89s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: memory_ctx, intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.25s, 32文字)",
+            "[応答] 最終応答 (32文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 現在注文更新",
+            "[Intake] Agent応答 (341文字, 1.81s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 10房 (product_id=P-004)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 現在注文更新"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (341文字, 1.81s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ぶどう 10房 (product_id=P-004)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (2.89s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "label": "注文 → キャンセル（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "みかん30個お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- みかん 30個\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-499131A2",
+          "current_order_id": "ORD-499131A2",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case7-1779961664, message='みかん30個お願いします'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 4.7s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → みかん 30個 (product_id=P-003)",
+            "[Exception] confirmation_needed=False (2.6s)",
+            "[在庫]   みかん: 要求=30個, 在庫=344個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001, items=[みかん 30個]",
+            "[保存] 受注確定: ORD-499131A2",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.31s, 27文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (55文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 4.7s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → みかん 30個 (product_id=P-003)"
+          ],
+          "debug_在庫": [
+            "[在庫]   みかん: 要求=30個, 在庫=344個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001, items=[みかん 30個]",
+            "[保存] 受注確定: ORD-499131A2"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (332文字, 4.7s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 30個 (product_id=P-003)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.6s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   みかん: 要求=30個, 在庫=344個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001, items=[みかん 30個]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-499131A2"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "さっきの注文キャンセルしたい",
+          "response": "承知いたしました。\n現在のご注文は取り消しいたします。\nすでに出荷準備後の場合は、別途ご連絡することがあります。",
+          "agent": "Orchestrator",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-499131A2",
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "変更対象なしと返さない",
+              "ok": true,
+              "desc": "「変更対象なし」が出ない"
+            },
+            {
+              "name": "キャンセル受付",
+              "ok": false,
+              "desc": "キャンセル受付メッセージ"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case7-1779961664, message='さっきの注文キャンセルしたい'",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-499131A2 (status=受注済み)",
+            "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 全注文取消と判定",
+            "[取消] 注文キャンセル実行: ORD-499131A2"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない",
+            "[判定] 全注文取消と判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 全注文取消と判定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "注文キャンセル",
+              "log": "[取消] 注文キャンセル実行: ORD-499131A2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "label": "現在の注文の問い合わせ（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "レモン10個お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- レモン 10個\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-D4FDF483",
+          "current_order_id": "ORD-D4FDF483",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case8-1779961673, message='レモン10個お願いします'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 4.63s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → レモン 10個 (product_id=P-014)",
+            "[Exception] confirmation_needed=False (2.66s)",
+            "[在庫]   レモン: 要求=10個, 在庫=70個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001, items=[レモン 10個]",
+            "[保存] 受注確定: ORD-D4FDF483",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.2s, 27文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (55文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 4.63s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → レモン 10個 (product_id=P-014)"
+          ],
+          "debug_在庫": [
+            "[在庫]   レモン: 要求=10個, 在庫=70個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001, items=[レモン 10個]",
+            "[保存] 受注確定: ORD-D4FDF483"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (332文字, 4.63s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → レモン 10個 (product_id=P-014)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.66s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   レモン: 要求=10個, 在庫=70個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001, items=[レモン 10個]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-D4FDF483"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "今の注文って何だっけ？",
+          "response": "現在のご注文内容です。\n\n【5/28配送予定】\n・レモン 20個\n・ぶどう 25房\n・みかん 60個\n・いちご 3パック\n・キウイ 10個\n・りんご 10箱\n・バナナ 20kg\n【5/30配送予定】\n・ぶどう 6房",
+          "agent": "Orchestrator",
+          "route": "現在注文問い合わせテンプレート",
+          "order_id": null,
+          "current_order_id": "ORD-D4FDF483",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "OK",
+          "checks": [
+            {
+              "name": "レモンに言及",
+              "ok": true,
+              "desc": "レモンの情報が含まれる"
+            },
+            {
+              "name": "新規注文として処理しない",
+              "ok": true,
+              "desc": "2通目で新たなorder_savedが発生しない"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case8-1779961673, message='今の注文って何だっけ？'",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-D4FDF483 (status=受注済み)",
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True",
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 現在注文の問い合わせと判定"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "label": "配送日・時間帯指定",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "ぶどう3房、明後日の午前中に届けて",
+          "response": "ぶどう3房、明後日午前中お届けで承ります。こちらの内容でよろしいでしょうか？",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            },
+            {
+              "name": "午前中に言及",
+              "ok": true,
+              "desc": "時間帯が反映"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case9-1779961683, message='ぶどう3房、明後日の午前中に届けて'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (375文字, 4.21s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=True",
+            "[Intake]   → ぶどう 3房 (product_id=P-004)",
+            "[Exception] confirmation_needed=False (2.61s)",
+            "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.13s, 38文字)",
+            "[応答] 最終応答 (38文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (375文字, 4.21s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=True",
+            "[Intake]   → ぶどう 3房 (product_id=P-004)"
+          ],
+          "debug_在庫": [
+            "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=True",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (375文字, 4.21s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=True"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ぶどう 3房 (product_id=P-004)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.61s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "label": "複数注文の一部キャンセル（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "いちご5パック、キウイ10個、みかん20個お願いします",
+          "response": "いちご5パック、キウイ10個、みかん20個のご注文ありがとうございます。キウイのご注文数量が通常より多く見受けられます。10個でお間違いないか、ご確認をお願いいたします。",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779961691, message='いちご5パック、キウイ10個、みかん20個お願いします'",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (555文字, 3.74s)",
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[Intake]   → いちご 5パック (product_id=P-006)",
+            "[Intake]   → キウイ 10個 (product_id=P-011)",
+            "[Intake]   → みかん 20個 (product_id=P-003)",
+            "[Exception] confirmation_needed=True (3.62s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.34s, 85文字)",
+            "[応答] 最終応答 (85文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (555文字, 3.74s)",
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[Intake]   → いちご 5パック (product_id=P-006)",
+            "[Intake]   → キウイ 10個 (product_id=P-011)",
+            "[Intake]   → みかん 20個 (product_id=P-003)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (555文字, 3.74s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=3件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → いちご 5パック (product_id=P-006)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → キウイ 10個 (product_id=P-011)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 20個 (product_id=P-003)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (3.62s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "そのうちキウイだけキャンセルして",
+          "response": "確認です。\n変更対象の現在注文が見当たりませんでした。\n新しいご注文として承る場合は、商品名と数量をあらためてお知らせください。",
+          "agent": "Orchestrator",
+          "route": "テンプレート上書き",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "全取消にしない",
+              "ok": false,
+              "desc": "キウイのみ取消・他は継続"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779961691, message='そのうちキウイだけキャンセルして'",
+            "[履歴] 2件の会話履歴あり",
+            "[ドラフト] 確認待ち注文ドラフトあり",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 変更/取消要求だが現在注文なし"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 変更/取消要求だが現在注文なし"
+          ],
+          "debug_ドラフト": [
+            "[ドラフト] 確認待ち注文ドラフトあり"
+          ],
+          "needs_confirmation_logs": [
+            "[ドラフト] 確認待ち注文ドラフトあり"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "ドラフト確認",
+              "log": "[ドラフト] 確認待ち注文ドラフトあり"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 変更/取消要求だが現在注文なし"
+            }
+          ]
+        },
+        {
+          "seq": 3,
+          "input": "今の注文は？",
+          "response": "現在のご注文内容です。\n\n【5/28配送予定】\n・レモン 20個\n・ぶどう 25房\n・みかん 60個\n・いちご 3パック\n・キウイ 10個\n・りんご 10箱\n・バナナ 20kg\n【5/30配送予定】\n・ぶどう 6房",
+          "agent": "Orchestrator",
+          "route": "現在注文問い合わせテンプレート",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "いちご・みかんが残る",
+              "ok": true,
+              "desc": "一部キャンセル後の残注文が正しい"
+            },
+            {
+              "name": "キウイが消える",
+              "ok": false,
+              "desc": "キウイは取消済み"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779961691, message='今の注文は？'",
+            "[履歴] 4件の会話履歴あり",
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False",
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_顧客": [],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 現在注文の問い合わせと判定"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

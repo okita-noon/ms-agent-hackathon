@@ -33,9 +33,11 @@ def format_line_order_items(items: list[Any] | None) -> str:
     return "\n".join(lines)
 
 
-def build_delivery_estimate_line(delivery_estimate: str | None) -> str:
+def build_delivery_estimate_line(delivery_estimate: str | None, time_slot: str | None = None) -> str:
     if not delivery_estimate:
         return ""
+    if time_slot:
+        return f"納品予定は {delivery_estimate}・{time_slot} です。"
     return f"納品予定は {delivery_estimate} です。"
 
 

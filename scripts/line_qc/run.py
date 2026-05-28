@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 20:05
+Updated: 2026-05-28 20:43
 
 使い方:
     python scripts/line_qc/run.py
@@ -85,14 +85,20 @@ TEST_CASES: list[dict[str, Any]] = [
     },
     {
         "id": 3,
-        "label": "誤発注の数量異常検知",
+        "label": "誤発注の数量異常検知 → 修正して確定",
         "customer_id": "C-001",
         "messages": [
             "みかん1500個お願いします",
+            "15個でお願いします",
         ],
         "checks": [
             [
                 ("即確定しない", lambda r, d: d.get("order_saved") is not True, "異常検知で確認質問"),
+                ("通常より多い旨の言及", lambda r, d: "通常" in r or "確認" in r or "異なる" in r or "多い" in r, "異常を通知する"),
+            ],
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "15個で受注確定"),
+                ("みかんに言及", lambda r, d: "みかん" in r or "15" in r, "みかん15個が確定"),
             ],
         ],
     },
@@ -198,15 +204,20 @@ TEST_CASES: list[dict[str, Any]] = [
     },
     {
         "id": 10,
-        "label": "在庫問い合わせ（受注しない）",
+        "label": "在庫問い合わせ → 在庫範囲内で注文",
         "customer_id": "C-001",
         "messages": [
-            "メロンって今ある？",
+            "さくらんぼって今ある？",
+            "じゃあ5パックお願い",
         ],
         "checks": [
             [
                 ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "在庫照会のみで受注しない"),
-                ("在庫情報を返す", lambda r, d: "メロン" in r or "在庫" in r or "玉" in r, "在庫情報が含まれる"),
+                ("在庫情報を返す", lambda r, d: "さくらんぼ" in r or "在庫" in r or "パック" in r, "在庫情報が含まれる"),
+            ],
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "5パックで受注確定"),
+                ("さくらんぼに言及", lambda r, d: "さくらんぼ" in r or "5" in r, "さくらんぼ5パックが確定"),
             ],
         ],
     },

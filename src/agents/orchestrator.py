@@ -131,13 +131,14 @@ def _build_line_from_template(
     *,
     items: list[dict] | list[OrderItem] | None = None,
     delivery_estimate: str | None = None,
+    time_slot: str | None = None,
     body: str | None = None,
     summary: str | None = None,
 ) -> str:
     return render_line_template(
         template_name,
         order_items=format_line_order_items(items),
-        delivery_estimate_line=build_delivery_estimate_line(delivery_estimate),
+        delivery_estimate_line=build_delivery_estimate_line(delivery_estimate, time_slot=time_slot),
         body=body or "",
         summary=summary or "",
     )
@@ -151,7 +152,7 @@ def _build_order_cancel_response(source: OrderSource, order: Order) -> str:
             body="現在のご注文をキャンセルいたしました。",
         )
     if source == OrderSource.LINE:
-        return _build_line_from_template("order_full_cancel_confirm.txt")
+        return _build_line_from_template("order_full_cancel_confirm.txt", items=order.items)
     return "現在のご注文をキャンセルいたしました。"
 
 
@@ -349,15 +350,21 @@ class OrderOrchestrator:
                 customer_id = customer.id if customer else None
                 debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={customer_id or '未特定'}")
             if customer_id:
-                repo = self._ctx.get_connector("IOrderRepository")
-                customer_orders = await repo.list_by_customer(customer_id, limit=20)
-                today = today_jst()
-                open_orders = [
-                    o
-                    for o in customer_orders
-                    if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
-                    and (o.delivery_date is None or o.delivery_date >= today)
-                ]
+                # current_orderが渡っている場合はそれだけ表示（テスト注文の混入を防ぐ）
+                if current_order and current_order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}:
+                    open_orders = [current_order]
+                    debug_log.append(f"[注文照会] current_orderを使用: {current_order.id}")
+                else:
+                    repo = self._ctx.get_connector("IOrderRepository")
+                    customer_orders = await repo.list_by_customer(customer_id, limit=20)
+                    today = today_jst()
+                    open_orders = [
+                        o
+                        for o in customer_orders
+                        if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+                        and (o.delivery_date is None or o.delivery_date >= today)
+                    ]
+                    debug_log.append(f"[注文照会] list_by_customerで{len(open_orders)}件取得")
                 if open_orders:
                     response_text = _build_line_from_template(
                         "order_current_summary.txt",
@@ -436,6 +443,7 @@ class OrderOrchestrator:
                     "order_update_confirm.txt" if current_order else "order_confirm.txt",
                     items=saved_order.items,
                     delivery_estimate=affirm_delivery_estimate,
+                    time_slot=saved_order.delivery_time_slot,
                 )
             elif source != OrderSource.EMAIL:
                 response_text = _insert_order_id(response_text, saved_order.id)
@@ -847,6 +855,7 @@ class OrderOrchestrator:
                 "order_confirm.txt",
                 items=saved_order.items,
                 delivery_estimate=delivery_estimate_text,
+                time_slot=saved_order.delivery_time_slot,
             )
         else:
             response_text = _insert_order_id(
@@ -981,6 +990,7 @@ class OrderOrchestrator:
                 "order_update_confirm.txt" if current_order else "order_confirm.txt",
                 items=saved_order.items,
                 delivery_estimate=delivery_estimate_text,
+                time_slot=saved_order.delivery_time_slot,
             )
         else:
             response_text = _insert_order_id(
@@ -1357,6 +1367,7 @@ class OrderOrchestrator:
                     template_name,
                     items=saved_order.items,
                     delivery_estimate=delivery_estimate_text,
+                    time_slot=saved_order.delivery_time_slot,
                 )
             elif source == OrderSource.PHONE and saved_order:
                 debug_log.append("[応答] 電話応答に受注No挿入")
@@ -1735,6 +1746,7 @@ class OrderOrchestrator:
                     template_name,
                     items=saved_order.items,
                     delivery_estimate=delivery_estimate_text,
+                    time_slot=saved_order.delivery_time_slot,
                 )
             elif source == OrderSource.PHONE and saved_order:
                 debug_log.append("[応答] 電話応答に受注No挿入")

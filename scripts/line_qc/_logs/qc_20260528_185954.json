@@ -1,0 +1,1510 @@
+{
+  "meta": {
+    "timestamp_jst": "2026-05-28T18:59:54.680077+09:00",
+    "branch": "main",
+    "max_pr": "#170",
+    "base_url": "https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io",
+    "total_cases": 6,
+    "ok_count": 0,
+    "ng_count": 6
+  },
+  "cases": [
+    {
+      "id": 1,
+      "label": "通常注文（即確定）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "みかん10個、キウイ5個お願いします",
+          "response": "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            },
+            {
+              "name": "確認質問なし",
+              "ok": false,
+              "desc": "確認質問が出ていない"
+            },
+            {
+              "name": "配送予定日あり",
+              "ok": false,
+              "desc": "配送予定日が含まれる"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case1-1779962397, message='みかん10個、キウイ5個お願いします'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='キウイ' → found=True, product_id=P-011, name=キウイ",
+            "[DB:Product] normalize_product: raw_name='みかん' → found=True, product_id=P-003, name=みかん",
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='みかん10個、キウイ5個お願いします' → found=True, confidence=0.7, needs_confirmation=True",
+            "[Intake] Agent応答 (475文字, 3.64s)",
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True, 理由='みかん10個、キウイ5個で承りました。こちらの内容でよろしいでしょうか？'",
+            "[Intake]   → みかん 10個 (product_id=P-003)",
+            "[Intake]   → キウイ 5個 (product_id=P-011)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-003' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-011' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=5.0, avg=4.5, z_score=0.51, is_anomaly=False",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-003' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=10.0, avg=17.466666666666665, z_score=0.61, is_anomaly=False",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-011' → profile='あり', typical_unit=個",
+            "[Exception] confirmation_needed=False (2.95s)",
+            "[在庫]   みかん: 要求=10個, 在庫=344個 → OK",
+            "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK",
+            "[在庫] 全品在庫OK (2件チェック)",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.07s, 36文字)",
+            "[ポリシー] 応答がポリシーにより書き換えられた",
+            "[応答] 最終応答 (51文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (475文字, 3.64s)",
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True, 理由='みかん10個、キウイ5個で承りました。こちらの内容でよろしいでしょうか？'",
+            "[Intake]   → みかん 10個 (product_id=P-003)",
+            "[Intake]   → キウイ 5個 (product_id=P-011)"
+          ],
+          "debug_在庫": [
+            "[在庫]   みかん: 要求=10個, 在庫=344個 → OK",
+            "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK",
+            "[在庫] 全品在庫OK (2件チェック)"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='みかん10個、キウイ5個お願いします' → found=True, confidence=0.7, needs_confirmation=True",
+            "[Intake] customer_id=C-001, items=2件, needs_confirmation=True, 理由='みかん10個、キウイ5個で承りました。こちらの内容でよろしいでしょうか？'",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (475文字, 3.64s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=2件, needs_confirmation=True, 理由='みかん10個、キウイ5個で承りました。こちらの内容でよろしいでしょうか？'"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 10個 (product_id=P-003)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → キウイ 5個 (product_id=P-011)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.95s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   みかん: 要求=10個, 在庫=344個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   キウイ: 要求=5個, 在庫=77個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (2件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "label": "注文 → 変更（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "ぶどう5房お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- ぶどう 5房\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-55F807BE",
+          "current_order_id": "ORD-55F807BE",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case6-1779962405, message='ぶどう5房お願いします'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='ぶどう' → found=True, product_id=P-004, name=ぶどう",
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='ぶどう5房お願いします' → found=True, confidence=0.9999999999999999, needs_confirmation=False",
+            "[Intake] Agent応答 (331文字, 3.01s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 5房 (product_id=P-004)",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-004' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=5.0, avg=4.142857142857143, z_score=0.82, is_anomaly=False",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-004' → profile='あり', typical_unit=房",
+            "[Exception] confirmation_needed=False (2.58s)",
+            "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 5房]",
+            "[保存] 受注確定: ORD-55F807BE",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.08s, 26文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (54文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (331文字, 3.01s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 5房 (product_id=P-004)"
+          ],
+          "debug_在庫": [
+            "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 5房]",
+            "[保存] 受注確定: ORD-55F807BE"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='ぶどう5房お願いします' → found=True, confidence=0.9999999999999999, needs_confirmation=False",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (331文字, 3.01s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ぶどう 5房 (product_id=P-004)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.58s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   ぶどう: 要求=5房, 在庫=26房 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 5房]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-55F807BE"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "やっぱり10房に変更して",
+          "response": "ご注文承りました。ぶどう10房、6月1日配送予定です。",
+          "agent": "Orchestrator",
+          "route": "フォールバック応答",
+          "order_id": null,
+          "current_order_id": "ORD-55F807BE",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "OK",
+          "checks": [
+            {
+              "name": "変更対象なしと返さない",
+              "ok": true,
+              "desc": "「変更対象の現在注文が見当たりません」が出ない"
+            },
+            {
+              "name": "10房への言及あり",
+              "ok": true,
+              "desc": "10房への変更が反映"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case6-1779962405, message='やっぱり10房に変更して'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-55F807BE (status=受注済み, customer_id=C-001)",
+            "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=2件, memory_ctx=393文字",
+            "[Intake] プロンプト種別: 現在注文更新",
+            "[Intake] Agent応答 (525文字, 1.72s)",
+            "[Intake] JSON抽出失敗 → Communication Agentフォールバック",
+            "[Intake] Agent生テキスト冒頭: '{\"customer_id\":\"C-001\",\"customer_name\":\"ビストロ青葉\",\"items\":[{\"product_id\":\"P-004\",\"product_name\":\"ぶどう\",\"quantity\":10,\"unit\":\"房\"}],\"delivery_date\":\"2026-05-28\",\"delivery_time_slot\":null,\"needs_confirmatio'",
+            "[Communication] LLM入力要素: memory_ctx, intake",
+            "[Communication] Agent応答 (1.13s, 27文字)"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 現在注文更新",
+            "[Intake] Agent応答 (525文字, 1.72s)",
+            "[Intake] JSON抽出失敗 → Communication Agentフォールバック",
+            "[Intake] Agent生テキスト冒頭: '{\"customer_id\":\"C-001\",\"customer_name\":\"ビストロ青葉\",\"items\":[{\"product_id\":\"P-004\",\"product_name\":\"ぶどう\",\"quantity\":10,\"unit\":\"房\"}],\"delivery_date\":\"2026-05-28\",\"delivery_time_slot\":null,\"needs_confirmatio'"
+          ],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=modify_current_order, action_type=update, confidence=0.85, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 現在注文更新"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (525文字, 1.72s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] JSON抽出失敗 → Communication Agentフォールバック"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent生テキスト冒頭: '{\"customer_id\":\"C-001\",\"customer_name\":\"ビストロ青葉\",\"items\":[{\"product_id\":\"P-004\",\"product_name\":\"ぶどう\",\"quantity\":10,\"unit\":\"房\"}],\"delivery_date\":\"2026-05-28\",\"delivery_time_slot\":null,\"needs_confirmatio'"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "label": "注文 → キャンセル（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "みかん30個お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- みかん 30個\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-1475F8FE",
+          "current_order_id": "ORD-1475F8FE",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case7-1779962415, message='みかん30個お願いします'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='みかん' → found=True, product_id=P-003, name=みかん",
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='みかん30個お願いします' → found=True, confidence=1.0, needs_confirmation=False",
+            "[Intake] Agent応答 (332文字, 3.77s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → みかん 30個 (product_id=P-003)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-003' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-003' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=30.0, avg=17.466666666666665, z_score=1.03, is_anomaly=False",
+            "[Exception] confirmation_needed=False (3.52s)",
+            "[在庫]   みかん: 要求=30個, 在庫=344個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[みかん 30個]",
+            "[保存] 受注確定: ORD-1475F8FE",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.18s, 27文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (55文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 3.77s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → みかん 30個 (product_id=P-003)"
+          ],
+          "debug_在庫": [
+            "[在庫]   みかん: 要求=30個, 在庫=344個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[みかん 30個]",
+            "[保存] 受注確定: ORD-1475F8FE"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='みかん30個お願いします' → found=True, confidence=1.0, needs_confirmation=False",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (332文字, 3.77s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 30個 (product_id=P-003)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (3.52s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   みかん: 要求=30個, 在庫=344個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[みかん 30個]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-1475F8FE"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "さっきの注文キャンセルしたい",
+          "response": "承知いたしました。\n現在のご注文は取り消しいたします。\nすでに出荷準備後の場合は、別途ご連絡することがあります。",
+          "agent": "Orchestrator",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-1475F8FE",
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "変更対象なしと返さない",
+              "ok": true,
+              "desc": "「変更対象なし」が出ない"
+            },
+            {
+              "name": "キャンセル受付",
+              "ok": false,
+              "desc": "キャンセル受付メッセージ"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case7-1779962415, message='さっきの注文キャンセルしたい'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-1475F8FE (status=受注済み, customer_id=C-001)",
+            "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 全注文取消と判定",
+            "[取消] 注文キャンセル実行: ORD-1475F8FE"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない",
+            "[判定] 全注文取消と判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=full_cancel, action_type=full_cancel, confidence=0.95, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 全注文取消と判定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "注文キャンセル",
+              "log": "[取消] 注文キャンセル実行: ORD-1475F8FE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "label": "現在の注文の問い合わせ（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "レモン10個お願いします",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- レモン 10個\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-99A9961D",
+          "current_order_id": "ORD-99A9961D",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case8-1779962424, message='レモン10個お願いします'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='レモン' → found=True, product_id=P-014, name=レモン",
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='レモン10個お願いします' → found=True, confidence=1.0, needs_confirmation=False",
+            "[Intake] Agent応答 (332文字, 3.07s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → レモン 10個 (product_id=P-014)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-014' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-014' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=10.0, avg=10.0, z_score=0.0, is_anomaly=False",
+            "[Exception] confirmation_needed=False (2.39s)",
+            "[在庫]   レモン: 要求=10個, 在庫=70個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[レモン 10個]",
+            "[保存] 受注確定: ORD-99A9961D",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.15s, 27文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (55文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (332文字, 3.07s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → レモン 10個 (product_id=P-014)"
+          ],
+          "debug_在庫": [
+            "[在庫]   レモン: 要求=10個, 在庫=70個 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[レモン 10個]",
+            "[保存] 受注確定: ORD-99A9961D"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[DB:Pattern] resolve_with_pattern: customer_id='C-001', expr='レモン10個お願いします' → found=True, confidence=1.0, needs_confirmation=False",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (332文字, 3.07s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → レモン 10個 (product_id=P-014)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.39s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   レモン: 要求=10個, 在庫=70個 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[レモン 10個]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-99A9961D"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "今の注文って何だっけ？",
+          "response": "現在のご注文内容です。\n\n【5/28配送予定】\n・レモン 30個\n・ぶどう 30房\n・みかん 30個\n・いちご 3パック\n・キウイ 5個\n【5/30配送予定】\n・ぶどう 6房",
+          "agent": "Orchestrator",
+          "route": "現在注文問い合わせテンプレート",
+          "order_id": null,
+          "current_order_id": "ORD-99A9961D",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "OK",
+          "checks": [
+            {
+              "name": "レモンに言及",
+              "ok": true,
+              "desc": "レモンの情報が含まれる"
+            },
+            {
+              "name": "新規注文として処理しない",
+              "ok": true,
+              "desc": "2通目で新たなorder_savedが発生しない"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case8-1779962424, message='今の注文って何だっけ？'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[履歴] 2件の会話履歴あり",
+            "[現在注文] ORD-99A9961D (status=受注済み, customer_id=C-001)",
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True",
+            "[判定] 現在注文の問い合わせと判定",
+            "[顧客解決] 経路=known渡し, customer_id=C-001"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し, customer_id=C-001"
+          ],
+          "debug_分類": [
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=True"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 現在注文の問い合わせと判定"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し, customer_id=C-001"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "label": "配送日・時間帯指定",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "ぶどう3房、明後日の午前中に届けて",
+          "response": "いつもお世話になっております。\nご注文を承りました。\n- ぶどう 3房\n納品予定は 6月1日配送予定 です。",
+          "agent": "MultiAgent",
+          "route": "テンプレート上書き",
+          "order_id": "ORD-653D365E",
+          "current_order_id": "ORD-653D365E",
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            },
+            {
+              "name": "午前中に言及",
+              "ok": true,
+              "desc": "時間帯が反映"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case9-1779962432, message='ぶどう3房、明後日の午前中に届けて'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='ぶどう' → found=True, product_id=P-004, name=ぶどう",
+            "[Intake] Agent応答 (340文字, 3.41s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 3房 (product_id=P-004)",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-004' → profile='あり', typical_unit=房",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-004' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=3.0, avg=4.25, z_score=1.23, is_anomaly=False",
+            "[Exception] confirmation_needed=False (2.45s)",
+            "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)",
+            "[配送] 入力: route=None, lead_time=None",
+            "[配送] 推定配送日: 6月1日配送予定",
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 3房]",
+            "[保存] 受注確定: ORD-653D365E",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, delivery",
+            "[Communication] Agent応答 (1.13s, 29文字)",
+            "[応答] LINEテンプレート上書き: order_confirm.txt",
+            "[応答] 最終応答 (54文字)",
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (340文字, 3.41s)",
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False",
+            "[Intake]   → ぶどう 3房 (product_id=P-004)"
+          ],
+          "debug_在庫": [
+            "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK",
+            "[在庫] 全品在庫OK (1件チェック)"
+          ],
+          "debug_保存": [
+            "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 3房]",
+            "[保存] 受注確定: ORD-653D365E"
+          ],
+          "debug_セッション": [
+            "[セッション] 確認不要 → 完了"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (340文字, 3.41s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=1件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → ぶどう 3房 (product_id=P-004)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=False (2.45s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫]   ぶどう: 要求=3房, 在庫=26房 → OK"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] 全品在庫OK (1件チェック)"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 入力: route=None, lead_time=None"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 推定配送日: 6月1日配送予定"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] ドラフト: customer_id=C-001（known渡しと一致）, items=[ぶどう 3房]"
+            },
+            {
+              "agent": "OrderRepository",
+              "step": "受注保存",
+              "log": "[保存] 受注確定: ORD-653D365E"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認不要 → 完了"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "label": "複数注文の一部キャンセル（文脈保持）",
+      "customer_id": "C-001",
+      "overall_ok": false,
+      "messages": [
+        {
+          "seq": 1,
+          "input": "いちご5パック、キウイ10個、みかん20個お願いします",
+          "response": "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。",
+          "agent": "MultiAgent",
+          "route": "LLM生成",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": true,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "受注確定",
+              "ok": false,
+              "desc": "order_saved=True"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779962439, message='いちご5パック、キウイ10個、みかん20個お願いします'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] 在庫問い合わせではない",
+            "[パイプライン] マルチエージェント",
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)",
+            "[コンテキスト] 履歴=0件, memory_ctx=0文字",
+            "[Intake] プロンプト種別: 新規注文",
+            "[DB:Product] normalize_product: raw_name='いちご' → found=True, product_id=P-006, name=いちご",
+            "[DB:Product] normalize_product: raw_name='キウイ' → found=True, product_id=P-011, name=キウイ",
+            "[DB:Product] normalize_product: raw_name='みかん' → found=True, product_id=P-003, name=みかん",
+            "[Intake] Agent応答 (555文字, 3.54s)",
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[Intake]   → いちご 5パック (product_id=P-006)",
+            "[Intake]   → キウイ 10個 (product_id=P-011)",
+            "[Intake]   → みかん 20個 (product_id=P-003)",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-003' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=20.0, avg=18.25, z_score=0.14, is_anomaly=False",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-011' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-011' → profile=あり, stats=あり",
+            "[DB:AnomalyCheck] detect_quantity_anomaly: ordered=10.0, avg=4.5, z_score=5.64, is_anomaly=True",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-003' → profile='あり', typical_unit=個",
+            "[DB:Profile] detect_unit_anomaly: customer_id='C-001', product_id='P-006' → profile='あり', typical_unit=パック",
+            "[DB:Profile] detect_quantity_anomaly: customer_id='C-001', product_id='P-006' → profile=あり, stats=あり",
+            "[Exception] confirmation_needed=True (3.35s)",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[応答] Communication Agent生成",
+            "[Communication] LLM入力要素: intake, exception, note='顧客確認が必要なため、受注確定していません。顧客には確認質問を送り、受注承りました・確定しましたとは言わないでください。'",
+            "[Communication] Agent応答 (1.32s, 70文字)",
+            "[ポリシー] 応答がポリシーにより書き換えられた",
+            "[応答] 最終応答 (51文字)",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+          ],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [
+            "[Intake] プロンプト種別: 新規注文",
+            "[Intake] Agent応答 (555文字, 3.54s)",
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[Intake]   → いちご 5パック (product_id=P-006)",
+            "[Intake]   → キウイ 10個 (product_id=P-011)",
+            "[Intake]   → みかん 20個 (product_id=P-003)"
+          ],
+          "debug_在庫": [
+            "[在庫] スキップ（異常検知で確認待ち）"
+          ],
+          "debug_保存": [],
+          "debug_セッション": [
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "debug_判定": [
+            "[判定] 在庫問い合わせではない"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [
+            "[Intake] customer_id=C-001, items=3件, needs_confirmation=False",
+            "[在庫] スキップ（異常検知で確認待ち）",
+            "[配送] 配送日推定スキップ（確認待ち or 在庫不足）",
+            "[セッション] 確認待ち → awaiting_reply"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "パイプライン選択",
+              "log": "[パイプライン] マルチエージェント"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し → Agentに顧客特定済みとして渡す: C-001 (ビストロ青葉)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] プロンプト種別: 新規注文"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] Agent応答 (555文字, 3.54s)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake] customer_id=C-001, items=3件, needs_confirmation=False"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → いちご 5パック (product_id=P-006)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → キウイ 10個 (product_id=P-011)"
+            },
+            {
+              "agent": "IntakeAgent",
+              "step": "注文解析",
+              "log": "[Intake]   → みかん 20個 (product_id=P-003)"
+            },
+            {
+              "agent": "ExceptionAgent",
+              "step": "異常検知",
+              "log": "[Exception] confirmation_needed=True (3.35s)"
+            },
+            {
+              "agent": "InventoryCheck",
+              "step": "在庫確認",
+              "log": "[在庫] スキップ（異常検知で確認待ち）"
+            },
+            {
+              "agent": "DeliveryEstimator",
+              "step": "配送日推定",
+              "log": "[配送] 配送日推定スキップ（確認待ち or 在庫不足）"
+            },
+            {
+              "agent": "SessionManager",
+              "step": "セッション状態",
+              "log": "[セッション] 確認待ち → awaiting_reply"
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "input": "そのうちキウイだけキャンセルして",
+          "response": "確認です。\n変更対象の現在注文が見当たりませんでした。\n新しいご注文として承る場合は、商品名と数量をあらためてお知らせください。",
+          "agent": "Orchestrator",
+          "route": "テンプレート上書き",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "全取消にしない",
+              "ok": false,
+              "desc": "キウイのみ取消・他は継続"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779962439, message='そのうちキウイだけキャンセルして'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[履歴] 2件の会話履歴あり",
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-001, items=3件",
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False",
+            "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 変更/取消要求だが現在注文なし"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [],
+          "debug_分類": [
+            "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')",
+            "[判定] 在庫問い合わせではない",
+            "[判定] 変更/取消要求だが現在注文なし"
+          ],
+          "debug_ドラフト": [
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-001, items=3件"
+          ],
+          "needs_confirmation_logs": [
+            "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-001, items=3件"
+          ],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "System",
+              "step": "ドラフト確認",
+              "log": "[ドラフト] 確認待ち注文ドラフトあり: customer_id=C-001, items=3件"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=new_order, action_type=new_order, confidence=0.0, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] ドラフトあるが肯定返答ではない (message='そのうちキウイだけキャンセルして')"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 在庫問い合わせではない"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 変更/取消要求だが現在注文なし"
+            }
+          ]
+        },
+        {
+          "seq": 3,
+          "input": "今の注文は？",
+          "response": "現在のご注文内容です。\n\n【5/28配送予定】\n・レモン 30個\n・ぶどう 30房\n・みかん 20個\n・いちご 3パック\n・キウイ 5個\n【5/30配送予定】\n・ぶどう 9房",
+          "agent": "Orchestrator",
+          "route": "現在注文問い合わせテンプレート",
+          "order_id": null,
+          "current_order_id": null,
+          "order_saved": false,
+          "pending_exists": false,
+          "ai_judgment": "NG",
+          "checks": [
+            {
+              "name": "いちご・みかんが残る",
+              "ok": true,
+              "desc": "一部キャンセル後の残注文が正しい"
+            },
+            {
+              "name": "キウイが消える",
+              "ok": false,
+              "desc": "キウイは取消済み"
+            }
+          ],
+          "debug_log": [
+            "[入力] source=LINE, session=qc-case13-1779962439, message='今の注文は？'",
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉",
+            "[履歴] 4件の会話履歴あり",
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False",
+            "[判定] 現在注文の問い合わせと判定",
+            "[顧客解決] 経路=known渡し, customer_id=C-001"
+          ],
+          "debug_顧客": [
+            "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+          ],
+          "debug_顧客解決": [
+            "[顧客解決] 経路=known渡し, customer_id=C-001"
+          ],
+          "debug_分類": [
+            "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False"
+          ],
+          "debug_Intake": [],
+          "debug_在庫": [],
+          "debug_保存": [],
+          "debug_セッション": [],
+          "debug_判定": [
+            "[判定] 現在注文の問い合わせと判定"
+          ],
+          "debug_ドラフト": [],
+          "needs_confirmation_logs": [],
+          "agent_flow": [
+            {
+              "agent": "System",
+              "step": "顧客情報の確認",
+              "log": "[顧客] known渡し: customer_id=C-001, customer_name=ビストロ青葉"
+            },
+            {
+              "agent": "IntentClassifier",
+              "step": "意図分類",
+              "log": "[分類] intent=order_status_inquiry, action_type=new_order, confidence=0.95, editable=False"
+            },
+            {
+              "agent": "Orchestrator",
+              "step": "ルール判定",
+              "log": "[判定] 現在注文の問い合わせと判定"
+            },
+            {
+              "agent": "System",
+              "step": "顧客解決経路の決定",
+              "log": "[顧客解決] 経路=known渡し, customer_id=C-001"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
