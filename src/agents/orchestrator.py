@@ -3100,6 +3100,9 @@ def _format_open_orders_summary(orders: list[Order]) -> str:
 
 def _is_affirmative_reply(message: str) -> bool:
     normalized = re.sub(r"\s+", "", message).lower()
+    # 数値を含む返答は数量訂正の可能性があるため肯定返答とみなさない
+    if re.search(r"\d", normalized):
+        return False
     affirmative_words = {
         "ok",
         "ｏｋ",
