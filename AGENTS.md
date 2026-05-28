@@ -5,7 +5,13 @@
 ## AI エージェント共通ルール（必須）
 
 ### セッション開始時
-- `main` ブランチから作業用ブランチを切る（既に作業ブランチにいる場合はそのまま使う）
+- 別作業は別セッションで扱う前提のため、各AIエージェントは**編集前に専用 git worktree を用意してそこで作業する**
+- 既存の通常 checkout（例: `/Users/okita/dev/ms-agent-hackathon`）や他エージェントの worktree 上で、直接編集・commit・push してはならない
+- Codex は `.codex/worktrees/<task-slug>`、Claude Code は `.claude/worktrees/<task-slug>` を標準の worktree 配置先とする
+- worktree は `origin/main` から作成し、ブランチ名はエージェント名を prefix にする（例: `codex/login-copy-update`, `claude/exception-modal`）
+- worktree 作成には `scripts/new_agent_worktree.sh <agent> <task-slug>` を使う。例: `scripts/new_agent_worktree.sh codex login-copy-update`
+- 既に専用 worktree 内にいる場合のみ、その worktree を継続利用してよい
+- 未コミット変更がある場合は勝手に破棄せず、ユーザー変更か前回作業かを確認してから進める
 
 ### Pull Request 作成前チェック
 PR を作成する前に以下を**必ず**実行し、全てパスすることを確認する:
@@ -276,6 +282,10 @@ src/
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── line_template_renderer.py # LINE返信テンプレート描画
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
+│   ├── intent_understanding.py   # 注文会話の Intent 分類（明確ルール + LLM fallback）
+│   ├── order_application.py      # 注文状態変更の業務サービス
+│   ├── inventory_application.py  # 注文ドラフト単位の在庫確認業務サービス
+│   ├── order_memory.py           # 「いつもの」・過去注文参照のドラフト復元
 │   ├── dashboard_agent.py        # Dashboard Agent サービス（Exception Triage / Resolution プレビュー）
 │   └── tenant_resolver.py        # テナント解決（LINE/電話→テナント紐付け）
 ├── models/                       # Pydantic データモデル

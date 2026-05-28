@@ -5,6 +5,7 @@ import type {
   AgentExceptionType,
   Order,
 } from "../lib/api";
+import OrderDetailContent from "./OrderDetailContent";
 
 const SEVERITY_BG: Record<AgentExceptionSeverity, string> = {
   high: "bg-red-100 text-red-700 border-red-200",
@@ -31,14 +32,23 @@ interface ExceptionModalProps {
   orders: Order[];
   onClose: () => void;
   onOpenOrder: (order: Order) => void;
+  onMemoUpdated?: (order: Order) => void;
 }
 
-export default function ExceptionModal({
-  exceptions,
-  orders,
-  onClose,
-  onOpenOrder,
-}: ExceptionModalProps) {
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
+  } catch {
+    return "";
+  }
+}
+
+/* ── Main modal ──────────────────────────────────────── */
+
+export default function ExceptionModal({ exceptions, orders, onClose, onOpenOrder, onMemoUpdated }: ExceptionModalProps) {
+  const [selectedId, setSelectedId] = useState<string>(exceptions.length > 0 ? exceptions[0].id : "");
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -47,11 +57,11 @@ export default function ExceptionModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const orderMap = new Map(orders.map((o) => [o.uid || o.id, o]));
-
   const highCount = exceptions.filter((e) => e.severity === "high").length;
   const mediumCount = exceptions.filter((e) => e.severity === "medium").length;
+  const selectedExc = exceptions.find((e) => e.id === selectedId);
+  const selectedOrder = selectedExc ? orderMap.get(selectedExc.order_id) : undefined;
 
   if (exceptions.length === 0) return null;
 
@@ -60,7 +70,7 @@ export default function ExceptionModal({
       className="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden fade-in border border-gray-100 flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden fade-in border border-gray-100 flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -92,69 +102,85 @@ export default function ExceptionModal({
           </button>
         </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {exceptions.map((exc) => {
-            const order = orderMap.get(exc.order_id);
-            const isHovered = hoveredId === exc.id;
-            return (
-              <button
-                key={exc.id}
-                type="button"
-                onMouseEnter={() => setHoveredId(exc.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => {
-                  if (order) {
-                    onClose();
-                    onOpenOrder(order);
-                  }
-                }}
-                className={`w-full text-left rounded-xl p-3.5 transition-all border ${
-                  isHovered
-                    ? "bg-brand-50/50 border-brand-200 shadow-sm"
-                    : "bg-white border-gray-100 hover:border-gray-200"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      {SEVERITY_LABEL[exc.severity]}
-                    </span>
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
-                      {TYPE_LABEL[exc.type] ?? exc.type}
+        {/* 2-pane body */}
+        <div className="flex flex-1 min-h-0">
+          {/* Left: exception list */}
+          <div className="w-80 shrink-0 border-r border-gray-100 overflow-y-auto p-3 space-y-2">
+            {exceptions.map((exc) => {
+              const order = orderMap.get(exc.order_id);
+              const isSelected = selectedId === exc.id;
+              return (
+                <button
+                  key={exc.id}
+                  type="button"
+                  onClick={() => setSelectedId(exc.id)}
+                  className={`w-full text-left rounded-xl p-3 transition-all border ${
+                    isSelected
+                      ? "bg-brand-50/60 border-brand-200 shadow-sm ring-1 ring-brand-200"
+                      : "bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        {SEVERITY_LABEL[exc.severity]}
+                      </span>
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
+                        {TYPE_LABEL[exc.type] ?? exc.type}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-400 tabular-nums shrink-0 ml-2">
+                      {order?.order_date ? order.order_date.slice(5, 10).replace("-", "/") : ""}
+                      {order?.created_at ? ` ${formatTime(order.created_at)}` : ""}
                     </span>
                   </div>
-                  <span className="text-[11px] text-gray-400 tabular-nums shrink-0 ml-2">
-                    {(() => {
-                      if (!order?.order_date) return "";
-                      const time = order.created_at
-                        ? new Date(order.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" })
-                        : "";
-                      return `${order.order_date.slice(0, 10)} ${time}`;
-                    })()}
-                  </span>
-                </div>
-                <p className="text-sm font-semibold text-gray-900">{exc.customer_name} 様</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {order?.items.map((i) => `${i.product_name} ${i.quantity ?? ""}${i.unit ?? ""}`).join("、") ?? ""}
-                </p>
-                <p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed line-clamp-2">{exc.summary}</p>
-              </button>
-            );
-          })}
-        </div>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{exc.customer_name} 様</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {order?.items.map((i) => `${i.product_name} ${i.quantity ?? ""}${i.unit ?? ""}`).join("、") ?? ""}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            閉じる
-          </button>
+          {/* Right: order detail (reuses OrderDetailContent) */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {selectedExc && selectedOrder ? (
+              <>
+                <div className="flex-1 overflow-y-auto p-5">
+                  <OrderDetailContent
+                    key={selectedExc.id}
+                    order={selectedOrder}
+                    exceptions={exceptions}
+                    onMemoUpdated={onMemoUpdated}
+                  />
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); onOpenOrder(selectedOrder); }}
+                    className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-xs font-medium transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    受注詳細を開く
+                  </button>
+                </div>
+              </>
+            ) : selectedExc && !selectedOrder ? (
+              <div className="flex items-center justify-center h-full text-sm text-gray-400">
+                受注データが見つかりません
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-gray-400">
+                左のリストから確認事項を選択してください
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

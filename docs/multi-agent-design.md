@@ -19,6 +19,14 @@
 |---|---|---|---|
 | **Learning Service** | 発注パターン学習・統計更新 | `record_pattern`, `update_pattern_confidence`, `build_customer_profile`, `generate_expression_embedding` | Container Apps 内のバックグラウンドタスクとして実装。注文確定イベントで非同期起動。LLM推論不要のためAgentにしない（コスト・速度の最適化） |
 
+**Intent Understanding Service（非Agent）**
+
+`src/services/intent_understanding.py` は、チャネル入口で `new_order` / `modify_current_order` / `partial_cancel` / `full_cancel` / `repeat_previous_order` / `repeat_usual_order` / `inventory_inquiry` / `order_status_inquiry` / `unclear` に分類する。明確な全体キャンセルなどは低レイテンシの deterministic rule で即時分類し、現在注文がある状態でルールだけでは曖昧な文言は Orchestrator Agent に JSON intent 分類を依頼する。以降の注文更新・キャンセル・在庫照会は分類済み Intent を入力として処理する。
+
+**Application Services（非Agent）**
+
+`src/services/order_application.py` は注文状態変更、`src/services/inventory_application.py` は注文ドラフト単位の在庫確認、`src/services/order_memory.py` は「いつもの」「前と同じ」のドラフト復元を担う。Agent は自然文理解と構造化に集中し、DB/API 呼び出しを含む業務ロジックは Connector 経由のサービス層に寄せる。LINE/メール/電話はいずれも同じサービス層を通り、チャネル差分は返信テンプレートと入出力だけに閉じる。
+
 ## 電話同期応答フロー
 
 電話チャネルは、通話中の沈黙を短くしつつ在庫確認まで返答するため、通常の4 Agent直列実行とは別に同期応答用の経路を持つ。

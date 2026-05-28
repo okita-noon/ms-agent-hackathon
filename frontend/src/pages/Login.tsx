@@ -53,7 +53,7 @@ export default function Login() {
             <span className="text-orange-500">gent</span>
           </span>
           <p className="text-sm text-gray-500 mt-1">
-            AI受発注自動一元管理システム
+            受注業務をスマートに
           </p>
         </div>
 
