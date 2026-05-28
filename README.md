@@ -288,7 +288,13 @@ ms-agent-hackathon/
 ├── scripts/                                # 補助スクリプト
 │   ├── seed_orders.py                      # 受注シードデータ投入
 │   ├── seed_users.py                       # ユーザーシードデータ投入
-│   └── sync_products_to_search.py          # 商品マスタ → AI Search 同期
+│   ├── sync_products_to_search.py          # 商品マスタ → AI Search 同期
+│   ├── fix_order_dates_jst.py              # 受注日付をJST基準に補正
+│   ├── line_qc/                            # LINE Tester QC自動実行（デバッグ用）
+│   │   ├── run.py                          # 14ケース自動テスト・docs/line_QC.md に結果追記
+│   │   └── _logs/                          # テスト実行ログ（JSON形式）
+│   └── add_stock/                          # 在庫補充スクリプト（デバッグ・デモ用）
+│       └── run.py                          # Azure SQL の在庫をリセット・補充
 ├── articles/                               # 記事草稿や発信用素材
 ├── images/                                 # 図版・画像
 ├── .github/                                # GitHub 設定
