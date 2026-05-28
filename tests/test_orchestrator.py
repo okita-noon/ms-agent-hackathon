@@ -27,6 +27,7 @@ from src.models.inbound import InboundMessage
 from src.models.intelligence import OrderPattern, ResolvedItem
 from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.models.product import Product, UnitType
 from src.models.session import OrderSession
 
 
@@ -67,6 +68,13 @@ class TestParseOrderItems:
         assert items[0]["raw_name"] == "りんご"
         assert items[0]["quantity"] == 5.0
         assert items[0]["unit"] == "箱"
+
+    def test_normalizes_japanese_quantity_and_kilo(self):
+        items = _parse_order_items("もも一キロ")
+        assert len(items) == 1
+        assert items[0]["raw_name"] == "もも"
+        assert items[0]["quantity"] == 1.0
+        assert items[0]["unit"] == "kg"
 
     def test_multiple_items_comma(self):
         items = _parse_order_items("りんご10箱、バナナ20kg")
@@ -760,6 +768,336 @@ class TestPhoneOrderWithInventory:
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
         assert result["order_accepted"] is True
         assert "りんご1箱" in result["response"]
+
+
+class TestLineOrderCorrections:
+    @pytest.mark.asyncio
+    async def test_line_explicit_non_master_unit_requires_confirmation(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = Product(
+            id="P-002",
+            tenant_id="T-TEST",
+            name="バナナ",
+            default_unit=UnitType.KG,
+            temperature_zone=TemperatureZone.AMBIENT,
+        )
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "ビストロ青葉",
+                "items": [
+                    {
+                        "product_id": "P-002",
+                        "product_name": "バナナ",
+                        "quantity": 1,
+                        "unit": "kg",
+                        "temperature_zone": "常温",
+                    }
+                ],
+                "needs_confirmation": False,
+            },
+            ensure_ascii=False,
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return (f"```json\n{intake_json}\n```", 0.1)
+            if call_count == 2:
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.1)
+            return ("確認しました", 0.1)
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", new_callable=AsyncMock) as mock_check,
+        ):
+            result = await orch.process_order_message(
+                message="バナナ一個",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+        mock_check.assert_not_called()
+        assert result["session_status"] == "awaiting_reply"
+        assert "システム上は1kg" in result["response"]
+        assert result["pending_order_draft"]["items"][0]["quantity"] == 1.0
+        assert result["pending_order_draft"]["items"][0]["unit"] == "kg"
+
+    @pytest.mark.asyncio
+    async def test_line_box_order_converts_to_master_kg_when_unit_weight_exists(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = Product(
+            id="P-005",
+            tenant_id="T-TEST",
+            name="もも",
+            default_unit=UnitType.KG,
+            temperature_zone=TemperatureZone.CHILLED,
+            unit_weight_kg=2.0,
+        )
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-PEACH-KG"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "ビストロ青葉",
+                "items": [
+                    {
+                        "product_id": "P-005",
+                        "product_name": "もも",
+                        "quantity": 1,
+                        "unit": "箱",
+                        "temperature_zone": "冷蔵",
+                    }
+                ],
+                "needs_confirmation": False,
+            },
+            ensure_ascii=False,
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return (f"```json\n{intake_json}\n```", 0.1)
+            if call_count == 2:
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.1)
+            return ("確認しました", 0.1)
+
+        checked_items = [
+            {
+                "product_id": "P-005",
+                "product_name": "もも",
+                "required_qty": 2.0,
+                "unit": "kg",
+                "available_qty": 10,
+                "is_sufficient": True,
+                "needs_confirmation": False,
+            }
+        ]
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=checked_items),
+        ):
+            result = await orch.process_order_message(
+                message="もも1箱",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+        assert result["order_id"] == "ORD-PEACH-KG"
+        assert saved_orders[0].items[0].quantity == 2.0
+        assert saved_orders[0].items[0].unit == "kg"
+
+    @pytest.mark.asyncio
+    async def test_line_kg_order_for_box_master_confirms_internal_box_unit(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = Product(
+            id="P-005",
+            tenant_id="T-TEST",
+            name="もも",
+            default_unit=UnitType.BOX,
+            temperature_zone=TemperatureZone.CHILLED,
+            unit_weight_kg=2.0,
+        )
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "ビストロ青葉",
+                "items": [
+                    {
+                        "product_id": "P-005",
+                        "product_name": "もも",
+                        "quantity": 1,
+                        "unit": "kg",
+                        "temperature_zone": "冷蔵",
+                    }
+                ],
+                "needs_confirmation": False,
+            },
+            ensure_ascii=False,
+        )
+
+        async def mock_invoke(agent, message):
+            return (f"```json\n{intake_json}\n```", 0.1)
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", new_callable=AsyncMock) as mock_check,
+        ):
+            result = await orch.process_order_message(
+                message="もも1kg",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+        mock_check.assert_not_called()
+        assert result["session_status"] == "awaiting_reply"
+        assert "システム上は1箱" in result["response"]
+        assert result["pending_order_draft"]["items"][0]["quantity"] == 1.0
+        assert result["pending_order_draft"]["items"][0]["unit"] == "箱"
+
+    @pytest.mark.asyncio
+    async def test_line_watermelon_order_with_stock_is_accepted(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = Product(
+            id="P-008",
+            tenant_id="T-TEST",
+            name="スイカ",
+            default_unit=UnitType.PIECE,
+            temperature_zone=TemperatureZone.AMBIENT,
+        )
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-WATERMELON"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "customer_name": "ビストロ青葉",
+                "items": [
+                    {
+                        "product_id": "P-008",
+                        "product_name": "スイカ",
+                        "quantity": 1,
+                        "unit": "個",
+                        "temperature_zone": "常温",
+                    }
+                ],
+                "needs_confirmation": False,
+            },
+            ensure_ascii=False,
+        )
+
+        call_count = 0
+
+        async def mock_invoke(agent, message):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return (f"```json\n{intake_json}\n```", 0.1)
+            if call_count == 2:
+                return ('```json\n{"anomalies": [], "confirmation_needed": false}\n```', 0.1)
+            return ("確認しました", 0.1)
+
+        checked_items = [
+            {
+                "product_id": "P-008",
+                "product_name": "スイカ",
+                "required_qty": 1.0,
+                "unit": "個",
+                "available_qty": 10,
+                "is_sufficient": True,
+                "needs_confirmation": False,
+            }
+        ]
+
+        with (
+            patch.object(orch, "_invoke_agent", side_effect=mock_invoke),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=checked_items),
+        ):
+            result = await orch.process_order_message(
+                message="スイカ一個",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+            )
+
+        assert result["order_id"] == "ORD-WATERMELON"
+        assert "在庫が0" not in result["response"]
+        assert saved_orders[0].items[0].product_id == "P-008"
+        assert saved_orders[0].items[0].quantity == 1.0
+        assert saved_orders[0].items[0].unit == "個"
+
+    @pytest.mark.asyncio
+    async def test_line_quantity_reply_updates_single_pending_item_without_llm(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.get_by_id.return_value = Product(
+            id="P-005",
+            tenant_id="T-TEST",
+            name="もも",
+            default_unit=UnitType.KG,
+            temperature_zone=TemperatureZone.CHILLED,
+        )
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-PEACH"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-005",
+                    "product_name": "もも",
+                    "quantity": 1,
+                    "unit": "個",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+        }
+        checked_items = [
+            {
+                "product_id": "P-005",
+                "product_name": "もも",
+                "required_qty": 1.0,
+                "unit": "kg",
+                "available_qty": 10,
+                "is_sufficient": True,
+                "needs_confirmation": False,
+            }
+        ]
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=checked_items),
+        ):
+            result = await orch.process_order_message(
+                message="1kg",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                pending_order_draft=pending_draft,
+                session_id="sess-1",
+            )
+
+        mock_invoke.assert_not_called()
+        assert result["order_id"] == "ORD-PEACH"
+        assert saved_orders[0].items[0].product_name == "もも"
+        assert saved_orders[0].items[0].quantity == 1.0
+        assert saved_orders[0].items[0].unit == "kg"
 
 
 class TestResponsePolicy:
