@@ -102,13 +102,9 @@ def _run(conn_str: str, stock: dict[str, int], dry_run: bool) -> None:
             print(f"  {s}")
         return
 
+    # pymssql を優先（pyodbc はODBCドライバー要件で環境依存が大きい）
     try:
-        import pyodbc
-        conn = pyodbc.connect(conn_str)
-    except ImportError:
-        # pyodbc がなければ pymssql を試みる
         import pymssql  # type: ignore
-        # pymssql 用に接続文字列をパース
         parts = {k.strip(): v.strip() for k, v in
                  (item.split("=", 1) for item in conn_str.split(";") if "=" in item)}
         server = parts.get("Server", "").replace("tcp:", "").split(",")[0]
@@ -116,6 +112,9 @@ def _run(conn_str: str, stock: dict[str, int], dry_run: bool) -> None:
         user = parts.get("User ID", parts.get("UID", ""))
         password = parts.get("Password", parts.get("PWD", ""))
         conn = pymssql.connect(server=server, database=db, user=user, password=password)
+    except ImportError:
+        import pyodbc
+        conn = pyodbc.connect(conn_str)
 
     cursor = conn.cursor()
     ok = 0
