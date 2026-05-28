@@ -128,7 +128,7 @@ INSERT INTO products (product_id, tenant_id, name, default_unit, temperature_zon
     (N'P-006', N'T-001', N'いちご', N'パック', N'常温', 0, 633),
     (N'P-007', N'T-001', N'メロン', N'玉', N'冷凍', 0, NULL),
     (N'P-008', N'T-001', N'スイカ', N'個', N'常温', 0, NULL),
-    (N'P-009', N'T-001', N'なし', N'個', N'冷蔵', 0, NULL),
+    (N'P-009', N'T-001', N'梨', N'個', N'冷蔵', 0, NULL),
     (N'P-010', N'T-001', N'マンゴー', N'個', N'冷凍', 0, NULL),
     (N'P-011', N'T-001', N'キウイ', N'個', N'常温', 0, NULL),
     (N'P-012', N'T-001', N'さくらんぼ', N'パック', N'冷蔵', 0, NULL),

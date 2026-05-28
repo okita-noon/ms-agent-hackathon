@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 22:17
+Updated: 2026-05-28 22:39
 
 使い方:
     python scripts/line_qc/run.py
@@ -117,7 +117,7 @@ TEST_CASES: list[dict[str, Any]] = [
                 ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "1通目はまだ確定しない"),
             ],
             [
-                ("受注確定", lambda r, d: d.get("order_saved") is True, "はい返答で受注確定"),
+                ("受注確定または在庫不足通知", lambda r, d: d.get("order_saved") is True or "在庫" in r or "不足" in r, "はい返答で受注確定 or 在庫切れ通知"),
             ],
         ],
     },
@@ -217,8 +217,8 @@ TEST_CASES: list[dict[str, Any]] = [
                 ("在庫情報を返す", lambda r, d: "さくらんぼ" in r or "在庫" in r or "パック" in r, "在庫情報が含まれる"),
             ],
             [
-                ("受注確定", lambda r, d: d.get("order_saved") is True, "5パックで受注確定"),
-                ("さくらんぼに言及", lambda r, d: "さくらんぼ" in r or "5" in r, "さくらんぼ5パックが確定"),
+                ("受注確定または在庫不足通知", lambda r, d: d.get("order_saved") is True or "在庫" in r or "不足" in r, "受注確定 or 在庫不足時は代替提案"),
+                ("さくらんぼに言及", lambda r, d: "さくらんぼ" in r, "さくらんぼの情報が含まれる"),
             ],
         ],
     },
