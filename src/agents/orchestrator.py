@@ -2021,6 +2021,16 @@ class OrderOrchestrator:
         remarks: str | None = None,
         existing_order: Order | None = None,
     ) -> Order:
+        # delivery_date が文字列で渡された場合は date に変換
+        raw_delivery_date = draft.get("delivery_date")
+        if isinstance(raw_delivery_date, str):
+            try:
+                from datetime import date as _date
+
+                draft = {**draft, "delivery_date": _date.fromisoformat(raw_delivery_date)}
+            except (ValueError, AttributeError):
+                draft = {**draft, "delivery_date": None}
+
         items = []
         for item_data in draft.get("items", []):
             items.append(
