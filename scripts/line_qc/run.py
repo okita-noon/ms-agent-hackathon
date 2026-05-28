@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 21:31
+Updated: 2026-05-28 22:02
 
 使い方:
     python scripts/line_qc/run.py
@@ -184,7 +184,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("レモンに言及", lambda r, d: "レモン" in r, "レモンの情報が含まれる"),
-                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
+                ("正しい配送日(6/1)が含まれる", lambda r, d: "6/1" in r or "6月1日" in r or "1日" in r, "確定時の配送日6/1がサマリに引き継がれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],
@@ -268,7 +268,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("アボカド・ブルーベリーが残る", lambda r, d: "アボカド" in r or "ブルーベリー" in r, "一部キャンセル後の残注文が正しい"),
-                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
+                ("正しい配送日(6/1)が含まれる", lambda r, d: "6/1" in r or "6月1日" in r or "1日" in r, "確定時の配送日6/1がサマリに引き継がれる"),
             ],
         ],
     },
@@ -286,7 +286,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("マンゴー・ブルーベリーに言及", lambda r, d: "マンゴー" in r or "ブルーベリー" in r, "注文内容が含まれる"),
-                ("正しい配送日(5/30)が含まれる", lambda r, d: "5/30" in r or "30日" in r, "確定時の配送日5/30がサマリに引き継がれる"),
+                ("正しい配送日(6/1)が含まれる", lambda r, d: "6/1" in r or "6月1日" in r or "1日" in r, "確定時の配送日6/1がサマリに引き継がれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
             ],
         ],

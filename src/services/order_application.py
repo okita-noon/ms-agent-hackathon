@@ -42,6 +42,16 @@ class OrderApplicationService:
 
         repo = self._ctx.get_connector("IOrderRepository")
         await repo.update_status(self._ctx.tenant_id, order.id, OrderStatus.CANCELLED)
+
+        # キャンセル分の在庫引当を解除（reserved_qty を戻す）
+        inventory_svc = self._ctx.get_connector("IInventoryService")
+        for item in order.items:
+            if item.product_id and item.quantity:
+                try:
+                    await inventory_svc.release(self._ctx.tenant_id, item.product_id, item.quantity)
+                except Exception:
+                    pass  # 引当解除失敗は注文キャンセル自体には影響させない
+
         await self._event_broker.publish(
             "order_updated",
             self._ctx.tenant_id,

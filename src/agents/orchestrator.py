@@ -2100,6 +2100,18 @@ class OrderOrchestrator:
         is_existing_order = existing_order is not None
         order_id = await repo.save(order)
         order.id = order_id
+
+        # 受注確定時に在庫引当を実行
+        if status == OrderStatus.ACCEPTED:
+            inventory_svc = self._ctx.get_connector("IInventoryService")
+            for item in order.items:
+                if item.product_id and item.quantity:
+                    try:
+                        await inventory_svc.reserve(self._ctx.tenant_id, item.product_id, item.quantity)
+                        logger.info("Reserved %s x %s for order %s", item.quantity, item.product_id, order.id)
+                    except Exception:
+                        logger.warning("Failed to reserve inventory for %s (order %s)", item.product_id, order.id)
+
         await dashboard_event_broker.publish(
             "order_updated" if is_existing_order else "order_created",
             self._ctx.tenant_id,
