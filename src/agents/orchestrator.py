@@ -350,19 +350,19 @@ class OrderOrchestrator:
                 customer_id = customer.id if customer else None
                 debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={customer_id or '未特定'}")
             if customer_id:
-                # current_orderが渡っている場合はそれだけ表示（テスト注文の混入を防ぐ）
-                if current_order and current_order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}:
+                # current_orderが渡っている場合はそれだけ表示（他セッション注文の混入を防ぐ）
+                if current_order and current_order.status == OrderStatus.ACCEPTED:
                     open_orders = [current_order]
                     debug_log.append(f"[注文照会] current_orderを使用: {current_order.id}")
                 else:
                     repo = self._ctx.get_connector("IOrderRepository")
                     customer_orders = await repo.list_by_customer(customer_id, limit=20)
                     today = today_jst()
+                    # ACCEPTED のみ表示（NEEDS_REVIEWは在庫切れ等の問題注文のため除外）
                     open_orders = [
                         o
                         for o in customer_orders
-                        if o.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
-                        and (o.delivery_date is None or o.delivery_date >= today)
+                        if o.status == OrderStatus.ACCEPTED and (o.delivery_date is None or o.delivery_date >= today)
                     ]
                     debug_log.append(f"[注文照会] list_by_customerで{len(open_orders)}件取得")
                 if open_orders:
