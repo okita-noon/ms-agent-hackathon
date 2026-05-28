@@ -103,10 +103,29 @@ async def _run_once(tenant_id: str) -> None:
         )
 
 
+def _seconds_until_next_slot() -> float:
+    """JST 0:00 起点で30分刻みの次の実行時刻までの秒数を返す。
+    例: 現在 0:10 → 次は 0:30 → 待ち 20分
+        現在 0:30 → 次は 1:00 → 待ち 30分
+        現在 0:00 → 次は 0:30 → 待ち 30分
+    """
+    now_jst = datetime.now(JST)
+    elapsed_seconds = now_jst.hour * 3600 + now_jst.minute * 60 + now_jst.second
+    remainder = elapsed_seconds % INTERVAL_SECONDS
+    wait = INTERVAL_SECONDS - remainder if remainder > 0 else INTERVAL_SECONDS
+    return float(wait)
+
+
 async def run_order_status_updater(tenant_ids: list[str]) -> None:
-    """バックグラウンドで定期的にステータス更新を実行するループ。"""
-    logger.info("Order status updater started (interval=%ds)", INTERVAL_SECONDS)
+    """JST 0:00 起点で30分ごとにステータス更新を実行するループ。"""
+    wait = _seconds_until_next_slot()
+    logger.info(
+        "Order status updater started: next run in %.0fs (at %s JST)",
+        wait,
+        (datetime.now(JST) + timedelta(seconds=wait)).strftime("%H:%M"),
+    )
     while True:
-        await asyncio.sleep(INTERVAL_SECONDS)
+        await asyncio.sleep(_seconds_until_next_slot())
+        logger.info("Order status updater running at %s JST", datetime.now(JST).strftime("%H:%M"))
         for tenant_id in tenant_ids:
             await _run_once(tenant_id)
