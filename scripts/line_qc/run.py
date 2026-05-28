@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 17:23
+Updated: 2026-05-28 18:00
 
 使い方:
     python scripts/line_qc/run.py
@@ -553,6 +553,23 @@ def _build_section(
     return "\n".join(lines)
 
 
+def _update_toc(content: str, section_no: str, date_str: str, n_cases: int) -> str:
+    """目次の「4. 実施結果ログ」配下に新しいエントリを追加する。"""
+    anchor = section_no.replace(".", "") + f"-{date_str}-実施分{n_cases}ケース"
+    new_entry = f"  - [{section_no}. {date_str} 実施分（{n_cases}ケース）](#{anchor})"
+
+    # 「4.X. 次回テスト記録枠」の行の直前に挿入
+    toc_marker = "  - [4."
+    next_entry_marker = "  - [4." + section_no.split(".")[1] + ". 次回テスト記録枠"
+
+    if next_entry_marker in content:
+        return content.replace(next_entry_marker, new_entry + "\n" + next_entry_marker)
+
+    # マーカーが見つからない場合は「5. 改善履歴」の直前に挿入
+    fallback = "- [5. 改善履歴"
+    return content.replace(fallback, new_entry + "\n" + fallback)
+
+
 def _next_section_no(content: str) -> str:
     """line_QC.md の最後の 4.X を見て次の番号を返す。"""
     matches = re.findall(r"^### (4\.\d+)\.", content, re.MULTILINE)
@@ -646,6 +663,7 @@ async def main(args: argparse.Namespace) -> None:
         # マーカーが見つからない場合は末尾の「## 5.」の直前に挿入
         updated = re.sub(r"(## 5\.)", new_section + "\n\\1", qc_content, count=1)
 
+    updated = _update_toc(updated, section_no, now_jst.strftime("%Y-%m-%d"), len(case_results))
     QC_DOC.write_text(updated, encoding="utf-8")
     print(f"\n結果を {QC_DOC} の {section_no} セクションに追記しましたわ。")
 
