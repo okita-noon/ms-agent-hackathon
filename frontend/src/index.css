@@ -180,3 +180,60 @@ tr.row-hover:hover {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
   40% { transform: translateY(-4px); opacity: 1; }
 }
+
+/* foogent AI loading banner */
+.ai-banner-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.ai-banner-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: aiBannerShimmer 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes aiBannerShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.ai-icon-glow {
+  animation: aiIconGlow 2s ease-in-out infinite;
+}
+@keyframes aiIconGlow {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(51, 102, 255, 0)); }
+  50% { filter: drop-shadow(0 0 8px rgba(51, 102, 255, 0.5)); }
+}
+
+.ai-icon-ring {
+  animation: aiIconRing 2s ease-out infinite;
+}
+@keyframes aiIconRing {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  70% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.ai-text-fade-in {
+  animation: aiTextFade 0.4s ease-out;
+}
+@keyframes aiTextFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mini shimmer for table cells */
+.ai-cell-shimmer {
+  background: linear-gradient(90deg, #eef4ff 25%, #d9e5ff 50%, #eef4ff 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
