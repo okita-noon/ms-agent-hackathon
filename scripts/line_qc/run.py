@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 22:02
+Updated: 2026-05-28 22:17
 
 使い方:
     python scripts/line_qc/run.py
@@ -108,7 +108,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "在庫不足 → 代替数量で確定",
         "customer_id": "C-002",
         "messages": [
-            "いちじく50箱お願いします",
+            "スイカ50個お願いします",
             "はい、お願いします",
         ],
         "checks": [
