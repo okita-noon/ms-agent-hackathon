@@ -7,7 +7,7 @@ from unittest.mock import ANY, AsyncMock, patch
 import pytest
 
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
-from src.services.line_handler import LineWebhookHandler, _EventDedup
+from src.services.line_handler import LineWebhookHandler, _EventDedup, _pick_current_order
 
 
 class TestEventDedup:
@@ -70,6 +70,49 @@ class TestVerifySignature:
             azure_openai_key="test-key",
         )
         assert handler.verify_signature(b"body", "any") is False
+
+
+class TestPickCurrentOrder:
+    def test_skips_needs_review_orders_created_for_unavailable_items(self):
+        review_order = Order(
+            uid="ORD-REVIEW",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="株式会社テスト",
+            order_date=date.today(),
+            source=OrderSource.LINE,
+            status=OrderStatus.NEEDS_REVIEW,
+            items=[
+                OrderItem(
+                    product_id="P-001",
+                    product_name="りんご",
+                    quantity=10,
+                    unit="箱",
+                    temperature_zone=TemperatureZone.CHILLED,
+                )
+            ],
+        )
+        accepted_order = Order(
+            uid="ORD-ACCEPTED",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="株式会社テスト",
+            order_date=date.today(),
+            source=OrderSource.LINE,
+            status=OrderStatus.ACCEPTED,
+            items=[
+                OrderItem(
+                    product_id="P-002",
+                    product_name="バナナ",
+                    quantity=1,
+                    unit="kg",
+                    temperature_zone=TemperatureZone.AMBIENT,
+                )
+            ],
+        )
+
+        assert _pick_current_order([review_order]) is None
+        assert _pick_current_order([review_order, accepted_order]).id == "ORD-ACCEPTED"
 
 
 class TestHandleWebhook:

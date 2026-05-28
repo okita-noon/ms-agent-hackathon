@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from datetime import date
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -29,6 +30,7 @@ from src.models.message_history import MessageHistory
 from src.services import delivery_estimator
 from src.models.customer import DeliveryLeadTime
 from src.models.order import DeliveryRoute, Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
+from src.models.product import UnitType
 from src.models.session import OrderSession
 from src.models.intelligence import ResolvedItem
 from src.plugins.communication_plugin import CommunicationPlugin
@@ -368,6 +370,22 @@ class OrderOrchestrator:
                 debug_log.append(f"[判定] ドラフトあるが肯定返答ではない (message={message!r})")
         else:
             _affirmative = False
+        if pending_order_draft and not _affirmative:
+            pending_quantity_result = await self._try_handle_pending_quantity_reply(
+                message=message,
+                line_user_id=line_user_id,
+                reply_token=reply_token,
+                source=source,
+                response_callback=response_callback,
+                pending_order_draft=pending_order_draft,
+                session_id=session_id,
+                current_order=current_order if current_order_editable else None,
+                debug_log=debug_log,
+            )
+            if pending_quantity_result:
+                result.update(pending_quantity_result)
+                result["debug_log"] = debug_log
+                return result
         if pending_order_draft and _affirmative:
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
@@ -834,6 +852,139 @@ class OrderOrchestrator:
             await self._send_line_message(response_text, reply_token, line_user_id)
         return result
 
+    async def _try_handle_pending_quantity_reply(
+        self,
+        *,
+        message: str,
+        line_user_id: str,
+        reply_token: str | None,
+        source: OrderSource,
+        response_callback: Callable[[str], Awaitable[None]] | None,
+        pending_order_draft: dict,
+        session_id: str | None,
+        current_order: Order | None,
+        debug_log: list[str] | None = None,
+    ) -> dict | None:
+        updated_draft = await _apply_quantity_reply_to_single_pending_item(self._ctx, pending_order_draft, message)
+        if not updated_draft:
+            return None
+
+        if debug_log is not None:
+            item = updated_draft["items"][0]
+            debug_log.append(
+                "[ドラフト] 数量のみの返信を単一確認待ち商品へ反映: "
+                f"{item.get('product_name')} {item.get('quantity')}{item.get('unit')}"
+            )
+
+        invalid_quantity_items = _find_non_positive_quantity_items(updated_draft)
+        if invalid_quantity_items:
+            response_text = _format_invalid_quantity_response(invalid_quantity_items, source=source)
+            result = {
+                "response": response_text,
+                "customer_id": updated_draft.get("customer_id"),
+                "pending_order_draft": updated_draft,
+                "session_status": "awaiting_reply",
+            }
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        if updated_draft.get("needs_confirmation"):
+            response_text = updated_draft.get("confirmation_message") or "数量と単位をご確認ください。"
+            result = {
+                "response": response_text,
+                "customer_id": updated_draft.get("customer_id"),
+                "pending_order_draft": updated_draft,
+                "session_status": "awaiting_reply",
+            }
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        checked_items = await _check_draft_inventory(self._ctx, updated_draft)
+        out_of_stock, partial_stock = _classify_inventory_shortage(checked_items)
+        if out_of_stock or partial_stock:
+            response_text = _build_inventory_shortage_response(
+                checked_items,
+                source=source,
+            ) or _format_phone_inventory_response(
+                checked_items,
+                needs_confirmation=True,
+            )
+            result = {
+                "response": response_text,
+                "customer_id": updated_draft.get("customer_id"),
+                "pending_order_draft": updated_draft,
+                "inventory": checked_items,
+            }
+            if partial_stock:
+                updated_draft["inventory_checked"] = checked_items
+                result["session_status"] = "awaiting_reply"
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        route = _resolve_delivery_route(updated_draft, self._ctx)
+        lead_time = await _resolve_lead_time(updated_draft, self._ctx)
+        min_d, max_d = delivery_estimator.estimate(
+            route,
+            lead_time=lead_time,
+            tenant_config=self._ctx.config,
+        )
+        delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
+        if not updated_draft.get("delivery_date"):
+            updated_draft["delivery_date"] = min_d
+
+        saved_order = await self.create_order_from_draft(
+            updated_draft,
+            source=source,
+            session_id=session_id,
+            existing_order=current_order,
+            status=OrderStatus.ACCEPTED,
+        )
+        asyncio.create_task(self._run_learning(saved_order, message))
+
+        if source == OrderSource.EMAIL:
+            response_text = _build_email_from_template(
+                "メール返信_受注確定.txt",
+                updated_draft,
+                delivery_estimate=delivery_estimate_text,
+            ).replace(
+                "ご注文を承りました。",
+                f"ご注文を承りました。（受注No: {saved_order.id}）",
+            )
+        elif source == OrderSource.LINE:
+            response_text = _build_line_from_template(
+                "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                items=saved_order.items,
+                delivery_estimate=delivery_estimate_text,
+            )
+        else:
+            response_text = _insert_order_id(
+                _format_phone_inventory_response(checked_items, needs_confirmation=False),
+                saved_order.id,
+            )
+
+        result = {
+            "response": response_text,
+            "order_id": saved_order.id,
+            "customer_id": saved_order.customer_id,
+            "current_order_id": saved_order.id,
+            "current_order_snapshot": _build_current_order_snapshot(saved_order),
+            "current_order_editable": _is_order_editable(saved_order),
+        }
+        if response_callback:
+            await response_callback(response_text)
+        else:
+            await self._send_line_message(response_text, reply_token, line_user_id)
+        return result
+
     async def _run_single_agent(
         self,
         message: str,
@@ -940,6 +1091,8 @@ class OrderOrchestrator:
             else:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
+        if await _normalize_explicit_message_items_to_master_units(self._ctx, intake_draft, message, debug_log):
+            intake_text = json.dumps(intake_draft, ensure_ascii=False, default=str)
 
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
@@ -989,7 +1142,7 @@ class OrderOrchestrator:
         inventory_shortage_response: str | None = None
         has_partial_stock = False
         has_only_out_of_stock = False
-        if not anomaly_confirmation_needed and items:
+        if not needs_confirmation and not anomaly_confirmation_needed and items:
             draft_for_check = _build_draft_from_intake(intake_draft) or {}
             checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
             for ci in checked_items:
@@ -1020,6 +1173,8 @@ class OrderOrchestrator:
                 debug_log.append(f"[在庫] 全品在庫OK ({len(checked_items)}件チェック)")
         elif anomaly_confirmation_needed:
             debug_log.append("[在庫] スキップ（異常検知で確認待ち）")
+        elif needs_confirmation:
+            debug_log.append("[在庫] スキップ（顧客確認待ち）")
         else:
             debug_log.append("[在庫] スキップ（itemsなし）")
 
@@ -1110,6 +1265,9 @@ class OrderOrchestrator:
         if inventory_shortage_response:
             debug_log.append("[応答] 在庫不足テンプレート返答")
             response_text = inventory_shortage_response
+        elif source == OrderSource.LINE and needs_confirmation and intake_draft.get("confirmation_message"):
+            debug_log.append("[応答] LINE単位換算確認メッセージ")
+            response_text = intake_draft["confirmation_message"]
         elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
             debug_log.append("[応答] メール受注確定テンプレート")
             response_text = _build_email_from_template(
@@ -1297,6 +1455,8 @@ class OrderOrchestrator:
             else:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
+        if await _normalize_explicit_message_items_to_master_units(self._ctx, intake_draft, message, debug_log):
+            intake_text = json.dumps(intake_draft, ensure_ascii=False, default=str)
 
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
@@ -1345,7 +1505,7 @@ class OrderOrchestrator:
         inventory_shortage_response: str | None = None
         has_partial_stock = False
         has_only_out_of_stock = False
-        if not anomaly_confirmation_needed and items:
+        if not needs_confirmation and not anomaly_confirmation_needed and items:
             draft_for_check = _build_draft_from_intake(intake_draft) or {}
             checked_items = await _check_draft_inventory(self._ctx, draft_for_check)
             for ci in checked_items:
@@ -1376,6 +1536,8 @@ class OrderOrchestrator:
                 debug_log.append(f"[在庫] 全品在庫OK ({len(checked_items)}件チェック)")
         elif anomaly_confirmation_needed:
             debug_log.append("[在庫] スキップ（異常検知で確認待ち）")
+        elif needs_confirmation:
+            debug_log.append("[在庫] スキップ（顧客確認待ち）")
         else:
             debug_log.append("[在庫] スキップ（itemsなし）")
 
@@ -1465,6 +1627,9 @@ class OrderOrchestrator:
         if inventory_shortage_response:
             debug_log.append("[応答] 在庫不足テンプレート返答")
             response_text = inventory_shortage_response
+        elif source == OrderSource.LINE and needs_confirmation and intake_draft.get("confirmation_message"):
+            debug_log.append("[応答] LINE単位換算確認メッセージ")
+            response_text = intake_draft["confirmation_message"]
         elif source == OrderSource.EMAIL and not needs_confirmation and intake_draft:
             debug_log.append("[応答] メール受注確定テンプレート")
             response_text = _build_email_from_template(
@@ -2088,15 +2253,13 @@ def _format_invalid_quantity_response(items: list[dict], *, source: OrderSource)
 
 
 def _extract_quantity_only_reply(message: str) -> tuple[float, str | None] | None:
-    normalized = re.sub(r"\s+", "", message)
+    normalized = re.sub(r"\s+", "", _normalize_quantity_text(message))
     normalized = re.sub(r"^(じゃあ|では|それなら|なら|それでは|やっぱり)", "", normalized)
     normalized = re.sub(r"(でお願いします|お願いします|で|にします|に変更|ください|下さい|。|！|!)$", "", normalized)
     match = re.fullmatch(r"(?P<qty>\d+(?:\.\d+)?)(?P<unit>kg|キロ|箱|個|本|袋|ケース|パック|玉|枚)?", normalized)
     if not match:
         return None
-    unit = match.group("unit")
-    if unit == "キロ":
-        unit = "kg"
+    unit = _normalize_unit(match.group("unit"))
     return float(match.group("qty")), unit
 
 
@@ -2462,8 +2625,203 @@ def _enforce_response_policy(
     return replacement
 
 
+def _normalize_unit(unit: str | None) -> str | None:
+    if not unit:
+        return None
+    normalized = unicodedata.normalize("NFKC", unit).strip()
+    if normalized == "キロ":
+        return "kg"
+    return normalized
+
+
+def _normalize_quantity_text(message: str) -> str:
+    normalized = unicodedata.normalize("NFKC", message)
+    replacements = {
+        "一": "1",
+        "二": "2",
+        "三": "3",
+        "四": "4",
+        "五": "5",
+        "六": "6",
+        "七": "7",
+        "八": "8",
+        "九": "9",
+    }
+    for old, new in replacements.items():
+        normalized = normalized.replace(old, new)
+    return normalized
+
+
+async def _apply_quantity_reply_to_single_pending_item(ctx: TenantContext, draft: dict, message: str) -> dict | None:
+    quantity_reply = _extract_quantity_only_reply(message)
+    items = draft.get("items", []) or []
+    if not quantity_reply or len(items) != 1:
+        return None
+
+    quantity, unit = quantity_reply
+    updated = copy.deepcopy(draft)
+    item = updated["items"][0]
+    product = None
+    product_id = item.get("product_id")
+    if product_id:
+        try:
+            product_master = ctx.get_connector("IProductMaster")
+            product = await product_master.get_by_id(ctx.tenant_id, product_id)
+        except Exception:
+            logger.debug("Could not load product while applying quantity reply: %s", product_id)
+    if product:
+        normalized = _normalize_item_quantity_to_master_unit(
+            product=product,
+            product_name=item.get("product_name") or "商品",
+            requested_quantity=quantity,
+            requested_unit=unit or item.get("unit"),
+        )
+        if normalized:
+            item["quantity"] = normalized["quantity"]
+            item["unit"] = normalized["unit"]
+            item["requested_quantity"] = quantity
+            item["requested_unit"] = unit
+            if normalized.get("needs_confirmation"):
+                updated["needs_confirmation"] = True
+                updated["confirmation_message"] = normalized.get("confirmation_message")
+        else:
+            item["quantity"] = quantity
+            if unit:
+                item["unit"] = unit
+    else:
+        item["quantity"] = quantity
+        if unit:
+            item["unit"] = unit
+    updated.pop("inventory_checked", None)
+    return updated
+
+
+PACKAGE_UNITS = {"箱", "個", "パック", "房", "玉", "ケース", "袋", "本", "枚"}
+
+
+async def _normalize_explicit_message_items_to_master_units(
+    ctx: TenantContext,
+    intake_draft: dict,
+    message: str,
+    debug_log: list[str] | None = None,
+) -> bool:
+    """顧客の明示単位を読み取りつつ、内部ドラフトは商品マスタ単位へ正規化する。"""
+    parsed_items = _parse_order_items(message)
+    if not parsed_items or not intake_draft.get("items"):
+        return False
+
+    product_master = ctx.get_connector("IProductMaster")
+    parsed_by_product_id: dict[str, list[dict]] = {}
+    products_by_id: dict[str, object] = {}
+    for parsed in parsed_items:
+        try:
+            product = await product_master.fuzzy_match(ctx.tenant_id, parsed["raw_name"])
+        except Exception:
+            logger.debug("Could not match explicit message item: %s", parsed["raw_name"])
+            continue
+        if not product:
+            continue
+        product_id = getattr(product, "id", None)
+        if not isinstance(product_id, str):
+            continue
+        products_by_id[product_id] = product
+        parsed_by_product_id.setdefault(product_id, []).append(parsed)
+
+    if not parsed_by_product_id:
+        return False
+
+    changed = False
+    confirmation_messages: list[str] = []
+    for item in intake_draft.get("items", []) or []:
+        product_id = item.get("product_id")
+        candidates = parsed_by_product_id.get(product_id) or []
+        if not candidates:
+            continue
+        parsed = candidates.pop(0)
+        product = products_by_id.get(product_id)
+        if not product:
+            continue
+
+        original_quantity = item.get("quantity")
+        original_unit = item.get("unit")
+        normalized = _normalize_item_quantity_to_master_unit(
+            product=product,
+            product_name=item.get("product_name") or parsed.get("raw_name") or "商品",
+            requested_quantity=parsed["quantity"],
+            requested_unit=parsed.get("unit") or item.get("unit"),
+        )
+        if not normalized:
+            continue
+
+        item["quantity"] = normalized["quantity"]
+        item["unit"] = normalized["unit"]
+        item["requested_quantity"] = parsed["quantity"]
+        item["requested_unit"] = parsed.get("unit")
+        item["requested_expression"] = (
+            f"{parsed.get('raw_name', '')}{_format_qty(parsed['quantity'])}{parsed.get('unit') or ''}"
+        )
+        changed = changed or item.get("quantity") != original_quantity or item.get("unit") != original_unit
+        if normalized.get("needs_confirmation"):
+            intake_draft["needs_confirmation"] = True
+            if normalized.get("confirmation_message"):
+                confirmation_messages.append(normalized["confirmation_message"])
+        if debug_log is not None and (item.get("quantity") != original_quantity or item.get("unit") != original_unit):
+            debug_log.append(
+                "[Intake補正] 顧客入力を商品マスタ単位へ正規化: "
+                f"{item.get('product_name')} {original_quantity}{original_unit} -> "
+                f"{item.get('quantity')}{item.get('unit')}"
+            )
+
+    if confirmation_messages:
+        intake_draft["confirmation_message"] = "\n".join(confirmation_messages)
+    return changed or bool(confirmation_messages)
+
+
+def _normalize_item_quantity_to_master_unit(
+    *,
+    product: object,
+    product_name: str,
+    requested_quantity: float,
+    requested_unit: str | None,
+) -> dict | None:
+    master_unit = getattr(getattr(product, "default_unit", None), "value", None) or getattr(
+        product, "default_unit", None
+    )
+    if not isinstance(master_unit, str) or not master_unit:
+        return None
+
+    requested_unit = _normalize_unit(requested_unit) or master_unit
+    unit_weight_kg = getattr(product, "unit_weight_kg", None)
+    try:
+        weight_kg = float(unit_weight_kg) if unit_weight_kg is not None else None
+    except (TypeError, ValueError):
+        weight_kg = None
+
+    if requested_unit == master_unit:
+        return {"quantity": requested_quantity, "unit": master_unit, "needs_confirmation": False}
+
+    if master_unit == UnitType.KG.value and requested_unit in PACKAGE_UNITS and weight_kg:
+        return {
+            "quantity": requested_quantity * weight_kg,
+            "unit": master_unit,
+            "needs_confirmation": False,
+        }
+
+    confirmation = (
+        f"{product_name}{_format_qty(requested_quantity)}{requested_unit}とのご注文ですが、"
+        f"システム上は{_format_qty(requested_quantity)}{master_unit}として扱います。"
+        "この内容でよろしいでしょうか？"
+    )
+    return {
+        "quantity": requested_quantity,
+        "unit": master_unit,
+        "needs_confirmation": True,
+        "confirmation_message": confirmation,
+    }
+
+
 def _parse_order_items(message: str) -> list[dict]:
-    normalized = message.replace("、", "\n").replace(",", "\n")
+    normalized = _normalize_quantity_text(message).replace("、", "\n").replace(",", "\n")
     normalized = re.sub(r"\s*(?:と|及び|および)\s*", "\n", normalized)
     lines = [line.strip(" ・-　\t") for line in normalized.splitlines()]
 
@@ -2471,7 +2829,7 @@ def _parse_order_items(message: str) -> list[dict]:
     for line in lines:
         match = re.search(
             r"(?P<name>.+?)\s*(?P<qty>\d+(?:\.\d+)?)\s*"
-            r"(?P<unit>kg|g|箱|個|パック|房|玉|ケース|袋|本|枚)?",
+            r"(?P<unit>kg|キロ|g|箱|個|パック|房|玉|ケース|袋|本|枚)?",
             line,
             flags=re.IGNORECASE,
         )
@@ -2484,7 +2842,7 @@ def _parse_order_items(message: str) -> list[dict]:
             {
                 "raw_name": raw_name,
                 "quantity": float(match.group("qty")),
-                "unit": match.group("unit"),
+                "unit": _normalize_unit(match.group("unit")),
             }
         )
     return items

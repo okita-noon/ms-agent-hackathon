@@ -389,7 +389,7 @@ def _build_message_history_id(
 
 
 def _pick_current_order(orders: list[Order]) -> Order | None:
-    open_statuses = {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW, OrderStatus.SHIPPING}
+    open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
     candidates = [order for order in orders if order.status in open_statuses]
     if not candidates:
         return None
@@ -397,7 +397,7 @@ def _pick_current_order(orders: list[Order]) -> Order | None:
 
 
 def _is_order_editable(order: Order) -> bool:
-    return order.status in {OrderStatus.ACCEPTED, OrderStatus.NEEDS_REVIEW}
+    return order.status == OrderStatus.ACCEPTED
 
 
 def _build_current_order_snapshot(order: Order) -> dict:
