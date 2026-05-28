@@ -1,14 +1,44 @@
 import { useEffect, useState } from "react";
-import type { Message, Order } from "../lib/api";
-import { fetchOrderMessages, updateOrderMemo } from "../lib/api";
+import type {
+  AgentExceptionCase,
+  AgentExceptionSeverity,
+  AgentResolutionPreview,
+  Message,
+  Order,
+} from "../lib/api";
+import { fetchOrderMessages, previewAgentResolution, updateOrderMemo } from "../lib/api";
 import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
+
+/* ── severity color maps ──────────────────────────────── */
+
+const SEVERITY_DETAIL: Record<
+  AgentExceptionSeverity,
+  { border: string; bg: string; icon: string; title: string; text: string }
+> = {
+  high: { border: "border-red-200", bg: "bg-red-50/60", icon: "text-red-500", title: "text-red-800", text: "text-red-700" },
+  medium: { border: "border-amber-200", bg: "bg-amber-50/60", icon: "text-amber-500", title: "text-amber-800", text: "text-amber-700" },
+  low: { border: "border-slate-200", bg: "bg-slate-50/60", icon: "text-slate-500", title: "text-slate-700", text: "text-slate-600" },
+};
+
+const SEVERITY_LABEL: Record<AgentExceptionSeverity, string> = { high: "高", medium: "中", low: "低" };
+
+const TYPE_LABEL: Record<string, string> = {
+  quantity_anomaly: "数量異常",
+  unit_anomaly: "単位異常",
+  inventory_shortage: "在庫不足",
+  needs_review: "要確認",
+  awaiting_reply: "返信待ち",
+};
+
+/* ── sub-components ───────────────────────────────────── */
 
 interface Props {
   order: Order | null;
   onClose: () => void;
   onMemoUpdated?: (order: Order) => void;
+  exceptions?: AgentExceptionCase[];
 }
 
 function MemoEditor({
@@ -209,10 +239,121 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
   );
 }
 
-export default function OrderDetailModal({ order, onClose, onMemoUpdated }: Props) {
+/* ── Exception detail section ─────────────────────────── */
+
+function ExceptionSection({ exceptions }: { exceptions: AgentExceptionCase[] }) {
+  const [previewById, setPreviewById] = useState<Record<string, AgentResolutionPreview>>({});
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+
+  async function handlePreview(exc: AgentExceptionCase) {
+    setPreviewingId(exc.id);
+    try {
+      const resp = await previewAgentResolution(exc);
+      if (resp.preview) {
+        setPreviewById((prev) => ({ ...prev, [exc.id]: resp.preview! }));
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setPreviewingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <img src="/favicon.png" alt="" className="w-4 h-4" />
+        <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">AI検知</h5>
+      </div>
+      {exceptions.map((exc) => {
+        const sc = SEVERITY_DETAIL[exc.severity];
+        const preview = previewById[exc.id];
+        return (
+          <div key={exc.id} className={`rounded-xl border-2 ${sc.border} ${sc.bg} p-4 space-y-3`}>
+            <div className="flex items-start gap-2">
+              <svg className={`w-5 h-5 ${sc.icon} shrink-0 mt-0.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${sc.border} ${sc.title}`}>
+                    {SEVERITY_LABEL[exc.severity]}
+                  </span>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${sc.title}`}>
+                    {TYPE_LABEL[exc.type] ?? exc.type}
+                  </span>
+                </div>
+                <p className={`text-sm font-bold ${sc.title}`}>{exc.title}</p>
+                <p className={`text-sm ${sc.text} mt-1 leading-relaxed`}>{exc.summary}</p>
+                {exc.evidence.length > 0 && (
+                  <div className={`mt-2 text-sm ${sc.text}`}>
+                    {exc.evidence.map((ev, i) => (
+                      <span key={i}>
+                        {i > 0 && "、"}
+                        {ev.label}: <strong>{ev.value}</strong>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recommended action / AI preview */}
+            {preview ? (
+              <div className="ml-7 space-y-2">
+                <ul className="space-y-1">
+                  {preview.recommended_actions.map((action, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-gray-700">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-brand-500 shrink-0" />
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
+                {preview.customer_message && (
+                  <div className="rounded-lg bg-white/80 border border-gray-200 px-3 py-2 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {preview.customer_message}
+                  </div>
+                )}
+              </div>
+            ) : exc.suggested_action ? (
+              <div className="ml-7 space-y-2">
+                <p className="text-sm text-gray-700">{exc.suggested_action}</p>
+                <button
+                  type="button"
+                  onClick={() => handlePreview(exc)}
+                  disabled={previewingId === exc.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60 transition-colors"
+                >
+                  <svg className={`w-3 h-3 ${previewingId === exc.id ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  {previewingId === exc.id ? "生成中..." : "AIに対応案を確認"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Main component ───────────────────────────────────── */
+
+export default function OrderDetailModal({ order, onClose, onMemoUpdated, exceptions }: Props) {
+  useEffect(() => {
+    if (!order) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [order, onClose]);
+
   if (!order) return null;
 
   const orderId = order.uid || order.id || "";
+  const orderExceptions = exceptions?.filter((e) => e.order_id === orderId) ?? [];
 
   return (
     <div
@@ -247,6 +388,11 @@ export default function OrderDetailModal({ order, onClose, onMemoUpdated }: Prop
             </div>
             <StatusBadge status={order.status} />
           </div>
+
+          {/* AI検知 (if any) */}
+          {orderExceptions.length > 0 && (
+            <ExceptionSection exceptions={orderExceptions} />
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50/80 rounded-xl">
             <Field label="受注日" value={order.order_date || ""} />

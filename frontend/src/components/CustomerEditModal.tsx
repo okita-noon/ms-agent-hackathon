@@ -18,6 +18,15 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!customer) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [customer, onClose]);
+
+  useEffect(() => {
     if (customer) {
       setName(customer.name || "");
       setShortName(customer.short_name || "");

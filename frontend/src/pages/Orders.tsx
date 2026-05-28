@@ -63,7 +63,6 @@ export default function Orders() {
   const [, setLiveStatus] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
-  const [exceptionModalInitialId, setExceptionModalInitialId] = useState<string | undefined>();
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
 
@@ -240,8 +239,7 @@ export default function Orders() {
     setOffset(0);
   }
 
-  function openExceptionModal(initialId?: string) {
-    setExceptionModalInitialId(initialId);
+  function openExceptionModal() {
     setExceptionModalOpen(true);
   }
 
@@ -470,14 +468,8 @@ export default function Orders() {
                       {triageAvailable && agentExceptions.length > 0 && (
                         <td className="px-5 py-3.5">
                           {excList ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openExceptionModal(excList[0].id);
-                              }}
-                              className="flex flex-wrap gap-1 hover:opacity-80 transition-opacity"
-                            >
+                            <div className="flex flex-wrap gap-1">
+
                               {excList.map((exc) => (
                                 <span
                                   key={exc.id}
@@ -490,7 +482,7 @@ export default function Orders() {
                                   {TYPE_LABEL[exc.type] ?? exc.type}
                                 </span>
                               ))}
-                            </button>
+                            </div>
                           ) : (
                             <span className="text-gray-300 text-xs">—</span>
                           )}
@@ -533,15 +525,15 @@ export default function Orders() {
           );
           setSelected(updated);
         }}
+        exceptions={agentExceptions}
       />
 
-      {/* Exception review modal */}
       {exceptionModalOpen && agentExceptions.length > 0 && (
         <ExceptionModal
           exceptions={agentExceptions}
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
-          initialExceptionId={exceptionModalInitialId}
+          onOpenOrder={(order) => setSelected(order)}
         />
       )}
     </>
