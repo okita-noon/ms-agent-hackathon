@@ -54,6 +54,7 @@
 - [x] LINE 返信テンプレート基盤（`_templates/line/` + `line_template_renderer.py`）を追加。LINE では受注Noを表示せず、定型返信を優先
 - [x] LINE の現在注文コンテキスト（`current_order_id` / `current_order_snapshot`）をセッションとオーケストレータに追加。1顧客1オープン注文前提で追加・変更・取消へ寄せる
 - [x] 受注作成時の業務日をJST基準に統一。Container Apps のUTC日付に引きずられて、JST深夜帯の注文が前日扱いになる問題を修正
+- [x] 注文・在庫・意図分類の業務サービス層（`OrderApplicationService`, `InventoryApplicationService`, `OrderMemoryService`, `IntentUnderstandingService`）を追加。自然文キャンセル、LLM Intent による曖昧キャンセル分類、在庫不足後の数量だけ返信（例:「じゃあ1kg」）、LINE/メール/電話の「いつもの」「前と同じ」注文復元をテスト付きで対応
 - [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能
 - [x] Cosmos DB 本番デモデータの未来日受注（`DEMO-20260527-*`）を2026-05-26基準へ補正し、再投入用シードJSONも同様に更新
 

@@ -282,6 +282,10 @@ src/
 │   ├── channel_locks.py          # チャネル×ユーザー単位の非同期ロック
 │   ├── line_template_renderer.py # LINE返信テンプレート描画
 │   ├── learning_service.py       # パターン記録・顧客プロファイル更新
+│   ├── intent_understanding.py   # 注文会話の Intent 分類（明確ルール + LLM fallback）
+│   ├── order_application.py      # 注文状態変更の業務サービス
+│   ├── inventory_application.py  # 注文ドラフト単位の在庫確認業務サービス
+│   ├── order_memory.py           # 「いつもの」・過去注文参照のドラフト復元
 │   ├── dashboard_agent.py        # Dashboard Agent サービス（Exception Triage / Resolution プレビュー）
 │   └── tenant_resolver.py        # テナント解決（LINE/電話→テナント紐付け）
 ├── models/                       # Pydantic データモデル
