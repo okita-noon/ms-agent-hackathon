@@ -857,6 +857,7 @@ class OrderOrchestrator:
         result = {
             "response": response_text,
             "order_id": saved_order.id,
+            "order_saved": True,
             "customer_id": saved_order.customer_id,
             "current_order_id": saved_order.id,
             "current_order_snapshot": _build_current_order_snapshot(saved_order),
@@ -990,6 +991,7 @@ class OrderOrchestrator:
         result = {
             "response": response_text,
             "order_id": saved_order.id,
+            "order_saved": True,
             "customer_id": saved_order.customer_id,
             "current_order_id": saved_order.id,
             "current_order_snapshot": _build_current_order_snapshot(saved_order),
