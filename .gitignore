@@ -61,6 +61,12 @@ yarn-error.log*
 .claude/settings.local.json
 **/.claude/settings.local.json
 CLAUDE.kio.md
+
+# Codex のローカル worktree / 設定（マシン固有・コミット禁止）
+.codex/worktrees/
+.codex/settings.local.json
+**/.codex/settings.local.json
+
 *.swp
 *.swo
 *~
