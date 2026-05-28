@@ -355,21 +355,16 @@ class OrderOrchestrator:
                 customer_id = customer.id if customer else None
                 debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={customer_id or '未特定'}")
             if customer_id:
-                # current_orderが渡っている場合はそれだけ表示（他セッション注文の混入を防ぐ）
-                if current_order and current_order.status == OrderStatus.ACCEPTED:
-                    open_orders = [current_order]
-                    debug_log.append(f"[注文照会] current_orderを使用: {current_order.id}")
-                else:
-                    repo = self._ctx.get_connector("IOrderRepository")
-                    customer_orders = await repo.list_by_customer(customer_id, limit=20)
-                    today = today_jst()
-                    # ACCEPTED のみ表示（NEEDS_REVIEWは在庫切れ等の問題注文のため除外）
-                    open_orders = [
-                        o
-                        for o in customer_orders
-                        if o.status == OrderStatus.ACCEPTED and (o.delivery_date is None or o.delivery_date >= today)
-                    ]
-                    debug_log.append(f"[注文照会] list_by_customerで{len(open_orders)}件取得")
+                # 顧客の未配送オープン注文を全件取得（配送日が今日以降のACCEPTEDのみ）
+                repo = self._ctx.get_connector("IOrderRepository")
+                customer_orders = await repo.list_by_customer(customer_id, limit=50)
+                today = today_jst()
+                open_orders = [
+                    o
+                    for o in customer_orders
+                    if o.status == OrderStatus.ACCEPTED and (o.delivery_date is None or o.delivery_date >= today)
+                ]
+                debug_log.append(f"[注文照会] list_by_customerで{len(open_orders)}件取得（ACCEPTED・今日以降）")
                 if open_orders:
                     response_text = _build_line_from_template(
                         "order_current_summary.txt",
