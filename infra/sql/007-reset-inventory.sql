@@ -8,12 +8,12 @@ UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001'
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-004'; -- ぶどう
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-005'; -- もも
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-006'; -- いちご
-UPDATE inventory SET quantity = 1,    reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-007'; -- メロン: 少数（在庫不足テスト用）
-UPDATE inventory SET quantity = 1,    reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-008'; -- スイカ: 少数（在庫不足テスト用）
+UPDATE inventory SET quantity = 30,   reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-007'; -- メロン: 在庫不足テスト用
+UPDATE inventory SET quantity = 30,   reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-008'; -- スイカ: 在庫不足テスト用
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-009'; -- 梨
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-010'; -- マンゴー
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-011'; -- キウイ
-UPDATE inventory SET quantity = 1,    reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-012'; -- さくらんぼ: 少数（在庫不足テスト用）
+UPDATE inventory SET quantity = 30,   reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-012'; -- さくらんぼ: 在庫不足テスト用
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-013'; -- いちじく
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-014'; -- レモン
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-015'; -- アボカド
