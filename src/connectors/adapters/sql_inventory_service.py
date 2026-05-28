@@ -91,3 +91,22 @@ class SqlInventoryService:
                 except Exception:
                     await conn.rollback()
                     raise
+
+    async def release(self, tenant_id: str, product_id: str, qty: float) -> ReservationResult:
+        """キャンセル時に引当済み数量を戻す（reserved_qty を減算・0未満にはしない）。"""
+        query = """
+        UPDATE inventory SET reserved_qty = CASE
+            WHEN reserved_qty - ? < 0 THEN 0
+            ELSE reserved_qty - ?
+        END
+        WHERE tenant_id = ? AND product_id = ?
+        """
+        async with await self._get_connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(query, (qty, qty, tenant_id, product_id))
+                    await conn.commit()
+                    return ReservationResult(product_id=product_id, reserved_qty=qty, success=True)
+                except Exception:
+                    await conn.rollback()
+                    raise
