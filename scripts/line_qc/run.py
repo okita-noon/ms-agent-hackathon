@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 18:00
+Updated: 2026-05-28 18:37
 
 使い方:
     python scripts/line_qc/run.py
@@ -11,6 +11,7 @@ Updated: 2026-05-28 18:00
 
 出力:
     docs/line_QC.md の 4.X セクションに結果を追記する。
+    scripts/line_qc/_logs/qc_YYYYMMDD_HHMMSS.json に全ログを出力する。
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ import httpx
 JST = timezone(timedelta(hours=9))
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QC_DOC = REPO_ROOT / "docs" / "line_QC.md"
+LOGS_DIR = Path(__file__).resolve().parent / "_logs"
 DEFAULT_BASE_URL = "https://ca-api-orderai-dev2.mangoground-6945bb56.japaneast.azurecontainerapps.io"
 DEFAULT_ACCESS_CODE = "test"
 DEFAULT_CUSTOMER_ID = "C-001"
@@ -496,6 +498,7 @@ def _build_section(
     branch: str,
     max_pr: str,
     case_results: list[dict],
+    log_filename: str = "",
 ) -> str:
     lines: list[str] = []
     n_cases = len(case_results)
@@ -505,9 +508,11 @@ def _build_section(
     lines.append(f"1. 実施日時 (JST): {now_jst.strftime('%Y-%m-%d %H:%M')}〜 頃")
     lines.append(f"2. 参照ブランチ: `{branch}`（ローカル確認時点）")
     lines.append(f"3. 当時点で `main` にマージ済みの最大PR番号: `{max_pr}`")
-    lines.append("4. 顧客No:")
+    lines.append(f"4. 詳細ログ: `scripts/line_qc/_logs/{log_filename}`")
+    lines.append("5. 顧客No:")
     for cr in case_results:
         lines.append(f"   - {section_no}.{cr['id']}: `{cr['customer_id']}`")
+    lines.append("")
     lines.append("")
 
     for cr in case_results:
@@ -568,6 +573,110 @@ def _update_toc(content: str, section_no: str, date_str: str, n_cases: int) -> s
     # マーカーが見つからない場合は「5. 改善履歴」の直前に挿入
     fallback = "- [5. 改善履歴"
     return content.replace(fallback, new_entry + "\n" + fallback)
+
+
+def _write_log(
+    log_path: Path,
+    now_jst: datetime,
+    branch: str,
+    max_pr: str,
+    base_url: str,
+    case_results: list[dict],
+) -> None:
+    """全ケースの詳細ログをJSONファイルに出力する。"""
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    def _extract_debug(debug_log: list[str], tag: str) -> list[str]:
+        return [l for l in debug_log if l.startswith(tag)]
+
+    def _build_agent_flow(debug_log: list[str]) -> list[dict]:
+        """debug_logからエージェント判断フローを時系列で整形する。"""
+        flow = []
+        # タグと対応するエージェント名のマッピング
+        tag_map = [
+            ("[顧客]", "System", "顧客情報の確認"),
+            ("[顧客解決]", "System", "顧客解決経路の決定"),
+            ("[分類]", "IntentClassifier", "意図分類"),
+            ("[判定]", "Orchestrator", "ルール判定"),
+            ("[ドラフト]", "System", "ドラフト確認"),
+            ("[パイプライン]", "Orchestrator", "パイプライン選択"),
+            ("[Intake]", "IntakeAgent", "注文解析"),
+            ("[Exception]", "ExceptionAgent", "異常検知"),
+            ("[在庫]", "InventoryCheck", "在庫確認"),
+            ("[配送]", "DeliveryEstimator", "配送日推定"),
+            ("[保存]", "OrderRepository", "受注保存"),
+            ("[確定]", "OrderRepository", "受注確定"),
+            ("[取消]", "OrderRepository", "注文キャンセル"),
+            ("[セッション]", "SessionManager", "セッション状態"),
+            ("[記憶注文]", "OrderMemoryService", "注文パターン照合"),
+        ]
+        for line in debug_log:
+            for tag, agent, step in tag_map:
+                if line.startswith(tag):
+                    flow.append({"agent": agent, "step": step, "log": line})
+                    break
+        return flow
+
+    payload = {
+        "meta": {
+            "timestamp_jst": now_jst.isoformat(),
+            "branch": branch,
+            "max_pr": max_pr,
+            "base_url": base_url,
+            "total_cases": len(case_results),
+            "ok_count": sum(1 for c in case_results if c.get("overall_ok")),
+            "ng_count": sum(1 for c in case_results if not c.get("overall_ok")),
+        },
+        "cases": [
+            {
+                "id": cr["id"],
+                "label": cr["label"],
+                "customer_id": cr["customer_id"],
+                "overall_ok": cr.get("overall_ok", False),
+                "messages": [
+                    {
+                        "seq": i + 1,
+                        "input": mr["message"],
+                        "response": mr["response"],
+                        "agent": mr["agent"],
+                        "route": mr["route"],
+                        # 業務状態
+                        "order_id": mr["order_id"],
+                        "current_order_id": mr["current_order_id"],
+                        "order_saved": mr["order_saved"],
+                        "pending_exists": mr["pending_exists"],
+                        # 判定
+                        "ai_judgment": mr["ai_judgment"],
+                        "checks": [
+                            {"name": c["name"], "ok": c["ok"], "desc": c["desc"]}
+                            for c in mr["checks"]
+                        ],
+                        # debug_log 全文
+                        "debug_log": mr["debug_log"],
+                        # debug_log から抽出したキー情報
+                        "debug_顧客": _extract_debug(mr["debug_log"], "[顧客]"),
+                        "debug_顧客解決": _extract_debug(mr["debug_log"], "[顧客解決]"),
+                        "debug_分類": _extract_debug(mr["debug_log"], "[分類]"),
+                        "debug_Intake": _extract_debug(mr["debug_log"], "[Intake]"),
+                        "debug_在庫": _extract_debug(mr["debug_log"], "[在庫]"),
+                        "debug_保存": _extract_debug(mr["debug_log"], "[保存]"),
+                        "debug_セッション": _extract_debug(mr["debug_log"], "[セッション]"),
+                        "debug_判定": _extract_debug(mr["debug_log"], "[判定]"),
+                        "debug_ドラフト": _extract_debug(mr["debug_log"], "[ドラフト]"),
+                        # needs_confirmation 関連を抽出
+                        "needs_confirmation_logs": [
+                            l for l in mr["debug_log"]
+                            if "needs_confirmation" in l or "確認待ち" in l or "awaiting" in l
+                        ],
+                        # エージェント判断フロー（時系列）
+                        "agent_flow": _build_agent_flow(mr["debug_log"]),
+                    }
+                    for i, mr in enumerate(cr.get("messages", []))
+                ],
+            }
+            for cr in case_results
+        ],
+    }
+    log_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _next_section_no(content: str) -> str:
@@ -650,10 +759,16 @@ async def main(args: argparse.Namespace) -> None:
                     "error": str(e),
                 })
 
+    # ログファイル出力
+    log_filename = f"qc_{now_jst.strftime('%Y%m%d_%H%M%S')}.json"
+    log_path = LOGS_DIR / log_filename
+    _write_log(log_path, now_jst, branch, max_pr, base_url, case_results)
+    print(f"詳細ログ: {log_path}")
+
     # Markdown 更新
     qc_content = QC_DOC.read_text(encoding="utf-8")
     section_no = _next_section_no(qc_content)
-    new_section = _build_section(section_no, now_jst, branch, max_pr, case_results)
+    new_section = _build_section(section_no, now_jst, branch, max_pr, case_results, log_filename)
 
     # 「4.X. 次回テスト記録枠」の直前に挿入
     marker = f"### {section_no}. 次回テスト記録枠"
