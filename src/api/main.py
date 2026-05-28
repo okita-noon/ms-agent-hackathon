@@ -27,6 +27,7 @@ from src.auth.dependencies import get_tenant_id
 from src.auth.endpoints import auth_router
 from src.connectors.adapters.registry import register_all_adapters
 from src.services.dashboard_events import dashboard_event_broker
+from src.services.order_status_updater import run_order_status_updater
 from src.services.tenant_resolver import resolve_tenant_by_id, resolve_tenant_for_email, resolve_tenant_for_line
 
 logging.basicConfig(level=logging.INFO)
@@ -162,8 +163,12 @@ async def lifespan(app: FastAPI):
         _active_subscription_id = sub_id
         renew_task = asyncio.create_task(_renew_graph_subscription(sub_id))
 
+    # 受注ステータス自動更新タスク（30分ごと）
+    status_updater_task = asyncio.create_task(run_order_status_updater(["T-001", "T-002"]))
+
     yield
 
+    status_updater_task.cancel()
     if renew_task:
         renew_task.cancel()
 
