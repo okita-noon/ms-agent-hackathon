@@ -534,6 +534,11 @@ export default function Orders() {
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
           onOpenOrder={(order) => setSelected(order)}
+          onMemoUpdated={(updated) => {
+            setOrders((current) =>
+              current.map((o) => ((o.uid || o.id) === (updated.uid || updated.id) ? updated : o))
+            );
+          }}
         />
       )}
     </>
