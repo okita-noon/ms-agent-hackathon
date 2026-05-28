@@ -1281,7 +1281,8 @@ class OrderOrchestrator:
                         f"{'（known渡しと一致）' if draft.get('customer_id') == known_customer_id else '（known渡しと不一致 or known未渡し）'}"
                         f", items=[{draft_items_summary}]"
                     )
-                    if estimated_delivery_date and not draft.get("delivery_date"):
+                    # estimated_delivery_dateを常に優先（Intake Agentが今日日付を入れる場合があるため）
+                    if estimated_delivery_date:
                         draft["delivery_date"] = estimated_delivery_date
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
@@ -1661,7 +1662,8 @@ class OrderOrchestrator:
                         f"{'（known渡しと一致）' if draft.get('customer_id') == known_customer_id else '（known渡しと不一致 or known未渡し）'}"
                         f", items=[{draft_items_summary}]"
                     )
-                    if estimated_delivery_date and not draft.get("delivery_date"):
+                    # estimated_delivery_dateを常に優先（Intake Agentが今日日付を入れる場合があるため）
+                    if estimated_delivery_date:
                         draft["delivery_date"] = estimated_delivery_date
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
