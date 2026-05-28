@@ -410,7 +410,7 @@ class OrderOrchestrator:
                 status=OrderStatus.ACCEPTED,
             )
             asyncio.create_task(self._run_learning(saved_order, message))
-            route = _resolve_delivery_route(pending_order_draft, self._ctx)
+            route = await _resolve_delivery_route_from_customer(pending_order_draft, self._ctx)
             lead_time = await _resolve_lead_time(pending_order_draft, self._ctx)
             min_d, max_d = delivery_estimator.estimate(
                 route,
@@ -814,7 +814,7 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        route = _resolve_delivery_route(draft, self._ctx)
+        route = await _resolve_delivery_route_from_customer(draft, self._ctx)
         lead_time = await _resolve_lead_time(draft, self._ctx)
         min_d, max_d = delivery_estimator.estimate(
             route,
@@ -946,7 +946,7 @@ class OrderOrchestrator:
                 await self._send_line_message(response_text, reply_token, line_user_id)
             return result
 
-        route = _resolve_delivery_route(updated_draft, self._ctx)
+        route = await _resolve_delivery_route_from_customer(updated_draft, self._ctx)
         lead_time = await _resolve_lead_time(updated_draft, self._ctx)
         min_d, max_d = delivery_estimator.estimate(
             route,
@@ -1209,7 +1209,7 @@ class OrderOrchestrator:
         delivery_estimate_text: str | None = None
         estimated_delivery_date: date | None = None
         if not needs_confirmation and not inventory_needs_review:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
+            route = await _resolve_delivery_route_from_customer(intake_draft, self._ctx)
             lead_time = await _resolve_lead_time(intake_draft, self._ctx)
             debug_log.append(f"[配送] 入力: route={route}, lead_time={lead_time}")
             min_d, max_d = delivery_estimator.estimate(
@@ -1586,7 +1586,7 @@ class OrderOrchestrator:
         delivery_estimate_text: str | None = None
         estimated_delivery_date: date | None = None
         if not needs_confirmation and not inventory_needs_review:
-            route = _resolve_delivery_route(intake_draft, self._ctx)
+            route = await _resolve_delivery_route_from_customer(intake_draft, self._ctx)
             lead_time = await _resolve_lead_time(intake_draft, self._ctx)
             debug_log.append(f"[配送] 入力: route={route}, lead_time={lead_time}")
             min_d, max_d = delivery_estimator.estimate(
@@ -2253,17 +2253,43 @@ def _resolve_delivery_route(draft: dict, ctx: TenantContext) -> DeliveryRoute | 
 
 
 async def _resolve_lead_time(draft: dict, ctx: TenantContext) -> DeliveryLeadTime | None:
-    """ドラフトの顧客IDから配送リードタイムを取得する."""
+    """ドラフトの顧客IDから配送リードタイムを取得する。customer_idで直接検索する。"""
     customer_id = draft.get("customer_id")
     if not customer_id:
         return None
     try:
         repo = ctx.get_connector("ICustomerRepository")
+        # customer_idで直接取得（find_by_identifierは名前・LINE ID・電話番号向けのため不適切）
+        customer = await repo.get_by_id(ctx.tenant_id, customer_id)
+        if customer and customer.delivery_lead_time:
+            return customer.delivery_lead_time
+        # フォールバック: find_by_identifierでも試みる
         customer = await repo.find_by_identifier(ctx.tenant_id, customer_id)
         if customer and customer.delivery_lead_time:
             return customer.delivery_lead_time
     except Exception:
         logger.debug("Could not resolve delivery_lead_time for %s", customer_id)
+    return None
+
+
+async def _resolve_delivery_route_from_customer(draft: dict, ctx: TenantContext) -> DeliveryRoute | None:
+    """顧客マスタから配送ルートを取得する（ドラフトにない場合のフォールバック）。"""
+    route_val = draft.get("delivery_route")
+    if route_val:
+        try:
+            return DeliveryRoute(route_val)
+        except ValueError:
+            pass
+    customer_id = draft.get("customer_id")
+    if not customer_id:
+        return None
+    try:
+        repo = ctx.get_connector("ICustomerRepository")
+        customer = await repo.get_by_id(ctx.tenant_id, customer_id)
+        if customer and customer.delivery_preference and customer.delivery_preference.default_route:
+            return customer.delivery_preference.default_route
+    except Exception:
+        logger.debug("Could not resolve delivery_route for %s", customer_id)
     return None
 
 
