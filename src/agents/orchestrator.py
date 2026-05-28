@@ -424,6 +424,7 @@ class OrderOrchestrator:
             result["response"] = response_text
             debug_log.append(f"[確定] ドラフト受注確定: {saved_order.id}")
             result["order_id"] = saved_order.id
+            result["order_saved"] = True
             result["customer_id"] = saved_order.customer_id
             result["current_order_id"] = saved_order.id
             result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
@@ -1126,6 +1127,7 @@ class OrderOrchestrator:
                     debug_log.append(f"[保存] 受注確定: {saved_order.id}")
                     logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
+                    result["order_saved"] = True
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
@@ -1494,6 +1496,7 @@ class OrderOrchestrator:
                     debug_log.append(f"[保存] 受注確定: {saved_order.id}")
                     logger.info("[multi-agent] Created order %s", saved_order.id)
                     result["order_id"] = saved_order.id
+                    result["order_saved"] = True
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)

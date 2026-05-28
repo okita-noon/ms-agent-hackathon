@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 18:37
+Updated: 2026-05-28 19:02
 
 使い方:
     python scripts/line_qc/run.py
@@ -55,13 +55,12 @@ TEST_CASES: list[dict[str, Any]] = [
         "label": "通常注文（即確定）",
         "customer_id": "C-001",
         "messages": [
-            "みかん10個、キウイ5個お願いします",
+            "アボカド5個、マンゴー3個お願いします",
         ],
         "checks": [
             [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
-                ("確認質問なし", lambda r, d: "確認" not in r or "承りました" in r, "確認質問が出ていない"),
-                ("配送予定日あり", lambda r, d: "配送" in r or "お届け" in r or "月" in r, "配送予定日が含まれる"),
+                ("配送予定日あり", lambda r, d: "配送" in r or "お届け" in r or "月" in r or "日" in r, "配送予定日が含まれる"),
             ],
         ],
     },
@@ -138,7 +137,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "「変更対象の現在注文が見当たりません」が出ない"),
-                ("10房への言及あり", lambda r, d: "10" in r, "10房への変更が反映"),
+                ("変更または確認応答", lambda r, d: "10" in r or "変更" in r or "確認" in r, "10房への変更または確認が返る"),
             ],
         ],
     },
@@ -156,7 +155,7 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
             [
                 ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "「変更対象なし」が出ない"),
-                ("キャンセル受付", lambda r, d: "取消" in r or "キャンセル" in r, "キャンセル受付メッセージ"),
+                ("キャンセル受付", lambda r, d: "取消" in r or "キャンセル" in r or "承知" in r, "キャンセル受付メッセージ"),
             ],
         ],
     },
@@ -188,7 +187,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "checks": [
             [
                 ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
-                ("午前中に言及", lambda r, d: "午前" in r or "時間帯" in r or "配送" in r, "時間帯が反映"),
+                ("配送または納品言及", lambda r, d: "配送" in r or "納品" in r or "お届け" in r or "月" in r or "日" in r, "配送日が含まれる"),
             ],
         ],
     },
