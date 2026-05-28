@@ -309,6 +309,7 @@ class OrderOrchestrator:
         }
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         debug_log.append(f"[入力] source={source.value}, session={session_id}, message={message!r}")
         if known_customer_id:
             debug_log.append(f"[顧客] known渡し: customer_id={known_customer_id}, customer_name={known_customer_name}")
@@ -866,6 +867,7 @@ class OrderOrchestrator:
         result: dict = {}
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
@@ -1236,6 +1238,7 @@ class OrderOrchestrator:
         result: dict = {}
         debug_log: list[str] = []
         result["debug_log"] = debug_log
+        self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
 
         if known_customer_id and known_customer_name:

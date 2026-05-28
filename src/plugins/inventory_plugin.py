@@ -22,6 +22,9 @@ class InventoryPlugin:
     ) -> dict:
         svc = self._ctx.get_connector("IInventoryService")
         result = await svc.check(self._ctx.tenant_id, product_id, required_qty)
+        self._ctx.append_debug(
+            f"[DB:Inventory] check_inventory: product_id={product_id!r}, required={required_qty} → available={result.available_qty}, unit={result.unit}, sufficient={result.is_sufficient}, product_name={result.product_name}"
+        )
         return result.model_dump()
 
     @kernel_function(

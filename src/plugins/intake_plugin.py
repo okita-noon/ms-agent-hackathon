@@ -39,6 +39,9 @@ class IntakePlugin:
     ) -> dict:
         repo = self._ctx.get_connector("ICustomerRepository")
         customer: Customer | None = await repo.find_by_identifier(self._ctx.tenant_id, identifier)
+        self._ctx.append_debug(
+            f"[DB:Customer] lookup_customer: identifier={identifier!r} → found={customer is not None}, customer_id={customer.id if customer else 'なし'}, name={customer.name if customer else 'なし'}"
+        )
         if not customer:
             return {"found": False, "identifier": identifier}
         return {"found": True, **customer.model_dump()}
@@ -53,6 +56,9 @@ class IntakePlugin:
     ) -> dict:
         repo = self._ctx.get_connector("ICustomerRepository")
         customer: Customer | None = await repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
+        self._ctx.append_debug(
+            f"[DB:Customer] lookup_customer_by_line_id: line_user_id={line_user_id!r} → found={customer is not None}, customer_id={customer.id if customer else 'なし'}, name={customer.name if customer else 'なし'}"
+        )
         if not customer:
             return {"found": False, "line_user_id": line_user_id}
         return {"found": True, **customer.model_dump()}
@@ -67,6 +73,9 @@ class IntakePlugin:
     ) -> dict:
         master = self._ctx.get_connector("IProductMaster")
         product: Product | None = await master.fuzzy_match(self._ctx.tenant_id, raw_name)
+        self._ctx.append_debug(
+            f"[DB:Product] normalize_product: raw_name={raw_name!r} → found={product is not None}, product_id={product.id if product else 'なし'}, name={product.name if product else 'なし'}"
+        )
         if not product:
             return {"found": False, "raw_name": raw_name}
         return {"found": True, **product.model_dump()}
@@ -88,10 +97,16 @@ class IntakePlugin:
 
         pattern = await store.find_pattern_exact(self._ctx.tenant_id, customer_id, normalized)
         if not pattern:
+            self._ctx.append_debug(
+                f"[DB:Pattern] resolve_with_pattern: customer_id={customer_id!r}, expr={raw_expression!r} → found=False"
+            )
             return None
 
         threshold = self._ctx.config.auto_confirm_threshold
         needs_confirmation = pattern.confidence < threshold
+        self._ctx.append_debug(
+            f"[DB:Pattern] resolve_with_pattern: customer_id={customer_id!r}, expr={raw_expression!r} → found=True, confidence={pattern.confidence}, needs_confirmation={needs_confirmation}"
+        )
         return {
             "resolved_items": [item.model_dump() for item in pattern.resolved_items],
             "confidence": pattern.confidence,

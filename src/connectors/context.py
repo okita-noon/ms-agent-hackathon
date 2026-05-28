@@ -7,9 +7,10 @@ from src.models.tenant import TenantConfig
 
 
 class TenantContext:
-    def __init__(self, config: TenantConfig, factory: ConnectorFactory):
+    def __init__(self, config: TenantConfig, factory: ConnectorFactory, debug_log: list[str] | None = None):
         self.config = config
         self._factory = factory
+        self._debug_log: list[str] = debug_log if debug_log is not None else []
 
     @property
     def tenant_id(self) -> str:
@@ -17,6 +18,12 @@ class TenantContext:
 
     def get_connector(self, interface_name: str) -> Any:
         return self._factory.resolve(interface_name)
+
+    def append_debug(self, msg: str) -> None:
+        self._debug_log.append(msg)
+
+    def get_debug_log(self) -> list[str]:
+        return self._debug_log
 
     @classmethod
     def from_config(cls, config: TenantConfig) -> TenantContext:
