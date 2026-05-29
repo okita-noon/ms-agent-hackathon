@@ -165,7 +165,7 @@ class LineWebhookHandler:
 
         known_customer_id, known_customer_name = await self._resolve_customer(user_id)
 
-        current_order = await self._resolve_current_order(user_id, session)
+        current_order = await self._resolve_current_order(user_id, session, fallback_customer_id=known_customer_id)
         if current_order:
             session.customer_id = current_order.customer_id
             session.current_order_id = current_order.id
@@ -356,13 +356,18 @@ class LineWebhookHandler:
             logger.error("LINE push failed: %s %s", resp.status_code, resp.text)
             return False
 
-    async def _resolve_current_order(self, user_id: str, session: OrderSession) -> Order | None:
+    async def _resolve_current_order(
+        self, user_id: str, session: OrderSession, *, fallback_customer_id: str | None = None
+    ) -> Order | None:
         customer_id = session.customer_id
         customer_repo = self._ctx.get_connector("ICustomerRepository")
         if not customer_id:
             customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, user_id)
             if customer:
                 customer_id = customer.id
+
+        if not customer_id:
+            customer_id = fallback_customer_id
 
         if not customer_id:
             return None
