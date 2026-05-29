@@ -207,8 +207,7 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
       <div className="border border-gray-100 rounded-xl bg-gray-50/40 p-4 space-y-3 max-h-72 overflow-y-auto">
         {messages.map((msg) => {
           const isCustomer = msg.role === "user";
-          const isPhone = channel === "phone";
-          const alignRight = isPhone ? isCustomer : !isCustomer;
+          const alignRight = !isCustomer;
           return (
             <div key={msg.id} className={`flex ${alignRight ? "justify-end" : "justify-start"}`}>
               <div
