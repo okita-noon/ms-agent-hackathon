@@ -56,6 +56,37 @@ function formatTime(iso: string): string {
   }
 }
 
+function formatMessageText(text: string | undefined | null, channel: string): string {
+  if (!text) return "";
+  let cleanText = text;
+
+  if (channel === "email") {
+    // Remove HTML comments (e.g. <!-- ... -->)
+    cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, "");
+
+    // Normalize newlines
+    cleanText = cleanText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+    // Add newlines before headers if not already preceded by a newline or start of string.
+    const headerRegex = /(差出人|送信日時|宛先|件名|From|To|Sent|Subject|Date)\s*(:|：)\s*/gi;
+    cleanText = cleanText.replace(headerRegex, (_match, p1, p2, offset, string) => {
+      let isAtStartOfLine = offset === 0;
+      if (offset > 0) {
+        let i = offset - 1;
+        while (i >= 0 && (string[i] === " " || string[i] === "\t")) {
+          i--;
+        }
+        if (i < 0 || string[i] === "\n") {
+          isAtStartOfLine = true;
+        }
+      }
+      return isAtStartOfLine ? `${p1}${p2} ` : `\n${p1}${p2} `;
+    });
+  }
+
+  return cleanText.trim().replace(/\n{3,}/g, "\n\n");
+}
+
 function ChannelIcon({ channel }: { channel: string }) {
   if (channel === "line") {
     return (
@@ -217,7 +248,7 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
                     : "bg-white border border-gray-200 rounded-tl-md"
                 }`}
               >
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{formatMessageText(msg.text, channel)}</p>
                 <p className={`text-[10px] mt-1 ${alignRight ? "text-brand-400" : "text-gray-400"}`}>
                   {isCustomer ? (channel === "phone" ? "発注側" : "お客様") : "受注側"} ・ {formatTime(msg.created_at)}
                 </p>
