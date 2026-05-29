@@ -219,7 +219,7 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
               >
                 <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.text}</p>
                 <p className={`text-[10px] mt-1 ${alignRight ? "text-brand-400" : "text-gray-400"}`}>
-                  {isCustomer ? (isPhone ? "発注側" : "お客様") : "受注側"} ・ {formatTime(msg.created_at)}
+                  {isCustomer ? (channel === "phone" ? "発注側" : "お客様") : "受注側"} ・ {formatTime(msg.created_at)}
                 </p>
               </div>
             </div>
