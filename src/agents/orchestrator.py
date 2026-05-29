@@ -741,8 +741,21 @@ class OrderOrchestrator:
         )
         if not draft:
             if debug_log is not None:
-                debug_log.append(f"[記憶注文] {intent.value} に該当する注文パターンなし")
-            return None
+                debug_log.append(f"[記憶注文] {intent.value} に該当する注文パターンなし → 明示応答")
+            if intent == OrderIntent.REPEAT_USUAL_ORDER:
+                response_text = "申し訳ございません。「いつもの注文」のパターンがまだ登録されていません。ご注文の商品名と数量をお伝えいただけますか？"
+            else:
+                response_text = "申し訳ございません。過去のご注文履歴が見つかりませんでした。ご注文の商品名と数量をお伝えいただけますか？"
+            result: dict = {
+                "response": response_text,
+                "customer_id": known_customer_id,
+                "session_status": "awaiting_reply",
+            }
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
 
         draft["customer_id"] = known_customer_id
         if known_customer_name and not draft.get("customer_name"):

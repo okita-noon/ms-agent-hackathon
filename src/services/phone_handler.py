@@ -562,6 +562,11 @@ class PhoneCallHandler:
         if history_repo is None:
             return []
         try:
+            if state.session:
+                return await history_repo.list_by_session_id(
+                    state.tenant_ctx.tenant_id,
+                    state.session.id,
+                )
             return await history_repo.list_recent_messages(
                 state.tenant_ctx.tenant_id,
                 "phone",
