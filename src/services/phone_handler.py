@@ -274,6 +274,9 @@ class PhoneCallHandler:
 
         known_customer_name = await self._resolve_customer_name(state)
         current_order = await self._resolve_current_order(state, session)
+        if current_order:
+            session.customer_id = current_order.customer_id
+            session.current_order_id = current_order.id
 
         response_text_holder: list[str] = []
 
@@ -338,14 +341,17 @@ class PhoneCallHandler:
             state.order_confirmed = False
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
+            session.pending_action_type = result.get("pending_action_type") or session.pending_action_type
             session.customer_id = result.get("customer_id") or session.customer_id
             session.current_order_id = result.get("current_order_id") or session.current_order_id
             session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
             session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
         elif order_id:
             session.status = "completed"
             session.pending_order_draft = None
+            session.pending_action_type = None
             session.customer_id = result.get("customer_id") or session.customer_id
             if result.get("current_order_cleared"):
                 session.current_order_id = None
