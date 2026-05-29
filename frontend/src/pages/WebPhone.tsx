@@ -12,7 +12,6 @@ import {
 interface Turn {
   role: "user" | "assistant" | "system";
   text: string;
-  raw?: WebPhoneResponse;
   ts: string;
 }
 
@@ -85,7 +84,6 @@ export default function WebPhone() {
   const [callConnectionId, setCallConnectionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [expandedRaw, setExpandedRaw] = useState<number | null>(null);
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [interimText, setInterimText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -184,7 +182,6 @@ export default function WebPhone() {
     setCallConnectionId(null);
     setTurns([]);
     setError(null);
-    setExpandedRaw(null);
     setInterimText("");
     setPhase("idle");
     setIsSpeaking(false);
@@ -199,10 +196,14 @@ export default function WebPhone() {
       const text = res.response || (res.error ? `[エラー] ${res.error}` : "[応答なし]");
       setTurns((prev) => [
         ...prev,
-        { role: "assistant", text, raw: res, ts: now() },
+        { role: "assistant", text, ts: now() },
       ]);
 
-      if (res.order_id) addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      if (res.order_id) {
+        addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      } else if (res.review_order_id) {
+        addSystemTurn(`要対応 — 受注ID: ${res.review_order_id}`);
+      }
 
       setPhase("connected");
 
@@ -440,37 +441,6 @@ export default function WebPhone() {
                   <div className="bg-gray-100 text-gray-900 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed">
                     {turn.text}
                   </div>
-                  {turn.raw && (
-                    <div className="mt-1.5">
-                      <button
-                        onClick={() => setExpandedRaw(expandedRaw === i ? null : i)}
-                        className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-                      >
-                        <svg
-                          className={`w-3 h-3 transition-transform ${expandedRaw === i ? "rotate-90" : ""}`}
-                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                        詳細
-                        {turn.raw.order_id && (
-                          <span className="ml-1 bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-medium">
-                            受注: {turn.raw.order_id}
-                          </span>
-                        )}
-                        {turn.raw.session_status && (
-                          <span className="ml-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs font-medium">
-                            {turn.raw.session_status}
-                          </span>
-                        )}
-                      </button>
-                      {expandedRaw === i && (
-                        <pre className="mt-1 text-xs bg-gray-900 text-green-400 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
-                          {JSON.stringify(turn.raw, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}

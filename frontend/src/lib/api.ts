@@ -327,6 +327,8 @@ export interface WebPhoneResponse {
   call_connection_id: string;
   status?: string;
   order_id?: string | null;
+  review_order_id?: string | null;
+  order_saved?: boolean;
   response?: string;
   response_audio?: string;
   session_status?: string;
