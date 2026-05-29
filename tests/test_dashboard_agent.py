@@ -300,6 +300,43 @@ class TestDashboardAgentClassification:
         # 在庫チェックはライブ受注分のみ呼ばれる（終端2件はスキップ）
         assert inventory.check.call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_specific_exception_suppresses_generic_needs_review(self, mock_tenant_ctx):
+        ctx = mock_tenant_ctx
+        repo = ctx.get_connector("IOrderRepository")
+        repo.list_by_date.return_value = [
+            _order(
+                uid="ORD-B",
+                status=OrderStatus.NEEDS_REVIEW,
+                items=[
+                    OrderItem(
+                        product_id="P-001",
+                        product_name="完熟トマト",
+                        quantity=20,
+                        unit="kg",
+                        temperature_zone=TemperatureZone.CHILLED,
+                    )
+                ],
+            ),
+        ]
+        ctx.get_connector("IOrderIntelligenceStore").get_customer_profile.return_value = None
+
+        inventory = AsyncMock()
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="完熟トマト",
+            available_qty=5,
+            unit="kg",
+            is_sufficient=False,
+        )
+        ctx._connectors["IInventoryService"] = inventory
+
+        cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
+
+        types_by_order = {(c.order_id, c.type) for c in cases}
+        assert ("ORD-B", "inventory_shortage") in types_by_order
+        assert ("ORD-B", "needs_review") not in types_by_order
+
 
 class TestDashboardAgentResolutionPreview:
     @pytest.fixture

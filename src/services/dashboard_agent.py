@@ -148,9 +148,15 @@ class DashboardAgentService:
             if profile is None and order.customer_id not in profiles:
                 profile = await _safe_get_profile(store, tenant_id, order.customer_id)
                 profiles[order.customer_id] = profile
-            cases.extend(_classify_status(order))
-            cases.extend(_classify_items(order, profile))
-            cases.extend(await _classify_inventory(order, tenant_id, inventory))
+
+            specific_cases: list[ExceptionCase] = []
+            specific_cases.extend(_classify_items(order, profile))
+            specific_cases.extend(await _classify_inventory(order, tenant_id, inventory))
+
+            if specific_cases:
+                cases.extend(specific_cases)
+            else:
+                cases.extend(_classify_status(order))
 
         cases.sort(key=lambda c: (SEVERITY_RANK.get(c.severity, 99), c.order_id))
         return cases
