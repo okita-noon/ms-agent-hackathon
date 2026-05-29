@@ -3155,23 +3155,21 @@ def _format_open_orders_summary(orders: list[Order]) -> str:
 
 
 def _is_affirmative_reply(message: str) -> bool:
-    normalized = re.sub(r"\s+", "", message).lower()
-    # 数値を含む返答は数量訂正の可能性があるため肯定返答とみなさない
+    normalized = re.sub(r"[\s。、！？!?]+", "", message).lower()
     if re.search(r"\d", normalized):
         return False
-    affirmative_words = {
+    affirmative_keywords = (
         "ok",
         "ｏｋ",
         "はい",
-        "それで",
-        "それでok",
-        "それでお願いします",
-        "お願いします",
-        "それでお願い",
         "大丈夫",
         "よい",
         "良い",
+        "いいです",
+        "構いません",
         "承認",
         "確定",
-    }
-    return normalized in affirmative_words or normalized.endswith("でお願いします")
+        "それで",
+        "お願い",
+    )
+    return any(kw in normalized for kw in affirmative_keywords)
