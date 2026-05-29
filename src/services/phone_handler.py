@@ -362,13 +362,9 @@ class PhoneCallHandler:
             await self._play_tts(state, response_text)
             await self._save_call_message(state, "assistant", response_text)
 
-        return {
-            "call_connection_id": call_connection_id,
-            "status": "processed",
-            "order_id": order_id,
-            "response": response_text,
-            "session_status": result.get("session_status"),
-        }
+        result["call_connection_id"] = call_connection_id
+        result["status"] = "processed"
+        return result
 
     async def _resolve_current_order(self, state: CallState, session: OrderSession) -> Order | None:
         customer_id = session.customer_id or state.known_customer_id
