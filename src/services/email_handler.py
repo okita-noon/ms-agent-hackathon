@@ -290,8 +290,19 @@ class EmailIngestionService:
 
         # 自己送信・システムメール・NDRをスキップ（無限ループ防止）
         sender_address = (raw_message.get("from", {}) or {}).get("address", "").lower()
+        # システムが送信に使う可能性のあるアドレスを全て収集
+        self_addresses: set[str] = {recipient_address.lower()}
+        smtp_from = os.environ.get("SMTP_FALLBACK_FROM_ADDRESS", "").strip().lower()
+        if smtp_from:
+            self_addresses.add(smtp_from)
+        tenant_email = (self._ctx.config.email_address or "").strip().lower()
+        if tenant_email:
+            self_addresses.add(tenant_email)
+        graph_mailbox = (self._ctx.config.graph_mailbox_user_id or "").strip().lower()
+        if graph_mailbox:
+            self_addresses.add(graph_mailbox)
         if sender_address and (
-            sender_address == recipient_address.lower()
+            sender_address in self_addresses
             or "microsoftexchange" in sender_address
             or sender_address.endswith("@noreply.microsoft.com")
             or sender_address.startswith("postmaster@")
