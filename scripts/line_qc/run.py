@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-30 00:23
+Updated: 2026-05-30 00:34
 
 使い方:
     python scripts/line_qc/run.py
@@ -302,9 +302,9 @@ TEST_CASES: list[dict[str, Any]] = [
             ],
         ],
     },
-    # ── 多面的拡張ケース（15〜40） ────────────────────────────────────────────
+    # ── 多面的拡張ケース（32〜57） ────────────────────────────────────────────
     {
-        "id": 15,
+        "id": 32,
         "label": "注文への追加（文脈保持）",
         "customer_id": "C-002",
         "messages": [
@@ -323,7 +323,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 16,
+        "id": 33,
         "label": "在庫0の完全欠品（りんご）",
         "customer_id": "C-002",
         "messages": [
@@ -337,7 +337,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 17,
+        "id": 34,
         "label": "半角/全角数字ゆれ",
         "customer_id": "C-002",
         "messages": [
@@ -352,7 +352,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 18,
+        "id": 35,
         "label": "漢数字での数量指定",
         "customer_id": "C-002",
         "messages": [
@@ -367,7 +367,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 19,
+        "id": 36,
         "label": "タメ口・カジュアル文体",
         "customer_id": "C-002",
         "messages": [
@@ -381,7 +381,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 20,
+        "id": 37,
         "label": "敬語・丁寧すぎる長文",
         "customer_id": "C-002",
         "messages": [
@@ -395,7 +395,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 21,
+        "id": 38,
         "label": "絵文字・記号混在",
         "customer_id": "C-002",
         "messages": [
@@ -409,7 +409,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 22,
+        "id": 39,
         "label": "存在しない商品の注文",
         "customer_id": "C-002",
         "messages": [
@@ -423,7 +423,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 23,
+        "id": 40,
         "label": "単位なしの数量（裸の数字）",
         "customer_id": "C-002",
         "messages": [
@@ -438,7 +438,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 24,
+        "id": 41,
         "label": "確認待ち中の割り込み別注文",
         "customer_id": "C-002",
         "messages": [
@@ -457,7 +457,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 25,
+        "id": 42,
         "label": "注文直後の矛盾する指示",
         "customer_id": "C-002",
         "messages": [
@@ -476,7 +476,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 26,
+        "id": 43,
         "label": "連続追加の積み増し",
         "customer_id": "C-002",
         "messages": [
@@ -498,7 +498,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 27,
+        "id": 44,
         "label": "全キャンセル後の再注文（文脈保持）",
         "customer_id": "C-002",
         "messages": [
@@ -520,7 +520,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 28,
+        "id": 45,
         "label": "数量ゼロ・負数の入力",
         "customer_id": "C-002",
         "messages": [
@@ -534,7 +534,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 29,
+        "id": 46,
         "label": "極端に多い商品種類（一括大量）",
         "customer_id": "C-002",
         "messages": [
@@ -548,7 +548,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 30,
+        "id": 47,
         "label": "在庫不足→数量だけ修正で確定",
         "customer_id": "C-002",
         # 在庫要件: メロン=20（50個注文→在庫不足→3個で確定）
@@ -567,7 +567,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 31,
+        "id": 48,
         "label": "商品名のみ・複数商品で数量欠落",
         "customer_id": "C-002",
         "messages": [
@@ -586,7 +586,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 32,
+        "id": 49,
         "label": "方言での注文",
         "customer_id": "C-002",
         "messages": [
@@ -600,7 +600,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 33,
+        "id": 50,
         "label": "注文と質問の混在",
         "customer_id": "C-002",
         "messages": [
@@ -615,7 +615,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 34,
+        "id": 51,
         "label": "変更→さらに変更（多段文脈保持）",
         "customer_id": "C-002",
         "messages": [
@@ -638,7 +638,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 35,
+        "id": 52,
         "label": "在庫問い合わせ→在庫超過で注文",
         "customer_id": "C-002",
         # 在庫要件: 梨=10（在庫照会→100個注文→在庫超過で確定しない）
@@ -658,7 +658,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 36,
+        "id": 53,
         "label": "キャンセルを撤回（やっぱり注文）",
         "customer_id": "C-002",
         "messages": [
@@ -680,7 +680,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 37,
+        "id": 54,
         "label": "極端に長い自由文の注文",
         "customer_id": "C-002",
         "messages": [
@@ -694,7 +694,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 38,
+        "id": 55,
         "label": "同一商品の重複指定",
         "customer_id": "C-002",
         "messages": [
@@ -709,7 +709,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 39,
+        "id": 56,
         "label": "配送日のみ後から指定（文脈保持）",
         "customer_id": "C-002",
         "messages": [
@@ -727,7 +727,7 @@ TEST_CASES: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": 40,
+        "id": 57,
         "label": "無言・記号のみ・空白",
         "customer_id": "C-002",
         "messages": [
