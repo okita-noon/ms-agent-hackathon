@@ -26,6 +26,20 @@ class TestIntentUnderstandingService:
             await svc.classify("前と同じでお願いします", has_current_order=False)
         ).intent == OrderIntent.REPEAT_PREVIOUS_ORDER
 
+    async def test_classifies_social_messages_as_small_talk(self):
+        svc = IntentUnderstandingService()
+
+        result = await svc.classify("今日はいい天気ですね", has_current_order=False)
+
+        assert result.intent == OrderIntent.SMALL_TALK
+
+    async def test_order_request_is_not_small_talk(self):
+        svc = IntentUnderstandingService()
+
+        result = await svc.classify("キウイ10個お願いします", has_current_order=False)
+
+        assert result.intent != OrderIntent.SMALL_TALK
+
     async def test_uses_llm_classifier_when_rules_are_unclear(self):
         async def llm_classifier(prompt: str) -> str:
             assert "message=やめとこうかな" in prompt

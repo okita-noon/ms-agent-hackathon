@@ -52,6 +52,7 @@ from src.utils.business_date import today_jst
 logger = logging.getLogger(__name__)
 
 DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+HISTORY_CONTEXT_LIMIT = 20
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "_templates"
 _email_config_cache: dict | None = None
@@ -101,6 +102,8 @@ def _source_to_channel(source: OrderSource) -> str:
     """OrderSource をナレッジチャネル名に変換する。"""
     if source == OrderSource.EMAIL:
         return "email"
+    if source == OrderSource.PHONE:
+        return "phone"
     return "line"
 
 
@@ -166,6 +169,66 @@ def _build_order_locked_response(source: OrderSource, order: Order) -> str:
     if source == OrderSource.LINE:
         return _build_line_from_template("order_locked_need_review.txt")
     return "このご注文はすでに処理が進んでいるため、自動で変更・キャンセルできません。担当者が確認いたします。"
+
+
+def _build_small_talk_response(
+    source: OrderSource,
+    message: str,
+    *,
+    pending_order_draft: dict | None = None,
+    customer_name: str | None = None,
+) -> str:
+    normalized = re.sub(r"\s+", "", message).lower()
+    weather_reply = "本当に気持ちのよいお天気ですね。"
+    thanks_reply = "こちらこそありがとうございます。"
+    greeting_reply = "お電話ありがとうございます。" if source == OrderSource.PHONE else "ご連絡ありがとうございます。"
+
+    if any(word in normalized for word in ("天気", "晴れ", "暑い", "寒い", "雨")):
+        base = weather_reply
+    elif "ありがとう" in normalized or "助かります" in normalized:
+        base = thanks_reply
+    elif source == OrderSource.EMAIL and customer_name:
+        base = f"{customer_name}様、ご連絡ありがとうございます。"
+    else:
+        base = greeting_reply
+
+    if pending_order_draft:
+        prompt = "先ほどの確認中のご注文について、よろしければ内容をお知らせください。"
+    else:
+        prompt = "ご注文がありましたら、商品名と数量をお知らせください。"
+
+    if source == OrderSource.EMAIL:
+        return _build_email_from_template(
+            "メール返信_異常時.txt",
+            {"customer_name": customer_name or "お客"},
+            body=f"{base}\n\n{prompt}",
+        )
+    return f"{base}{prompt}"
+
+
+def _build_current_orders_response(source: OrderSource, summary: str, *, customer_name: str | None = None) -> str:
+    if source == OrderSource.LINE:
+        return _build_line_from_template("order_current_summary.txt", summary=summary)
+    if source == OrderSource.EMAIL:
+        return _build_email_from_template(
+            "メール返信_異常時.txt",
+            {"customer_name": customer_name or "お客"},
+            body=f"現在のご注文内容です。\n\n{summary}",
+        )
+    return f"現在のご注文内容です。\n{summary}"
+
+
+def _build_no_current_order_response(source: OrderSource, *, customer_name: str | None = None) -> str:
+    body = "変更対象の現在注文が見当たりませんでした。新しいご注文として承る場合は、商品名と数量をお知らせください。"
+    if source == OrderSource.LINE:
+        return _build_line_from_template("order_no_current_order.txt")
+    if source == OrderSource.EMAIL:
+        return _build_email_from_template(
+            "メール返信_異常時.txt",
+            {"customer_name": customer_name or "お客"},
+            body=body,
+        )
+    return body
 
 
 class OrderOrchestrator:
@@ -343,19 +406,40 @@ class OrderOrchestrator:
             f"confidence={intent_result.confidence}, editable={current_order_editable}"
         )
 
-        if source == OrderSource.LINE and intent_result.intent == OrderIntent.ORDER_STATUS_INQUIRY:
+        if intent_result.intent == OrderIntent.SMALL_TALK:
+            debug_log.append("[判定] 雑談・挨拶として応答")
+            response_text = _build_small_talk_response(
+                source,
+                message,
+                pending_order_draft=pending_order_draft,
+                customer_name=known_customer_name,
+            )
+            result.update(
+                {
+                    "response": response_text,
+                    "intent": OrderIntent.SMALL_TALK.value,
+                    "customer_id": known_customer_id,
+                }
+            )
+            if pending_order_draft:
+                result["session_status"] = "awaiting_reply"
+                result["pending_order_draft"] = pending_order_draft
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
+        if intent_result.intent == OrderIntent.ORDER_STATUS_INQUIRY:
             debug_log.append("[判定] 現在注文の問い合わせと判定")
-            customer_id = known_customer_id or (current_order.customer_id if current_order else None)
+            customer_id = await self._resolve_customer_id_for_status(
+                source=source,
+                channel_user_id=line_user_id,
+                known_customer_id=known_customer_id,
+                current_order=current_order,
+                debug_log=debug_log,
+            )
             if customer_id:
-                _cid_source = "known渡し" if known_customer_id else "current_order"
-                debug_log.append(f"[顧客解決] 経路={_cid_source}, customer_id={customer_id}")
-            if not customer_id:
-                customer_repo = self._ctx.get_connector("ICustomerRepository")
-                customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
-                customer_id = customer.id if customer else None
-                debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={customer_id or '未特定'}")
-            if customer_id:
-                # 顧客の未配送オープン注文を全件取得（配送日が今日以降のACCEPTEDのみ）
                 repo = self._ctx.get_connector("IOrderRepository")
                 customer_orders = await repo.list_by_customer(customer_id, limit=50)
                 today = today_jst()
@@ -366,9 +450,10 @@ class OrderOrchestrator:
                 ]
                 debug_log.append(f"[注文照会] list_by_customerで{len(open_orders)}件取得（ACCEPTED・今日以降）")
                 if open_orders:
-                    response_text = _build_line_from_template(
-                        "order_current_summary.txt",
+                    response_text = _build_current_orders_response(
+                        source,
                         summary=_format_open_orders_summary(open_orders),
+                        customer_name=known_customer_name,
                     )
                     result.update({"response": response_text, "customer_id": customer_id})
                     if response_callback:
@@ -376,7 +461,7 @@ class OrderOrchestrator:
                     else:
                         await self._send_line_message(response_text, reply_token, line_user_id)
                     return result
-            response_text = _build_line_from_template("order_no_current_order.txt")
+            response_text = _build_no_current_order_response(source, customer_name=known_customer_name)
             result.update({"response": response_text, "pending_action_type": line_action_type})
             if response_callback:
                 await response_callback(response_text)
@@ -601,6 +686,34 @@ class OrderOrchestrator:
         result["debug_log"] = debug_log
         return result
 
+    async def _resolve_customer_id_for_status(
+        self,
+        *,
+        source: OrderSource,
+        channel_user_id: str,
+        known_customer_id: str | None,
+        current_order: Order | None,
+        debug_log: list[str],
+    ) -> str | None:
+        customer_id = known_customer_id or (current_order.customer_id if current_order else None)
+        if customer_id:
+            cid_source = "known渡し" if known_customer_id else "current_order"
+            debug_log.append(f"[顧客解決] 経路={cid_source}, customer_id={customer_id}")
+            return customer_id
+
+        customer_repo = self._ctx.get_connector("ICustomerRepository")
+        customer = None
+        if source == OrderSource.LINE:
+            customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, channel_user_id)
+            debug_log.append(f"[顧客解決] 経路=LINE User ID検索, customer_id={(customer.id if customer else '未特定')}")
+        elif source == OrderSource.EMAIL:
+            customer = await customer_repo.find_by_email(self._ctx.tenant_id, channel_user_id)
+            debug_log.append(f"[顧客解決] 経路=メール検索, customer_id={(customer.id if customer else '未特定')}")
+        elif source == OrderSource.PHONE:
+            customer = await customer_repo.find_by_identifier(self._ctx.tenant_id, channel_user_id)
+            debug_log.append(f"[顧客解決] 経路=電話番号検索, customer_id={(customer.id if customer else '未特定')}")
+        return customer.id if customer else None
+
     async def _classify_intent(self, message: str, *, source: OrderSource, has_current_order: bool) -> IntentResult:
         async def llm_classifier(prompt: str) -> str:
             agent = self._make_orchestrator_agent(_source_to_channel(source))
@@ -618,6 +731,7 @@ class OrderOrchestrator:
         pending_order_draft: dict | None = None,
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
+        session_id: str | None = None,
     ) -> dict:
         """電話中の同期応答用: 1 Agentで注文抽出し、在庫はコードで確認する."""
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
@@ -635,6 +749,61 @@ class OrderOrchestrator:
         else:
             prompt = f"以下の電話注文を処理してください。\n電話番号: {caller_number}\n{customer_ctx}{memory_ctx}発話内容: {message}\n"
 
+        intent_result = await IntentUnderstandingService().classify(message, has_current_order=False)
+        if intent_result.intent == OrderIntent.SMALL_TALK:
+            result = {
+                "response": _build_small_talk_response(
+                    OrderSource.PHONE,
+                    message,
+                    pending_order_draft=pending_order_draft,
+                    customer_name=known_customer_name,
+                ),
+                "phone_sync_status": "small_talk",
+                "order_accepted": False,
+            }
+            if pending_order_draft:
+                result["pending_order_draft"] = pending_order_draft
+                result["session_status"] = "awaiting_reply"
+            return result
+
+        if intent_result.intent == OrderIntent.ORDER_STATUS_INQUIRY:
+            customer_id = known_customer_id
+            customer_name = known_customer_name
+            if not customer_id:
+                try:
+                    customer_repo = self._ctx.get_connector("ICustomerRepository")
+                    customer = await customer_repo.find_by_identifier(self._ctx.tenant_id, caller_number)
+                    if customer:
+                        customer_id = customer.id
+                        customer_name = customer.name
+                except Exception:
+                    logger.exception("Failed to resolve phone customer for order status inquiry")
+            if customer_id:
+                repo = self._ctx.get_connector("IOrderRepository")
+                customer_orders = await repo.list_by_customer(customer_id, limit=50)
+                today = today_jst()
+                open_orders = [
+                    o
+                    for o in customer_orders
+                    if o.status == OrderStatus.ACCEPTED and (o.delivery_date is None or o.delivery_date >= today)
+                ]
+                if open_orders:
+                    response = _build_current_orders_response(
+                        OrderSource.PHONE,
+                        _format_open_orders_summary(open_orders),
+                        customer_name=customer_name,
+                    )
+                    return {
+                        "response": response,
+                        "phone_sync_status": "order_status_inquiry",
+                        "order_accepted": False,
+                    }
+            return {
+                "response": _build_no_current_order_response(OrderSource.PHONE, customer_name=customer_name),
+                "phone_sync_status": "order_status_inquiry",
+                "order_accepted": False,
+            }
+
         if pending_order_draft:
             quantity_reply = _extract_quantity_only_reply(message)
             target = _find_single_partial_inventory_target(pending_order_draft)
@@ -650,7 +819,12 @@ class OrderOrchestrator:
                                 item["unit"] = unit
                             break
                     draft.pop("inventory_checked", None)
-                    return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
+                    return await self._build_phone_sync_inventory_result(
+                        draft=draft,
+                        intake_text="",
+                        original_message=message,
+                        session_id=session_id,
+                    )
 
         if known_customer_id and (_is_usual_order_request(message) or _is_previous_order_request(message)):
             memory_service = OrderMemoryService(self._ctx)
@@ -662,12 +836,21 @@ class OrderOrchestrator:
             if draft:
                 if known_customer_name and not draft.get("customer_name"):
                     draft["customer_name"] = known_customer_name
-                return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
+                return await self._build_phone_sync_inventory_result(
+                    draft=draft,
+                    intake_text="",
+                    original_message=message,
+                    session_id=session_id,
+                )
 
         phone_agent = self._make_phone_order_agent()
         intake_text, _elapsed = await self._invoke_agent(phone_agent, prompt)
         logger.info("Phone agent responded in %.2fs", _elapsed)
-        intake_draft = self._extract_json(intake_text) or {}
+        intake_draft = _apply_known_customer_to_intake(
+            self._extract_json(intake_text),
+            known_customer_id=known_customer_id,
+            known_customer_name=known_customer_name,
+        )
 
         if intake_draft.get("is_farewell"):
             return {
@@ -696,6 +879,8 @@ class OrderOrchestrator:
             draft=draft,
             intake_text=intake_text,
             intake_draft=intake_draft,
+            original_message=message,
+            session_id=session_id,
         )
 
     async def _build_phone_sync_inventory_result(
@@ -704,6 +889,8 @@ class OrderOrchestrator:
         draft: dict,
         intake_text: str,
         intake_draft: dict | None = None,
+        original_message: str = "",
+        session_id: str | None = None,
     ) -> dict:
         invalid_quantity_items = _find_non_positive_quantity_items(draft)
         if invalid_quantity_items:
@@ -742,6 +929,34 @@ class OrderOrchestrator:
             ]
             if partial_stock:
                 draft["inventory_checked"] = inventory_results
+        else:
+            route = await _resolve_delivery_route_from_customer(draft, self._ctx)
+            lead_time = await _resolve_lead_time(draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            draft["delivery_date"] = min_d
+            saved_order = await self.create_order_from_draft(
+                draft,
+                source=OrderSource.PHONE,
+                session_id=session_id,
+                status=OrderStatus.ACCEPTED,
+            )
+            asyncio.create_task(self._run_learning(saved_order, original_message))
+            result.update(
+                {
+                    "response": _insert_order_id(response, saved_order.id),
+                    "order_id": saved_order.id,
+                    "order_saved": True,
+                    "customer_id": saved_order.customer_id,
+                    "current_order_id": saved_order.id,
+                    "current_order_snapshot": _build_current_order_snapshot(saved_order),
+                    "current_order_editable": _is_order_editable(saved_order),
+                    "delivery_estimate": delivery_estimator.format_estimate(min_d, max_d),
+                }
+            )
         return result
 
     async def _try_handle_memory_order(
@@ -1103,7 +1318,11 @@ class OrderOrchestrator:
         logger.info("Intake result: %s", intake_text[:500])
         debug_log.append(f"[Intake] Agent応答 ({len(intake_text)}文字, {intake_elapsed}s)")
 
-        intake_draft = self._extract_json(intake_text)
+        intake_draft = _apply_known_customer_to_intake(
+            self._extract_json(intake_text),
+            known_customer_id=known_customer_id,
+            known_customer_name=known_customer_name,
+        )
         if not intake_draft or not intake_draft.get("items"):
             debug_log.append("[Intake] JSON抽出失敗 → フォールバック応答")
             debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
@@ -1488,7 +1707,11 @@ class OrderOrchestrator:
         logger.info("[multi-agent] Intake result: %s", intake_text[:500])
         debug_log.append(f"[Intake] Agent応答 ({len(intake_text)}文字, {intake_elapsed}s)")
 
-        intake_draft = self._extract_json(intake_text)
+        intake_draft = _apply_known_customer_to_intake(
+            self._extract_json(intake_text),
+            known_customer_id=known_customer_id,
+            known_customer_name=known_customer_name,
+        )
         if not intake_draft or not intake_draft.get("items"):
             debug_log.append("[Intake] JSON抽出失敗 → Communication Agentフォールバック")
             debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
@@ -1889,6 +2112,10 @@ class OrderOrchestrator:
         if session.current_order_id:
             repo = self._ctx.get_connector("IOrderRepository")
             current_order = await repo.find_by_id(self._ctx.tenant_id, session.current_order_id)
+        conversation_history = await self._list_recent_history(
+            channel="email",
+            channel_user_id=inbound.channel_user_id,
+        )
 
         result = await self.process_order_message(
             message=inbound.text,
@@ -1896,6 +2123,7 @@ class OrderOrchestrator:
             reply_token=None,
             source=OrderSource.EMAIL,
             response_callback=capture_callback,
+            conversation_history=conversation_history,
             pending_order_draft=session.pending_order_draft,
             session_id=session.id,
             known_customer_id=inbound.customer_id,
@@ -1913,6 +2141,19 @@ class OrderOrchestrator:
             )
 
         return result
+
+    async def _list_recent_history(self, *, channel: str, channel_user_id: str) -> list[MessageHistory]:
+        try:
+            history_repo = self._ctx.get_connector("IMessageHistoryRepository")
+            return await history_repo.list_recent_messages(
+                self._ctx.tenant_id,
+                channel,
+                channel_user_id,
+                HISTORY_CONTEXT_LIMIT,
+            )
+        except Exception:
+            logger.exception("Failed to load %s message history; continuing without memory", channel)
+            return []
 
     async def _generate_final_response(
         self,
@@ -2367,6 +2608,20 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),
     }
+
+
+def _apply_known_customer_to_intake(
+    intake_draft: dict | None,
+    *,
+    known_customer_id: str | None = None,
+    known_customer_name: str | None = None,
+) -> dict:
+    draft = dict(intake_draft or {})
+    if known_customer_id and not draft.get("customer_id"):
+        draft["customer_id"] = known_customer_id
+    if known_customer_name and not draft.get("customer_name"):
+        draft["customer_name"] = known_customer_name
+    return draft
 
 
 def _find_non_positive_quantity_items(draft: dict | None) -> list[dict]:

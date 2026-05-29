@@ -32,7 +32,6 @@ interface ExceptionModalProps {
   exceptions: AgentExceptionCase[];
   orders: Order[];
   onClose: () => void;
-  onOpenOrder: (order: Order) => void;
   onMemoUpdated?: (order: Order) => void;
 }
 
@@ -47,7 +46,7 @@ function formatTime(iso: string): string {
 
 /* ── Main modal ──────────────────────────────────────── */
 
-export default function ExceptionModal({ exceptions, orders, onClose, onOpenOrder, onMemoUpdated }: ExceptionModalProps) {
+export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpdated }: ExceptionModalProps) {
   const [selectedId, setSelectedId] = useState<string>(exceptions.length > 0 ? exceptions[0].id : "");
   // 2タップ式: 同じ exception に対して1回目を踏むと confirmId にセットされ、
   // 3秒以内に 2 回目を踏むと確定。タイムアウトで自動キャンセル。
@@ -251,13 +250,10 @@ export default function ExceptionModal({ exceptions, orders, onClose, onOpenOrde
                     )}
                     <button
                       type="button"
-                      onClick={() => { onClose(); onOpenOrder(selectedOrder); }}
-                      className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-xs font-medium transition-colors"
+                      onClick={onClose}
+                      className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 px-3 py-1.5 text-xs font-medium transition-colors"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      受注詳細を開く
+                      閉じる
                     </button>
                   </div>
                 </div>

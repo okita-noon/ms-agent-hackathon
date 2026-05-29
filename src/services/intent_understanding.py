@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 
 
 class OrderIntent(StrEnum):
+    SMALL_TALK = "small_talk"
     NEW_ORDER = "new_order"
     MODIFY_CURRENT_ORDER = "modify_current_order"
     PARTIAL_CANCEL = "partial_cancel"
@@ -50,13 +51,16 @@ class IntentUnderstandingService:
             if classified:
                 return classified
 
-        return IntentResult(
-            intent=OrderIntent.NEW_ORDER if not has_current_order else OrderIntent.UNCLEAR, confidence=0.0
-        )
+        return IntentResult(intent=OrderIntent.UNCLEAR, confidence=0.0)
 
 
 def _classify_by_rule(message: str, *, has_current_order: bool) -> IntentResult | None:
     normalized = re.sub(r"\s+", "", message).lower()
+    if not normalized:
+        return IntentResult(intent=OrderIntent.SMALL_TALK, confidence=0.9, reason="empty message")
+
+    if _is_small_talk(normalized):
+        return IntentResult(intent=OrderIntent.SMALL_TALK, confidence=0.9, reason="social conversation")
 
     if any(keyword in normalized for keyword in ("在庫", "ざいこ")) and not _has_order_request_keyword(normalized):
         return IntentResult(intent=OrderIntent.INVENTORY_INQUIRY, confidence=0.95)
@@ -105,8 +109,9 @@ def _parse_llm_intent(raw: str) -> IntentResult | None:
 def _build_intent_prompt(message: str, has_current_order: bool) -> str:
     return (
         "次の食品卸の受注会話メッセージを intent JSON に分類してください。\n"
-        "intent は new_order, modify_current_order, partial_cancel, full_cancel, "
+        "intent は small_talk, new_order, modify_current_order, partial_cancel, full_cancel, "
         "repeat_previous_order, repeat_usual_order, inventory_inquiry, order_status_inquiry, unclear のいずれか。\n"
+        "挨拶、天気の話、感謝だけなど、注文処理に入らない社交発話は small_talk としてください。\n"
         "現在注文が存在し、商品名と数量だけが送られている場合は、別注文の明示がない限り modify_current_order としてください。\n"
         "注文全体をやめる・取り消す意図は full_cancel、商品単位で外す意図は partial_cancel としてください。\n"
         f"current_order_exists={has_current_order}\n"
@@ -147,3 +152,49 @@ def _has_cancel_keyword(normalized: str) -> bool:
 
 def _has_order_request_keyword(normalized: str) -> bool:
     return any(keyword in normalized for keyword in ("ください", "下さい", "お願い", "納品", "届け"))
+
+
+def _is_small_talk(normalized: str) -> bool:
+    orderish_keywords = (
+        "注文",
+        "発注",
+        "在庫",
+        "納品",
+        "配送",
+        "届け",
+        "ください",
+        "下さい",
+        "お願い",
+        "キャンセル",
+        "変更",
+        "追加",
+        "修正",
+        "いつもの",
+        "前と同じ",
+        "前回と同じ",
+    )
+    if any(keyword in normalized for keyword in orderish_keywords):
+        return False
+    if re.search(r"\d", normalized):
+        return False
+
+    social_patterns = (
+        "おはよう",
+        "こんにちは",
+        "こんばんは",
+        "お世話になります",
+        "お世話になっております",
+        "いい天気",
+        "良い天気",
+        "天気いい",
+        "天気がいい",
+        "暑いですね",
+        "寒いですね",
+        "雨ですね",
+        "晴れですね",
+        "ありがとう",
+        "ありがとうございます",
+        "助かります",
+        "よろしく",
+    )
+    return any(pattern in normalized for pattern in social_patterns)

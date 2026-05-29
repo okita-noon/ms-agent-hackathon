@@ -27,6 +27,7 @@ from src.services.tenant_resolver import resolve_tenant_for_phone
 logger = logging.getLogger(__name__)
 
 SESSION_TIMEOUT_HOURS = 2
+HISTORY_CONTEXT_LIMIT = 20
 MAX_TURNS = 10
 GREETING_MESSAGE = "お電話ありがとうございます。ご注文内容をお話しください。"
 GOODBYE_MESSAGE = "ご注文ありがとうございました。失礼いたします。"
@@ -273,6 +274,7 @@ class PhoneCallHandler:
         session = await self._ensure_session(state)
         state.session = session
         await self._save_call_message(state, "user", transcribed_text)
+        conversation_history = await self._list_recent_history(state)
 
         orchestrator = OrderOrchestrator(
             tenant_ctx=state.tenant_ctx,
@@ -289,22 +291,35 @@ class PhoneCallHandler:
                     orchestrator.process_phone_order_with_inventory(
                         message=transcribed_text,
                         caller_number=state.caller_number,
+                        conversation_history=conversation_history,
                         pending_order_draft=session.pending_order_draft if session else None,
                         known_customer_id=state.known_customer_id,
                         known_customer_name=known_customer_name,
+                        session_id=session.id if session else None,
                     ),
                     timeout=self._phone_sync_ai_timeout_seconds,
                 )
-                if self._phone_background_validation_enabled and result.get("order_accepted"):
+                if (
+                    self._phone_background_validation_enabled
+                    and result.get("order_accepted")
+                    and not result.get("order_id")
+                ):
                     asyncio.create_task(
                         self._process_phone_order_background(
                             state=state,
                             message=transcribed_text,
+                            conversation_history=conversation_history,
                             pending_order_draft=session.pending_order_draft if session else None,
                         )
                     )
             else:
-                result = await self._process_phone_order_full_sync(orchestrator, state, transcribed_text, session)
+                result = await self._process_phone_order_full_sync(
+                    orchestrator,
+                    state,
+                    transcribed_text,
+                    session,
+                    conversation_history=conversation_history,
+                )
         except TimeoutError:
             logger.warning(
                 "Phone sync AI timed out for call %s after %.1fs",
@@ -316,6 +331,7 @@ class PhoneCallHandler:
                     self._process_phone_order_background(
                         state=state,
                         message=transcribed_text,
+                        conversation_history=conversation_history,
                         pending_order_draft=session.pending_order_draft if session else None,
                     )
                 )
@@ -366,6 +382,7 @@ class PhoneCallHandler:
         state: CallState,
         message: str,
         session: OrderSession,
+        conversation_history: list[MessageHistory] | None = None,
     ) -> dict:
         response_text_holder: list[str] = []
 
@@ -378,6 +395,7 @@ class PhoneCallHandler:
             reply_token=None,
             source=OrderSource.PHONE,
             response_callback=capture_response,
+            conversation_history=conversation_history,
             pending_order_draft=session.pending_order_draft,
             session_id=session.id,
             known_customer_id=state.known_customer_id,
@@ -391,6 +409,7 @@ class PhoneCallHandler:
         self,
         state: CallState,
         message: str,
+        conversation_history: list[MessageHistory] | None,
         pending_order_draft: dict | None,
     ) -> None:
         try:
@@ -410,6 +429,7 @@ class PhoneCallHandler:
                 reply_token=None,
                 source=OrderSource.PHONE,
                 response_callback=ignore_customer_response,
+                conversation_history=conversation_history,
                 pending_order_draft=pending_order_draft,
                 session_id=state.session.id if state.session else None,
                 known_customer_id=state.known_customer_id,
@@ -587,6 +607,21 @@ class PhoneCallHandler:
                 text=text,
             ),
         )
+
+    async def _list_recent_history(self, state: CallState) -> list[MessageHistory]:
+        history_repo = get_message_history_repo(state.tenant_ctx)
+        if history_repo is None:
+            return []
+        try:
+            return await history_repo.list_recent_messages(
+                state.tenant_ctx.tenant_id,
+                "phone",
+                state.caller_number,
+                HISTORY_CONTEXT_LIMIT,
+            )
+        except Exception:
+            logger.exception("Failed to load phone message history; continuing without memory")
+            return []
 
     async def _ensure_session(self, state: CallState) -> OrderSession:
         session_repo = state.tenant_ctx.get_connector("ISessionRepository")
