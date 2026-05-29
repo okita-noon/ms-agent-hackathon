@@ -1862,9 +1862,15 @@ class OrderOrchestrator:
             captured_body.append(body)
 
         current_order = None
+        repo = self._ctx.get_connector("IOrderRepository")
         if session.current_order_id:
-            repo = self._ctx.get_connector("IOrderRepository")
             current_order = await repo.find_by_id(self._ctx.tenant_id, session.current_order_id)
+        if not current_order and inbound.customer_id:
+            orders = await repo.list_by_customer(inbound.customer_id, limit=10)
+            open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
+            candidates = [o for o in orders if o.status in open_statuses]
+            if candidates:
+                current_order = sorted(candidates, key=lambda o: o.updated_at, reverse=True)[0]
         conversation_history = await self._list_recent_history(
             channel="email",
             channel_user_id=inbound.channel_user_id,
