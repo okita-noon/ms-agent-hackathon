@@ -1,9 +1,19 @@
+import { getStoredToken } from "../auth/token";
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function getHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  // Cookie がクロスサイトでブロックされるプライベートウィンドウ向けに
+  // sessionStorage 上の Bearer トークンを併送する。
+  // バックエンドは Authorization ヘッダ優先 → Cookie の順で解釈する（src/auth/dependencies.py）。
+  const token = getStoredToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 const FETCH_TIMEOUT_MS = 30_000;

@@ -6,7 +6,12 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AuthUser } from "./token";
+import {
+  clearStoredToken,
+  getStoredToken,
+  setStoredToken,
+  type AuthUser,
+} from "./token";
 import { AuthContext } from "./context";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -47,8 +52,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     navigateRef.current = navigate;
   }, [navigate]);
 
-  const saveUser = useCallback((u: AuthUser) => {
-    setToken(null);
+  const saveUser = useCallback((u: AuthUser, accessToken?: string | null) => {
+    // Cookie がブロックされる環境向けに、レスポンス body から得たトークンを sessionStorage に保管。
+    // 後続の authFetch が Authorization ヘッダで送るためのフォールバックとして使われる。
+    if (accessToken) {
+      setStoredToken(accessToken);
+    }
+    setToken(accessToken ?? null);
     setUser(u);
     // user と同じバッチで isLoading を落とし、LoadingScreen → Dashboard の
     // 遷移を1回のレンダリングに収める（中間状態でログイン画面が見えるのを防ぐ）
@@ -61,6 +71,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       method: "POST",
       credentials: "include",
     }).catch(() => undefined);
+    clearStoredToken();
     setToken(null);
     setUser(null);
   }, []);
@@ -96,12 +107,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         const data = await res.json();
         if (cancelled) return;
-        saveUser({
-          user_id: "",
-          tenant_id: data.tenant_id,
-          email: data.email,
-          display_name: data.display_name,
-        });
+        saveUser(
+          {
+            user_id: "",
+            tenant_id: data.tenant_id,
+            email: data.email,
+            display_name: data.display_name,
+          },
+          data.access_token,
+        );
         // ログイン画面が再表示されずに直接 /orders へ遷移する
         // navigateRef を使うことで依存配列に navigate を含めずに済み、
         // navigate の参照変化による effect 再実行を防ぐ
@@ -124,6 +138,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     function handleTokenExpired() {
       authGenerationRef.current += 1;
+      clearStoredToken();
       setToken(null);
       setUser(null);
     }
@@ -138,7 +153,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const isCurrentAuthCheck = () =>
       active && authGeneration === authGenerationRef.current;
 
-    fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+    // 起動時：sessionStorage に Bearer トークンがあれば Authorization ヘッダでも送る。
+    // Cookie が使える環境では Cookie 単独でも認証できるが、両方送っても問題ない。
+    const storedToken = getStoredToken();
+    const headers: Record<string, string> = {};
+    if (storedToken) {
+      headers["Authorization"] = `Bearer ${storedToken}`;
+    }
+
+    fetch(`${API_BASE}/api/auth/me`, { credentials: "include", headers })
       .then((res) => {
         if (res.status === 401 || res.status === 403) throw new Error("invalid");
         if (!res.ok) throw new Error("transient");
@@ -155,6 +178,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
       .catch(() => {
         if (!isCurrentAuthCheck()) return;
+        clearStoredToken();
         setToken(null);
         setUser(null);
       })
@@ -185,12 +209,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           throw new Error(err.detail || "ログインに失敗しました");
         }
         const data = await res.json();
-        saveUser({
-          user_id: "",
-          tenant_id: data.tenant_id,
-          email: data.email,
-          display_name: data.display_name,
-        });
+        saveUser(
+          {
+            user_id: "",
+            tenant_id: data.tenant_id,
+            email: data.email,
+            display_name: data.display_name,
+          },
+          data.access_token,
+        );
         // saveToken 内で setIsLoading(false) が呼ばれる
       } catch (err) {
         setIsLoading(false); // エラー時はローディングを解除してフォームを再表示

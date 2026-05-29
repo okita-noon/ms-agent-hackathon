@@ -235,6 +235,7 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 - 全ビジネス API は JWT から `tenant_id` を取得（query parameter 不要）
 - JWT は原則として HttpOnly Cookie に保存し、フロントエンド JavaScript から読めないようにする
 - Cookie 認証での状態変更リクエストは `Origin` を `FRONTEND_ORIGINS` と照合して CSRF リスクを抑える
+- **プライベートウィンドウ向けフォールバック**: フロントと API が別 eTLD+1（例: `*.web.core.windows.net` ⇄ `*.azurecontainerapps.io`）の場合、プライベートウィンドウでは Cookie がクロスサイト Cookie として既定でブロックされる。これを救うため、`/api/auth/login` と `/api/auth/microsoft` のレスポンス body にも `access_token` を返し、フロントは `sessionStorage` に保存して以後 `Authorization: Bearer` でも併送する。バックエンドは Authorization ヘッダ → Cookie の順で参照する（`src/auth/dependencies.py`）。`sessionStorage` はタブクローズで消えるため localStorage より XSS リスクは小さい。SSE (`/api/orders/events`) は `EventSource` が Authorization ヘッダを付けられない仕様により、プライベートウィンドウでは購読できず手動再取得が必要
 
 ---
 
