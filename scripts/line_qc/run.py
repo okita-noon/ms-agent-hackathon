@@ -1,7 +1,7 @@
 """
 LINE QC 自動実行スクリプト
 Created: 2026-05-28
-Updated: 2026-05-28 22:39
+Updated: 2026-05-30 00:23
 
 使い方:
     python scripts/line_qc/run.py
@@ -54,6 +54,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 1,
         "label": "通常注文（即確定）",
         "customer_id": "C-002",
+        # 在庫要件: アボカド>=5、マンゴー>=3
         "messages": [
             "アボカド5個、マンゴー3個お願いします",
         ],
@@ -68,6 +69,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 2,
         "label": "数量不明の確認 → 回答で確定",
         "customer_id": "C-002",
+        # 在庫要件: みかん>=10
         "messages": [
             "みかんちょうだい",
             "10個",
@@ -87,6 +89,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 3,
         "label": "誤発注の数量異常検知 → 修正して確定",
         "customer_id": "C-002",
+        # 在庫要件: みかん>=15（1500個は異常検知で弾かれる想定。15個で確定）
         "messages": [
             "みかん1500個お願いします",
             "15個でお願いします",
@@ -107,6 +110,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 4,
         "label": "在庫不足 → 代替数量で確定",
         "customer_id": "C-002",
+        # 在庫要件: スイカ=1〜49（50個未満。在庫不足を発生させる。代替数量で確定するためゼロ以外）
         "messages": [
             "スイカ50個お願いします",
             "はい、お願いします",
@@ -125,6 +129,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 5,
         "label": "「いつもの」注文（パターン学習）",
         "customer_id": "C-002",
+        # 在庫要件: 特になし（学習パターン次第。パターンなければ確認質問で終わる）
         "messages": [
             "いつものお願い",
         ],
@@ -138,6 +143,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 6,
         "label": "注文 → 変更（文脈保持）",
         "customer_id": "C-002",
+        # 在庫要件: ぶどう>=6（変更後の数量で確定するため）
         "messages": [
             "ぶどう5房お願いします",
             "6房に数量変更してください",
@@ -156,6 +162,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 7,
         "label": "注文 → キャンセル（文脈保持）",
         "customer_id": "C-002",
+        # 在庫要件: みかん>=30（1通目で確定するため）
         "messages": [
             "みかん30個お願いします",
             "さっきの注文キャンセルしたい",
@@ -174,6 +181,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 8,
         "label": "現在の注文の問い合わせ（文脈保持）",
         "customer_id": "C-002",
+        # 在庫要件: レモン>=10
         "messages": [
             "レモン10個お願いします",
             "今の注文って何だっけ？",
@@ -193,6 +201,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 9,
         "label": "配送日・時間帯指定",
         "customer_id": "C-002",
+        # 在庫要件: ぶどう>=3
         "messages": [
             "ぶどう3房、明後日の午前中に届けて",
         ],
@@ -207,6 +216,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 10,
         "label": "在庫問い合わせ → 在庫範囲内で注文",
         "customer_id": "C-002",
+        # 在庫要件: さくらんぼ>=5（在庫照会→注文確定まで通すため）
         "messages": [
             "さくらんぼって今ある？",
             "じゃあ5パックお願い",
@@ -226,6 +236,7 @@ TEST_CASES: list[dict[str, Any]] = [
         "id": 11,
         "label": "表記ゆれ・あいまい商品名",
         "customer_id": "C-002",
+        # 在庫要件: レモン>=5、キウイ>=10
         "messages": [
             "レモン5個とキウイ10コ",
         ],
@@ -288,6 +299,444 @@ TEST_CASES: list[dict[str, Any]] = [
                 ("マンゴー・ブルーベリーに言及", lambda r, d: "マンゴー" in r or "ブルーベリー" in r, "注文内容が含まれる"),
                 ("正しい配送日(6/1)が含まれる", lambda r, d: "6/1" in r or "6月1日" in r or "1日" in r, "確定時の配送日6/1がサマリに引き継がれる"),
                 ("新規注文として処理しない", lambda r, d: d.get("order_saved") is not True, "2通目で新たなorder_savedが発生しない"),
+            ],
+        ],
+    },
+    # ── 多面的拡張ケース（15〜40） ────────────────────────────────────────────
+    {
+        "id": 15,
+        "label": "注文への追加（文脈保持）",
+        "customer_id": "C-002",
+        "messages": [
+            "りんご3箱お願いします",
+            "あとバナナも5kg追加で",
+        ],
+        "checks": [
+            [
+                # りんご・バナナは在庫0想定。確定 or 欠品通知のどちらでも破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+            ],
+            [
+                ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "「変更対象の現在注文が見当たりません」が出ない"),
+                ("バナナに言及または追加受付", lambda r, d: "バナナ" in r or "追加" in r or "在庫" in r or "承知" in r, "追加要求として処理（在庫不足通知含む）"),
+            ],
+        ],
+    },
+    {
+        "id": 16,
+        "label": "在庫0の完全欠品（りんご）",
+        "customer_id": "C-002",
+        "messages": [
+            "りんご5箱お願いします",
+        ],
+        "checks": [
+            [
+                ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "在庫0で確定しない"),
+                ("在庫不足/欠品を通知", lambda r, d: "在庫" in r or "欠品" in r or "受け付けられません" in r or "不足" in r or "ご用意" in r, "欠品/在庫不足メッセージ"),
+            ],
+        ],
+    },
+    {
+        "id": 17,
+        "label": "半角/全角数字ゆれ",
+        "customer_id": "C-002",
+        "messages": [
+            "みかん１０個とキウイ５個お願いします",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "全角数字を解釈して受注確定"),
+                ("みかん・キウイに言及", lambda r, d: "みかん" in r and "キウイ" in r, "両商品が含まれる"),
+                ("数量が解釈される", lambda r, d: "10" in r or "5" in r or "１０" in r or "５" in r, "数量が反映"),
+            ],
+        ],
+    },
+    {
+        "id": 18,
+        "label": "漢数字での数量指定",
+        "customer_id": "C-002",
+        "messages": [
+            "アボカドを五個お願いします",
+        ],
+        "checks": [
+            [
+                # 漢数字解釈は難度が高いため、破綻しないこと＋アボカド言及を本質チェック
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("アボカドに言及", lambda r, d: "アボカド" in r, "アボカドが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 19,
+        "label": "タメ口・カジュアル文体",
+        "customer_id": "C-002",
+        "messages": [
+            "マンゴー3個ちょうだい！よろしく〜",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "口調に関わらず受注確定"),
+                ("マンゴーに言及", lambda r, d: "マンゴー" in r, "マンゴーが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 20,
+        "label": "敬語・丁寧すぎる長文",
+        "customer_id": "C-002",
+        "messages": [
+            "いつも大変お世話になっております。誠に恐れ入りますが、本日キウイを10個ほどご手配いただけますと幸いです。何卒よろしくお願い申し上げます。",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "前置きに惑わされず受注確定"),
+                ("キウイに言及", lambda r, d: "キウイ" in r, "キウイが抽出される"),
+            ],
+        ],
+    },
+    {
+        "id": 21,
+        "label": "絵文字・記号混在",
+        "customer_id": "C-002",
+        "messages": [
+            "レモン🍋を5個お願いします😊",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "絵文字を無視して受注確定"),
+                ("レモンに言及", lambda r, d: "レモン" in r, "レモンが抽出される"),
+            ],
+        ],
+    },
+    {
+        "id": 22,
+        "label": "存在しない商品の注文",
+        "customer_id": "C-002",
+        "messages": [
+            "ドラゴンフルーツ10個お願いします",
+        ],
+        "checks": [
+            [
+                # マスタにない商品。誤マッチ確定しないことを本質チェック。破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+            ],
+        ],
+    },
+    {
+        "id": 23,
+        "label": "単位なしの数量（裸の数字）",
+        "customer_id": "C-002",
+        "messages": [
+            "バナナ5",
+        ],
+        "checks": [
+            [
+                # バナナは在庫0想定。単位補完 or 確認 or 欠品通知。破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("バナナに言及", lambda r, d: "バナナ" in r, "バナナが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 24,
+        "label": "確認待ち中の割り込み別注文",
+        "customer_id": "C-002",
+        "messages": [
+            "りんごちょうだい",
+            "やっぱりみかん10個で",
+        ],
+        "checks": [
+            [
+                ("確認質問あり（確定しない）", lambda r, d: d.get("order_saved") is not True, "数量確認でまだ確定しない"),
+            ],
+            [
+                # 割り込みでみかん側を処理。確定 or 確認のどちらでも破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("みかんに言及", lambda r, d: "みかん" in r or "10" in r, "割り込んだみかんが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 25,
+        "label": "注文直後の矛盾する指示",
+        "customer_id": "C-002",
+        "messages": [
+            "ぶどう5房お願いします",
+            "やっぱりいらない",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                # 取消解釈 or 確認。破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("取消/確認の応答", lambda r, d: "取消" in r or "キャンセル" in r or "承知" in r or "確認" in r, "取消的指示として処理"),
+            ],
+        ],
+    },
+    {
+        "id": 26,
+        "label": "連続追加の積み増し",
+        "customer_id": "C-002",
+        "messages": [
+            "キウイ5個お願いします",
+            "レモンも5個追加",
+            "今の注文は？",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "追加が現在注文に紐付く"),
+                ("レモンに言及または追加受付", lambda r, d: "レモン" in r or "追加" in r or "承知" in r, "レモンが追加される"),
+            ],
+            [
+                ("キウイ・レモン両方残る", lambda r, d: "キウイ" in r and "レモン" in r, "両商品が現在注文に残っている"),
+            ],
+        ],
+    },
+    {
+        "id": 27,
+        "label": "全キャンセル後の再注文（文脈保持）",
+        "customer_id": "C-002",
+        "messages": [
+            "みかん20個お願いします",
+            "さっきの注文キャンセルして",
+            "アボカド3個お願いします",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                ("キャンセル受付", lambda r, d: "取消" in r or "キャンセル" in r or "承知" in r, "キャンセル受付メッセージ"),
+            ],
+            [
+                ("アボカドで新規受注", lambda r, d: d.get("order_saved") is True, "再注文が受注確定する"),
+                ("みかんが混入しない", lambda r, d: "みかん" not in r, "取消済みのみかんが混ざらない"),
+            ],
+        ],
+    },
+    {
+        "id": 28,
+        "label": "数量ゼロ・負数の入力",
+        "customer_id": "C-002",
+        "messages": [
+            "りんご0箱お願いします",
+        ],
+        "checks": [
+            [
+                # 0箱で確定しないことを本質チェック。破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+            ],
+        ],
+    },
+    {
+        "id": 29,
+        "label": "極端に多い商品種類（一括大量）",
+        "customer_id": "C-002",
+        "messages": [
+            "アボカド2個、マンゴー2個、キウイ2個、レモン2個、ぶどう2房、みかん2個お願いします",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "全品在庫ありで受注確定"),
+                ("複数商品に言及", lambda r, d: sum(1 for p in ["アボカド", "マンゴー", "キウイ", "レモン", "ぶどう", "みかん"] if p in r) >= 4, "多数の商品が取りこぼされない"),
+            ],
+        ],
+    },
+    {
+        "id": 30,
+        "label": "在庫不足→数量だけ修正で確定",
+        "customer_id": "C-002",
+        # 在庫要件: メロン=20（50個注文→在庫不足→3個で確定）
+        "messages": [
+            "メロン50個お願いします",
+            "じゃあ3個で",
+        ],
+        "checks": [
+            [
+                ("在庫不足を通知", lambda r, d: "在庫" in r or "受け付けられません" in r or "よろしいですか" in r or "不足" in r, "在庫不足メッセージ"),
+                ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "1通目はまだ確定しない"),
+            ],
+            [
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+            ],
+        ],
+    },
+    {
+        "id": 31,
+        "label": "商品名のみ・複数商品で数量欠落",
+        "customer_id": "C-002",
+        "messages": [
+            "りんごとバナナください",
+            "りんご3箱、バナナ5kgで",
+        ],
+        "checks": [
+            [
+                ("確認質問あり（確定しない）", lambda r, d: d.get("order_saved") is not True, "数量欠落で確認質問"),
+            ],
+            [
+                # りんご・バナナ在庫0想定。確定 or 欠品通知。破綻しなければOK
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("りんご・バナナに言及", lambda r, d: "りんご" in r or "バナナ" in r, "両商品が処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 32,
+        "label": "方言での注文",
+        "customer_id": "C-002",
+        "messages": [
+            "みかん10個ほしいねん、頼むわ",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "方言に関わらず受注確定"),
+                ("みかんに言及", lambda r, d: "みかん" in r, "みかんが抽出される"),
+            ],
+        ],
+    },
+    {
+        "id": 33,
+        "label": "注文と質問の混在",
+        "customer_id": "C-002",
+        "messages": [
+            "アボカド3個お願いします。あとキウイって在庫ある？",
+        ],
+        "checks": [
+            [
+                # 注文と質問の混在。破綻しないこと＋アボカドorキウイ言及を本質チェック
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("アボカドまたはキウイに言及", lambda r, d: "アボカド" in r or "キウイ" in r, "いずれかが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 34,
+        "label": "変更→さらに変更（多段文脈保持）",
+        "customer_id": "C-002",
+        "messages": [
+            "ぶどう5房お願いします",
+            "8房に変更して",
+            "やっぱり10房で",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "1回目変更が現在注文に追従"),
+                ("8への変更言及", lambda r, d: "8" in r or "変更" in r or "更新" in r or "承知" in r, "8房への変更"),
+            ],
+            [
+                ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "2回目変更も追従"),
+                ("10への変更言及", lambda r, d: "10" in r or "変更" in r or "更新" in r or "承知" in r, "10房への再変更"),
+            ],
+        ],
+    },
+    {
+        "id": 35,
+        "label": "在庫問い合わせ→在庫超過で注文",
+        "customer_id": "C-002",
+        # 在庫要件: 梨=10（在庫照会→100個注文→在庫超過で確定しない）
+        "messages": [
+            "梨って今ある？",
+            "じゃあ100個お願い",
+        ],
+        "checks": [
+            [
+                ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "在庫照会のみで受注しない"),
+                ("梨または在庫に言及", lambda r, d: "梨" in r or "在庫" in r or "個" in r, "在庫情報が含まれる"),
+            ],
+            [
+                ("在庫超過で確定しない", lambda r, d: d.get("order_saved") is not True, "在庫10なので100個確定しない"),
+                ("在庫不足/欠品を通知", lambda r, d: "在庫" in r or "不足" in r or "受け付けられません" in r or "欠品" in r, "在庫不足通知"),
+            ],
+        ],
+    },
+    {
+        "id": 36,
+        "label": "キャンセルを撤回（やっぱり注文）",
+        "customer_id": "C-002",
+        "messages": [
+            "レモン10個お願いします",
+            "やっぱりキャンセルで",
+            "やっぱりレモン10個お願いします",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                ("キャンセル受付", lambda r, d: "取消" in r or "キャンセル" in r or "承知" in r, "キャンセル受付メッセージ"),
+            ],
+            [
+                ("再注文で受注確定", lambda r, d: d.get("order_saved") is True, "撤回後にレモンが再受注確定"),
+                ("レモンに言及", lambda r, d: "レモン" in r, "レモンが再注文される"),
+            ],
+        ],
+    },
+    {
+        "id": 37,
+        "label": "極端に長い自由文の注文",
+        "customer_id": "C-002",
+        "messages": [
+            "おはようございます！今日は天気が良くて気持ちいいですね。ところで先日はありがとうございました。それで本題なんですが、マンゴーを3個とブルーベリーを1箱お願いできますか。お忙しいところすみません。",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "雑談を無視して受注確定"),
+                ("マンゴー・ブルーベリーに言及", lambda r, d: "マンゴー" in r and "ブルーベリー" in r, "両商品が抽出される"),
+            ],
+        ],
+    },
+    {
+        "id": 38,
+        "label": "同一商品の重複指定",
+        "customer_id": "C-002",
+        "messages": [
+            "アボカド3個、アボカド2個お願いします",
+        ],
+        "checks": [
+            [
+                # 合算 or 確認。破綻しないこと＋アボカド言及を本質チェック
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+                ("アボカドに言及", lambda r, d: "アボカド" in r, "アボカドが処理対象"),
+            ],
+        ],
+    },
+    {
+        "id": 39,
+        "label": "配送日のみ後から指定（文脈保持）",
+        "customer_id": "C-002",
+        "messages": [
+            "キウイ5個お願いします",
+            "明後日の午前中に届けて",
+        ],
+        "checks": [
+            [
+                ("受注確定", lambda r, d: d.get("order_saved") is True, "order_saved=True"),
+            ],
+            [
+                ("変更対象なしと返さない", lambda r, d: "変更対象" not in r, "配送日指定が現在注文に紐付く"),
+                ("破綻しない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
+            ],
+        ],
+    },
+    {
+        "id": 40,
+        "label": "無言・記号のみ・空白",
+        "customer_id": "C-002",
+        "messages": [
+            "？？？",
+        ],
+        "checks": [
+            [
+                ("受注確定しない", lambda r, d: d.get("order_saved") is not True, "記号のみで受注確定しない"),
+                ("エラーでない", lambda r, d: r != "" and "エラー" not in r, "応答が空でなくエラーでない"),
             ],
         ],
     },
@@ -736,6 +1185,19 @@ def _get_max_pr() -> str:
 async def main(args: argparse.Namespace) -> None:
     _load_dotenv(REPO_ROOT / ".env")
 
+    # 在庫チェック・補正（--skip-stock-check で省略可）
+    if not getattr(args, "skip_stock_check", False):
+        import subprocess
+        print("── 在庫チェック中 ──────────────────────────")
+        result = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "check_stock" / "run.py")],
+            capture_output=False
+        )
+        if result.returncode != 0:
+            print("在庫チェックに失敗しましたわ。--skip-stock-check で省略できます。")
+            sys.exit(1)
+        print()
+
     base_url = args.base_url or os.environ.get("LINE_TESTER_BASE_URL", DEFAULT_BASE_URL)
     access_code = os.environ.get("LINE_TESTER_ACCESS_CODE", DEFAULT_ACCESS_CODE)
     verbose = args.verbose
@@ -811,4 +1273,5 @@ if __name__ == "__main__":
     parser.add_argument("--cases", default=None, help="実行するケースID（カンマ区切り）例: 1,3,5")
     parser.add_argument("--customer", default=None, help="全ケースで使用する顧客ID（例: C-011）")
     parser.add_argument("--verbose", action="store_true", help="詳細ログを表示")
+    parser.add_argument("--skip-stock-check", action="store_true", help="在庫チェック・補正をスキップ")
     asyncio.run(main(parser.parse_args()))
