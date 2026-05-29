@@ -59,6 +59,7 @@
 - [x] 注文・在庫・意図分類の業務サービス層（`OrderApplicationService`, `InventoryApplicationService`, `OrderMemoryService`, `IntentUnderstandingService`）を追加。自然文キャンセル、LLM Intent による曖昧キャンセル分類、在庫不足後の数量だけ返信（例:「じゃあ1kg」）、LINE/メール/電話の「いつもの」「前と同じ」注文復元をテスト付きで対応
 - [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能
 - [x] Cosmos DB 本番デモデータの未来日受注（`DEMO-20260527-*`）を2026-05-26基準へ補正し、再投入用シードJSONも同様に更新
+- [x] 受注ステータス更新 API `PUT /api/orders/{order_id}/status`（要対応→受注済み等、完了/キャンセル状態への戻し以外を許可、SSE `order_updated` を発火）
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
@@ -89,6 +90,7 @@
   - 電話発注（Web）のテスト用テンプレート（Quick Messages）を大幅拡充。通常発注・追加変更・全体取消・リピート・在庫代替・曖昧例外の6カテゴリに整理し、切り替え用タブUIを導入してテストしやすさを向上
   - 受注詳細の注文会話履歴で、電話チャネルも受注側メッセージが右側に揃うよう表示を統一
   - ログイン画面のサブコピーを「受注業務をスマートに」に変更
+  - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。表示条件は **注文の `status == 要対応`**（needs_review に限らず、同一注文に紐づく在庫不足・数量異常などの例外を選択中でも表示）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該注文の要対応タグ起因の案件が消える
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check

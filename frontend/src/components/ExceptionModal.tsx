@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import type {
-  AgentExceptionCase,
-  AgentExceptionSeverity,
-  AgentExceptionType,
-  Order,
+import { useEffect, useRef, useState } from "react";
+import {
+  updateOrderStatus,
+  type AgentExceptionCase,
+  type AgentExceptionSeverity,
+  type AgentExceptionType,
+  type Order,
 } from "../lib/api";
 import OrderDetailContent from "./OrderDetailContent";
 
@@ -47,6 +48,12 @@ function formatTime(iso: string): string {
 
 export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpdated }: ExceptionModalProps) {
   const [selectedId, setSelectedId] = useState<string>(exceptions.length > 0 ? exceptions[0].id : "");
+  // 2タップ式: 同じ exception に対して1回目を踏むと confirmId にセットされ、
+  // 3秒以内に 2 回目を踏むと確定。タイムアウトで自動キャンセル。
+  const [resolveConfirmId, setResolveConfirmId] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const confirmTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -55,6 +62,52 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  // 選択が変わったら確認状態をリセット
+  useEffect(() => {
+    setResolveConfirmId(null);
+    setResolveError(null);
+  }, [selectedId]);
+
+  // confirm タイマーのクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current !== null) {
+        window.clearTimeout(confirmTimerRef.current);
+      }
+    };
+  }, []);
+
+  function armResolveConfirm(excId: string) {
+    setResolveError(null);
+    setResolveConfirmId(excId);
+    if (confirmTimerRef.current !== null) {
+      window.clearTimeout(confirmTimerRef.current);
+    }
+    confirmTimerRef.current = window.setTimeout(() => {
+      setResolveConfirmId((current) => (current === excId ? null : current));
+      confirmTimerRef.current = null;
+    }, 3000);
+  }
+
+  async function handleResolve(_excId: string, orderId: string) {
+    if (confirmTimerRef.current !== null) {
+      window.clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const updated = await updateOrderStatus(orderId, "受注済み");
+      onMemoUpdated?.(updated);
+      setResolveConfirmId(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "対応済み更新に失敗しました";
+      setResolveError(msg);
+    } finally {
+      setResolving(false);
+    }
+  }
 
   const orderMap = new Map(orders.map((o) => [o.uid || o.id, o]));
   const highCount = exceptions.filter((e) => e.severity === "high").length;
@@ -155,16 +208,54 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                     order={selectedOrder}
                     exceptions={exceptions}
                     onMemoUpdated={onMemoUpdated}
+                    hideResolveAction
                   />
                 </div>
-                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end shrink-0">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 px-3 py-1.5 text-xs font-medium transition-colors"
-                  >
-                    閉じる
-                  </button>
+                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-2 shrink-0">
+                  <div className="flex-1 min-w-0">
+                    {resolveError && (
+                      <p className="text-xs text-red-600 truncate" role="alert">
+                        {resolveError}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {selectedOrder.status === "要対応" && (
+                      resolveConfirmId === selectedExc.id ? (
+                        <button
+                          type="button"
+                          disabled={resolving}
+                          onClick={() => handleResolve(selectedExc.id, selectedExc.order_id)}
+                          className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {resolving ? "更新中…" : "もう一度押して確定"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={resolving}
+                          onClick={() => armResolveConfirm(selectedExc.id)}
+                          className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60"
+                          title="要対応タグを外し、受注済みに変更します"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          対応済みにする
+                        </button>
+                      )
+                    )}
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 px-3 py-1.5 text-xs font-medium transition-colors"
+                    >
+                      閉じる
+                    </button>
+                  </div>
                 </div>
               </>
             ) : selectedExc && !selectedOrder ? (

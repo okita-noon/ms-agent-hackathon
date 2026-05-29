@@ -281,3 +281,141 @@ class TestOrderMessages:
         history_repo.list_by_session_id.assert_awaited_once_with("T-001", "sess-1")
         assert result["session_id"] == "sess-1"
         assert [message["id"] for message in result["messages"]] == ["hist-user"]
+
+
+class TestUpdateOrderStatus:
+    """PUT /api/orders/{order_id}/status の動作テスト."""
+
+    def _build_order(self, status: str = "要対応") -> Order:
+        return Order(
+            uid="ORD-001",
+            tenant_id="T-001",
+            order_date=date(2026, 5, 28),
+            delivery_date=date(2026, 5, 28),
+            customer_id="C-001",
+            customer_name="ビストロ青葉",
+            source=OrderSource.LINE,
+            status=status,
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_status_from_needs_review_to_accepted_publishes_event(self):
+        from src.api.main import OrderStatusUpdate, update_order_status
+
+        before = self._build_order(status="要対応")
+        after = self._build_order(status="受注済み")
+
+        order_repo = MagicMock()
+        order_repo.find_by_id = AsyncMock(side_effect=[before, after])
+        order_repo.update_status = AsyncMock()
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.return_value = order_repo
+
+        with (
+            patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx),
+            patch("src.api.main.dashboard_event_broker.publish", new=AsyncMock()) as publish_mock,
+        ):
+            result = await update_order_status(
+                order_id="ORD-001",
+                payload=OrderStatusUpdate(status="受注済み"),
+                tenant_id="T-001",
+            )
+
+        order_repo.update_status.assert_awaited_once()
+        # 第3引数の OrderStatus を value で比較
+        args, _ = order_repo.update_status.call_args
+        assert args[0] == "T-001"
+        assert args[1] == "ORD-001"
+        assert args[2].value == "受注済み"
+
+        publish_mock.assert_awaited_once()
+        publish_args, _ = publish_mock.call_args
+        assert publish_args[0] == "order_updated"
+        assert publish_args[1] == "T-001"
+        assert publish_args[2]["reason"] == "status_updated"
+        assert publish_args[2]["order_id"] == "ORD-001"
+
+        assert result["status"] == "受注済み"
+
+    @pytest.mark.asyncio
+    async def test_update_status_rejects_invalid_status(self):
+        from fastapi import HTTPException
+
+        from src.api.main import OrderStatusUpdate, update_order_status
+
+        with pytest.raises(HTTPException) as excinfo:
+            await update_order_status(
+                order_id="ORD-001",
+                payload=OrderStatusUpdate(status="存在しない"),
+                tenant_id="T-001",
+            )
+        assert excinfo.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_update_status_returns_404_when_order_missing(self):
+        from fastapi import HTTPException
+
+        from src.api.main import OrderStatusUpdate, update_order_status
+
+        order_repo = MagicMock()
+        order_repo.find_by_id = AsyncMock(return_value=None)
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.return_value = order_repo
+
+        with patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx):
+            with pytest.raises(HTTPException) as excinfo:
+                await update_order_status(
+                    order_id="ORD-XYZ",
+                    payload=OrderStatusUpdate(status="受注済み"),
+                    tenant_id="T-001",
+                )
+        assert excinfo.value.status_code == 404
+        order_repo.update_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_status_rejects_changing_terminal_status(self):
+        from fastapi import HTTPException
+
+        from src.api.main import OrderStatusUpdate, update_order_status
+
+        completed = self._build_order(status="完了")
+        order_repo = MagicMock()
+        order_repo.find_by_id = AsyncMock(return_value=completed)
+        order_repo.update_status = AsyncMock()
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.return_value = order_repo
+
+        with patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx):
+            with pytest.raises(HTTPException) as excinfo:
+                await update_order_status(
+                    order_id="ORD-001",
+                    payload=OrderStatusUpdate(status="受注済み"),
+                    tenant_id="T-001",
+                )
+        assert excinfo.value.status_code == 409
+        order_repo.update_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_status_noop_when_same_status(self):
+        from src.api.main import OrderStatusUpdate, update_order_status
+
+        order = self._build_order(status="受注済み")
+        order_repo = MagicMock()
+        order_repo.find_by_id = AsyncMock(return_value=order)
+        order_repo.update_status = AsyncMock()
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.return_value = order_repo
+
+        with (
+            patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx),
+            patch("src.api.main.dashboard_event_broker.publish", new=AsyncMock()) as publish_mock,
+        ):
+            result = await update_order_status(
+                order_id="ORD-001",
+                payload=OrderStatusUpdate(status="受注済み"),
+                tenant_id="T-001",
+            )
+
+        order_repo.update_status.assert_not_called()
+        publish_mock.assert_not_called()
+        assert result["status"] == "受注済み"
