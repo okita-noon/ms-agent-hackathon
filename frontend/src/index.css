@@ -83,6 +83,12 @@ tr.row-hover {
 tr.row-hover:hover {
   background-color: #f1f5f9;
 }
+tr.row-hover.row-review {
+  background-color: #fff1f2;
+}
+tr.row-hover.row-review:hover {
+  background-color: #ffe4e6;
+}
 
 .animate-new-order {
   animation: newOrderHighlight 6s ease-out, newOrderSlideIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);

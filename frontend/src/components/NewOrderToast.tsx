@@ -5,7 +5,8 @@ export interface ToastItem {
   order_id: string;
   customer_name?: string;
   source?: string;
-  order_date?: string;
+  /** ISO timestamp recorded at the moment the SSE event was received */
+  received_at: string;
   type: "created" | "updated";
 }
 
@@ -16,9 +17,8 @@ const SOURCE_ICON: Record<string, string> = {
   web: "🌐",
 };
 
-function formatToastTime(value?: string): string {
-  if (!value) return "";
-  const d = new Date(value);
+function formatToastTime(iso: string): string {
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
 }
@@ -38,7 +38,7 @@ function SingleToast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: s
   }, []);
 
   const icon = SOURCE_ICON[toast.source ?? ""] ?? "📦";
-  const time = formatToastTime(toast.order_date);
+  const time = formatToastTime(toast.received_at);
   const isNew = toast.type === "created";
 
   return (

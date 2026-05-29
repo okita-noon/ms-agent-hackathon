@@ -190,7 +190,7 @@ export default function Orders() {
             order_id: payload.order_id,
             customer_name: payload.customer_name,
             source: payload.source,
-            order_date: payload.order_date,
+            received_at: new Date().toISOString(),
             type: eventType,
           };
           setToasts((current) => [...current.slice(-3), toast]);
@@ -450,7 +450,11 @@ export default function Orders() {
                     <tr
                       key={orderId}
                       className={`row-hover cursor-pointer group ${
-                        recentOrderIds.has(orderId) ? "bg-green-50 animate-new-order" : ""
+                        recentOrderIds.has(orderId)
+                          ? "bg-green-50 animate-new-order"
+                          : normalizeStatus(o.status) === "要対応"
+                          ? "row-review"
+                          : ""
                       }`}
                       onClick={() => setSelected(o)}
                     >
