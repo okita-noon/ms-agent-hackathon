@@ -15,17 +15,14 @@ from src.services.phone_handler import (
 )
 
 
-def _make_handler(sync_ai: bool = True) -> PhoneCallHandler:
-    handler = PhoneCallHandler(
+def _make_handler() -> PhoneCallHandler:
+    return PhoneCallHandler(
         callback_base_url="https://test.example.com",
         azure_openai_endpoint="https://test.openai.azure.com/",
         azure_openai_key="test-key",
         speech_service_key="test-speech-key",
         speech_service_endpoint="https://test.speech.azure.com/",
     )
-    handler._phone_sync_ai_enabled = sync_ai
-    handler._phone_background_validation_enabled = False
-    return handler
 
 
 def _make_incoming_call_event(
@@ -99,13 +96,17 @@ def _register_call_state(handler: PhoneCallHandler, mock_tenant_ctx, conn_id: st
     return state
 
 
+def _mock_orchestrator_result(**overrides) -> dict:
+    base = {"response": "テスト応答", "order_id": None, "order_saved": False}
+    base.update(overrides)
+    return base
+
+
 class TestHandleIncomingCall:
     @pytest.mark.asyncio
     async def test_answers_call_and_creates_state(self, mock_tenant_ctx):
         handler = _make_handler()
 
-        mock_call_connection = MagicMock()
-        mock_call_connection.call_connection_id = "conn-001"
         mock_answer_result = MagicMock()
         mock_answer_result.call_connection.call_connection_id = "conn-001"
 
@@ -161,7 +162,7 @@ class TestHandleCallConnected:
 
 class TestHandleRecognizeCompleted:
     @pytest.mark.asyncio
-    async def test_processes_speech_through_phone_sync_orchestrator(self, mock_tenant_ctx):
+    async def test_processes_speech_through_unified_orchestrator(self, mock_tenant_ctx):
         handler = _make_handler()
         state = _register_call_state(handler, mock_tenant_ctx)
 
@@ -170,61 +171,55 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.return_value = {
-            "response": "りんご10箱、在庫は確認できました。",
-            "order_accepted": True,
-            "phone_sync_status": "inventory_checked",
-        }
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="りんご10箱、承りました。",
+            order_id="ORD-PHONE-001",
+            order_saved=True,
+        )
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
 
         assert result["status"] == "processed"
-        assert result["phone_sync_status"] == "inventory_checked"
-        assert result["response"] == "りんご10箱、在庫は確認できました。"
+        assert result["order_id"] == "ORD-PHONE-001"
+        assert result["response"] == "りんご10箱、承りました。"
         assert state.turn_count == 1
         assert state.order_confirmed is True
 
-        call_kwargs = mock_orchestrator.process_phone_order_with_inventory.call_args
-        assert call_kwargs.kwargs["message"] == "りんご10箱"
-        assert call_kwargs.kwargs["caller_number"] == "+81312345678"
-        assert call_kwargs.kwargs["session_id"].startswith("sess-phone-")
+        call_kwargs = mock_orchestrator.process_order_message.call_args.kwargs
+        assert call_kwargs["message"] == "りんご10箱"
+        assert call_kwargs["line_user_id"] == "+81312345678"
+        assert call_kwargs["session_id"].startswith("sess-phone-")
+        assert call_kwargs["reply_token"] is None
+        assert call_kwargs["response_callback"] is not None
 
     @pytest.mark.asyncio
-    async def test_does_not_start_background_validation_when_sync_order_saved(self, mock_tenant_ctx):
+    async def test_order_confirmed_only_when_order_id_present(self, mock_tenant_ctx):
         handler = _make_handler()
-        _register_call_state(handler, mock_tenant_ctx)
+        state = _register_call_state(handler, mock_tenant_ctx)
 
         session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
         session_repo.find_active_session.return_value = None
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.return_value = {
-            "response": "りんご10箱、在庫は確認できました。",
-            "order_accepted": True,
-            "order_id": "ORD-PHONE",
-            "phone_sync_status": "inventory_checked",
-        }
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="数量を教えてください。",
+            session_status="awaiting_reply",
+            pending_order_draft={"items": [{"product_name": "りんご"}]},
+        )
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
-            patch.object(handler, "_process_phone_order_background", new_callable=AsyncMock) as mock_background,
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
-            result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+            result = await handler.handle_event(_make_recognize_completed_event(speech="りんごちょうだい"))
 
-        assert result["order_id"] == "ORD-PHONE"
-        mock_background.assert_not_called()
+        assert result["session_status"] == "awaiting_reply"
+        assert state.order_confirmed is False
 
     @pytest.mark.asyncio
     async def test_creates_session_on_first_turn(self, mock_tenant_ctx):
@@ -236,13 +231,10 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.return_value = {"response": "OK", "order_accepted": True}
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result()
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             await handler.handle_event(_make_recognize_completed_event())
@@ -262,13 +254,10 @@ class TestHandleRecognizeCompleted:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.side_effect = RuntimeError("LLM down")
+        mock_orchestrator.process_order_message.side_effect = RuntimeError("LLM down")
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
         ):
             result = await handler.handle_event(_make_recognize_completed_event())
@@ -288,16 +277,13 @@ class TestHandleRecognizeCompleted:
         history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.return_value = {
-            "response": "りんご10箱、在庫は確認できました。",
-            "order_accepted": True,
-        }
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="りんご10箱、承りました。",
+            order_id="ORD-001",
+        )
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
@@ -307,7 +293,7 @@ class TestHandleRecognizeCompleted:
         assert [m.role for m in saved] == ["user", "assistant"]
         assert saved[0].channel == "phone"
         assert saved[0].text == "りんご10箱"
-        assert "在庫は確認できました" in saved[1].text
+        assert "承りました" in saved[1].text
 
     @pytest.mark.asyncio
     async def test_saves_fallback_history_on_timeout(self, mock_tenant_ctx):
@@ -320,13 +306,10 @@ class TestHandleRecognizeCompleted:
         history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.side_effect = TimeoutError()
+        mock_orchestrator.process_order_message.side_effect = TimeoutError()
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
@@ -347,13 +330,10 @@ class TestHandleRecognizeCompleted:
         history_repo = mock_tenant_ctx.get_connector("IMessageHistoryRepository")
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.side_effect = RuntimeError("LLM down")
+        mock_orchestrator.process_order_message.side_effect = RuntimeError("LLM down")
 
         with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_play_tts", new_callable=AsyncMock),
         ):
             result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
@@ -373,6 +353,36 @@ class TestHandleRecognizeCompleted:
 
         assert result["status"] == "empty_speech"
         mock_play.assert_called_once_with(handler._calls["conn-001"], RETRY_MESSAGE)
+
+    @pytest.mark.asyncio
+    async def test_session_updated_with_current_order_on_confirm(self, mock_tenant_ctx):
+        handler = _make_handler()
+        _register_call_state(handler, mock_tenant_ctx)
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="承りました。",
+            order_id="ORD-123",
+            order_saved=True,
+            current_order_id="ORD-123",
+            current_order_snapshot={"id": "ORD-123", "items": []},
+            current_order_editable=True,
+            customer_id="C-001",
+        )
+
+        with (
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch.object(handler, "_play_tts", new_callable=AsyncMock),
+        ):
+            await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+
+        updated_session = session_repo.update_session.call_args[0][0]
+        assert updated_session.current_order_id == "ORD-123"
+        assert updated_session.customer_id == "C-001"
 
 
 class TestHandlePlayCompleted:
@@ -461,42 +471,6 @@ class TestHandleCallDisconnected:
         assert result is None
 
 
-class TestOrchestratorCallback:
-    @pytest.mark.asyncio
-    async def test_response_callback_captures_text(self, mock_tenant_ctx):
-        """Verify the orchestrator uses response_callback instead of LINE send."""
-        handler = _make_handler(sync_ai=False)
-        _register_call_state(handler, mock_tenant_ctx)
-
-        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
-        session_repo.find_active_session.return_value = None
-        session_repo.create_session.side_effect = lambda s: s
-
-        captured_callback = None
-
-        async def mock_process(**kwargs):
-            nonlocal captured_callback
-            captured_callback = kwargs.get("response_callback")
-            if captured_callback:
-                await captured_callback("テスト応答")
-            return {"response": "テスト応答", "order_id": "ORD-TEST"}
-
-        mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_order_message.side_effect = mock_process
-
-        with (
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
-            patch.object(handler, "_play_tts", new_callable=AsyncMock) as mock_play,
-        ):
-            await handler.handle_event(_make_recognize_completed_event())
-
-        assert captured_callback is not None
-        mock_play.assert_called()
-
-
 class TestDemoPhoneMessage:
     @pytest.mark.asyncio
     async def test_processes_demo_message_without_audio_calls(self, mock_tenant_ctx):
@@ -507,21 +481,14 @@ class TestDemoPhoneMessage:
         session_repo.create_session.side_effect = lambda s: s
 
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_phone_order_with_inventory.return_value = {
-            "response": "りんご10箱、在庫は確認できました。",
-            "order_accepted": True,
-            "phone_sync_status": "inventory_checked",
-        }
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="りんご10箱、承りました。",
+            order_id="ORD-DEMO",
+        )
 
         with (
-            patch(
-                "src.services.phone_handler.resolve_tenant_for_phone",
-                return_value=mock_tenant_ctx,
-            ),
-            patch(
-                "src.services.phone_handler.OrderOrchestrator",
-                return_value=mock_orchestrator,
-            ),
+            patch("src.services.phone_handler.resolve_tenant_for_phone", return_value=mock_tenant_ctx),
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
             patch.object(handler, "_get_acs_client") as mock_client,
         ):
             result = await handler.process_demo_message(
@@ -531,6 +498,6 @@ class TestDemoPhoneMessage:
             )
 
         assert result["demo_mode"] is True
-        assert result["response"] == "りんご10箱、在庫は確認できました。"
+        assert result["response"] == "りんご10箱、承りました。"
         assert handler._calls[result["call_connection_id"]].audio_enabled is False
         mock_client.assert_not_called()
