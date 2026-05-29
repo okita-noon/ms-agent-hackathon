@@ -104,7 +104,7 @@ async def login(req: LoginRequest, response: Response):
     token = create_access_token(user)
     _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token="",
+        access_token=token,
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
@@ -149,7 +149,7 @@ async def register(
     token = create_access_token(user)
     _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token="",
+        access_token=token,
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
@@ -202,7 +202,7 @@ async def microsoft_login(req: MicrosoftLoginRequest, response: Response):
     token = create_access_token(user)
     _set_auth_cookie(response, token)
     return TokenResponse(
-        access_token="",
+        access_token=token,
         tenant_id=user.tenant_id,
         display_name=user.display_name,
         email=user.email,
