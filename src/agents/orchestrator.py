@@ -271,16 +271,6 @@ class OrderOrchestrator:
             instructions=get_intake_instructions(channel),
         )
 
-    def _make_exception_agent(self, channel: str = "line") -> ChatCompletionAgent:
-        kernel = self._build_kernel(
-            (ExceptionPlugin(self._ctx), "exception"),
-        )
-        return ChatCompletionAgent(
-            kernel=kernel,
-            name="ExceptionAgent",
-            instructions=get_exception_instructions(channel),
-        )
-
     def _make_inventory_agent(self, channel: str = "line") -> ChatCompletionAgent:
         kernel = self._build_kernel(
             (InventoryPlugin(self._ctx), "inventory"),
@@ -461,9 +451,9 @@ class OrderOrchestrator:
         if pending_order_draft:
             _affirmative = _is_affirmative_reply(message)
             if _affirmative:
-                debug_log.append(f"[判定] 肯定返答 → ドラフト受注確定 (message={message!r})")
+                debug_log.append(f"[判定] 肯定返答（ルール）→ ドラフト受注確定 (message={message!r})")
             else:
-                debug_log.append(f"[判定] ドラフトあるが肯定返答ではない (message={message!r})")
+                debug_log.append(f"[判定] ルールでは肯定判定せず (message={message!r})")
         else:
             _affirmative = False
         if pending_order_draft and not _affirmative:
@@ -481,6 +471,19 @@ class OrderOrchestrator:
             if pending_quantity_result:
                 result.update(pending_quantity_result)
                 result["debug_log"] = debug_log
+                return result
+            llm_reply_class = await self._classify_pending_reply(message, source=source)
+            debug_log.append(f"[判定] LLM確認返答分類: {llm_reply_class}")
+            if llm_reply_class == "affirmative":
+                _affirmative = True
+            elif llm_reply_class == "rejection":
+                debug_log.append("[判定] 拒否 → ドラフト破棄、注文促し")
+                response_text = "承知いたしました。ご注文がありましたら、商品名と数量をお知らせください。"
+                result.update({"response": response_text, "pending_order_draft": None})
+                if response_callback:
+                    await response_callback(response_text)
+                else:
+                    await self._send_line_message(response_text, reply_token, line_user_id)
                 return result
         if pending_order_draft and _affirmative:
             saved_order = await self.create_order_from_draft(
@@ -702,6 +705,31 @@ class OrderOrchestrator:
             customer = await customer_repo.find_by_identifier(self._ctx.tenant_id, channel_user_id)
             debug_log.append(f"[顧客解決] 経路=電話番号検索, customer_id={(customer.id if customer else '未特定')}")
         return customer.id if customer else None
+
+    async def _classify_pending_reply(self, message: str, *, source: OrderSource) -> str:
+        """確認待ちドラフトに対する返答を LLM で分類する。
+
+        Returns: "affirmative" | "quantity_correction" | "rejection" | "unrelated"
+        """
+        prompt = (
+            "食品卸の受注システムです。AI が数量確認や在庫確認の質問をした後の、顧客の返答を分類してください。\n"
+            "分類:\n"
+            "- affirmative: 確認に同意している（例: この分量でOK、はい大丈夫、それで進めて、構いません）\n"
+            "- quantity_correction: 数量を訂正している（例: じゃあ5個で、半分にして、やっぱり10箱）\n"
+            "- rejection: 拒否・キャンセルしている（例: やめます、いらない、今回はなしで）\n"
+            "- unrelated: 確認と無関係な発話（例: 天気の話、別の商品の注文）\n\n"
+            f"顧客の返答: {message}\n"
+            '出力は分類名のみ1語で返してください（例: affirmative）'
+        )
+        try:
+            agent = self._make_orchestrator_agent(_source_to_channel(source))
+            raw, _elapsed = await self._invoke_agent(agent, prompt)
+            cleaned = raw.strip().lower().strip('"\'')
+            valid = {"affirmative", "quantity_correction", "rejection", "unrelated"}
+            return cleaned if cleaned in valid else "unrelated"
+        except Exception:
+            logger.exception("Failed to classify pending reply via LLM")
+            return "unrelated"
 
     async def _classify_intent(self, message: str, *, source: OrderSource, has_current_order: bool) -> IntentResult:
         async def llm_classifier(prompt: str) -> str:
@@ -1118,34 +1146,24 @@ class OrderOrchestrator:
                 f" (product_id={it.get('product_id', 'N/A')})"
             )
 
-        # ── Step 2: Exception Agent ────────────────────────────────────────────
+        # ── Step 2: Exception check (code-based) ─────────────────────────────
         exception_text: str | None = None
         exception_result: dict | None = None
+        anomaly_confirmation_needed = False
         if items and customer_id:
-            exception_agent = self._make_exception_agent(channel)
-            items_summary = json.dumps(items, ensure_ascii=False)
-            exception_prompt = (
-                f"以下の注文ドラフトの異常検知を行ってください。\n"
-                f"顧客ID: {customer_id}\n"
-                f"注文アイテム: {items_summary}\n"
-                f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
-                f"結果をJSON形式で返してください。"
-            )
-            exception_text, exc_elapsed = await self._invoke_agent(exception_agent, exception_prompt)
-            logger.info("Exception result: %s", exception_text[:500])
-            exception_result = self._extract_json(exception_text)
-            debug_log.append(
-                f"[Exception] confirmation_needed="
-                f"{exception_result.get('confirmation_needed') if exception_result else 'N/A'}"
-                f" ({exc_elapsed}s)"
-            )
+            exception_result = await _check_anomalies(self._ctx, customer_id, items)
+            if exception_result.get("confirmation_needed"):
+                anomaly_confirmation_needed = True
+                needs_confirmation = True
+                anomaly_details = exception_result.get("anomalies", [])
+                exception_text = "; ".join(
+                    (a.get("quantity_anomaly") or a.get("unit_anomaly") or {}).get("reason", "")
+                    for a in anomaly_details
+                    if (a.get("quantity_anomaly") or a.get("unit_anomaly") or {}).get("reason")
+                )
+            debug_log.append(f"[Exception] confirmation_needed={anomaly_confirmation_needed}")
         else:
             debug_log.append("[Exception] スキップ（items or customer_id なし）")
-
-        anomaly_confirmation_needed = False
-        if exception_result and exception_result.get("confirmation_needed"):
-            anomaly_confirmation_needed = True
-            needs_confirmation = True
 
         # ── Step 3: Inventory check (code-based) ─────────────────────────────
         checked_items: list[dict] = []
@@ -1505,31 +1523,22 @@ class OrderOrchestrator:
                 f" (product_id={it.get('product_id', 'N/A')})"
             )
 
-        # ── Chain Step 2: Exception Agent ──────────────────────────────────────
+        # ── Chain Step 2: Exception check (code-based) ────────────────────────
         exception_text: str | None = None
         exception_result: dict | None = None
         anomaly_confirmation_needed = False
         if items and customer_id:
-            exception_agent = self._make_exception_agent(channel)
-            items_summary = json.dumps(items, ensure_ascii=False)
-            exception_prompt = (
-                f"以下の注文ドラフトの異常検知を行ってください。\n"
-                f"顧客ID: {customer_id}\n"
-                f"注文アイテム: {items_summary}\n"
-                f"各アイテムに対して detect_quantity_anomaly と detect_unit_anomaly を実行し、"
-                f"結果をJSON形式で返してください。"
-            )
-            exception_text, exc_elapsed = await self._invoke_agent(exception_agent, exception_prompt)
-            logger.info("[multi-agent] Exception result: %s", exception_text[:500])
-            exception_result = self._extract_json(exception_text)
-            debug_log.append(
-                f"[Exception] confirmation_needed="
-                f"{exception_result.get('confirmation_needed') if exception_result else 'N/A'}"
-                f" ({exc_elapsed}s)"
-            )
-            if exception_result and exception_result.get("confirmation_needed"):
+            exception_result = await _check_anomalies(self._ctx, customer_id, items)
+            if exception_result.get("confirmation_needed"):
                 anomaly_confirmation_needed = True
                 needs_confirmation = True
+                anomaly_details = exception_result.get("anomalies", [])
+                exception_text = "; ".join(
+                    (a.get("quantity_anomaly") or a.get("unit_anomaly") or {}).get("reason", "")
+                    for a in anomaly_details
+                    if (a.get("quantity_anomaly") or a.get("unit_anomaly") or {}).get("reason")
+                )
+            debug_log.append(f"[Exception] confirmation_needed={anomaly_confirmation_needed}")
         else:
             debug_log.append("[Exception] スキップ（items or customer_id なし）")
 
@@ -2432,6 +2441,28 @@ def _is_usual_order_request(message: str) -> bool:
 def _is_previous_order_request(message: str) -> bool:
     normalized = re.sub(r"\s+", "", message)
     return any(keyword in normalized for keyword in ("前と同じ", "前回と同じ", "前の注文と同じ", "この前と同じ"))
+
+
+async def _check_anomalies(ctx: TenantContext, customer_id: str, items: list[dict]) -> dict:
+    """Exception Agent の代替: LLM を介さず ExceptionPlugin の関数を直接呼ぶ。"""
+    plugin = ExceptionPlugin(ctx)
+    anomalies: list[dict] = []
+    for item in items:
+        pid = item.get("product_id", "")
+        qty = float(item.get("quantity", 0))
+        unit = item.get("unit", "")
+        if not pid:
+            continue
+        qty_result = await plugin.detect_quantity_anomaly(customer_id=customer_id, product_id=pid, ordered_qty=qty)
+        unit_result = await plugin.detect_unit_anomaly(customer_id=customer_id, product_id=pid, ordered_unit=unit)
+        if qty_result.get("is_anomaly") or unit_result.get("is_anomaly"):
+            anomalies.append({
+                "product_id": pid,
+                "product_name": item.get("product_name", ""),
+                "quantity_anomaly": qty_result if qty_result.get("is_anomaly") else None,
+                "unit_anomaly": unit_result if unit_result.get("is_anomaly") else None,
+            })
+    return {"confirmation_needed": bool(anomalies), "anomalies": anomalies}
 
 
 async def _check_draft_inventory(ctx: TenantContext, draft: dict) -> list[dict]:
