@@ -313,7 +313,10 @@ class TestCurrentOrderInquiry:
             )
         ]
 
-        with patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send:
+        with (
+            patch("src.agents.orchestrator.today_jst", return_value=date(2026, 5, 26)),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
             result = await orch.process_order_message(
                 message="今の注文は？",
                 line_user_id="WEB-C-001",
@@ -924,6 +927,7 @@ class TestKnownCustomerOrderSave:
             mock_invoke.side_effect = [
                 (json.dumps(intake_draft, ensure_ascii=False), 0.5),
                 (json.dumps({"confirmation_needed": False}, ensure_ascii=False), 0.2),
+                ("キウイ10個を受注しました。", 0.2),
             ]
             result = await orch.process_order_message(
                 message="キウイ10個",
