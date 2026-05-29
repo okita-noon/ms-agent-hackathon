@@ -237,6 +237,17 @@ curl -X POST https://<BASE_URL>/api/auth/register \
 - Cookie 認証での状態変更リクエストは `Origin` を `FRONTEND_ORIGINS` と照合して CSRF リスクを抑える
 - **プライベートウィンドウ向けフォールバック**: フロントと API が別 eTLD+1（例: `*.web.core.windows.net` ⇄ `*.azurecontainerapps.io`）の場合、プライベートウィンドウでは Cookie がクロスサイト Cookie として既定でブロックされる。これを救うため、`/api/auth/login` と `/api/auth/microsoft` のレスポンス body にも `access_token` を返し、フロントは `sessionStorage` に保存して以後 `Authorization: Bearer` でも併送する。バックエンドは Authorization ヘッダ → Cookie の順で参照する（`src/auth/dependencies.py`）。`sessionStorage` はタブクローズで消えるため localStorage より XSS リスクは小さい。SSE (`/api/orders/events`) は `EventSource` が Authorization ヘッダを付けられない仕様により、プライベートウィンドウでは購読できず手動再取得が必要
 
+### MFA 再要求の頻度（OIDC `max_age`）
+
+Microsoft SSO の `loginRedirect` に `extraQueryParameters: { max_age: "<秒>" }` を渡している（`frontend/src/auth/AuthContext.tsx`）。Entra ID は最後の認証実績から `max_age` 秒以上経過していると、Conditional Access の有無に関わらず再認証（必要なら MFA 含む）を要求する。
+
+現在の設定: **`28800` 秒（8 時間）**。営業時間内に 1 回 MFA を求める運用イメージ。値を変更したい場合は `AuthContext.tsx` の `MS_LOGIN_MAX_AGE_SECONDS` 定数を編集する（例: `43200` = 12h、`86400` = 24h）。
+
+注意:
+- これはアプリ単独で完結するクライアント側強制。Entra テナント admin の Conditional Access policy（Sign-in frequency）と併用しても矛盾はしないが、より厳しい方が勝つ
+- JWT 自体の有効期限 24 時間（`JWT_EXPIRE_HOURS`）とは別軸。JWT が切れる前でも `max_age` を超えれば次のログイン操作で MFA が再要求される
+- パスワードログイン経路（`/api/auth/login`）には影響しない（Microsoft SSO のみ）
+
 ---
 
 ## 6. API エンドポイント

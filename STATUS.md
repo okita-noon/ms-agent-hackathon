@@ -80,6 +80,7 @@
   - JWT保存をlocalStorageからHttpOnly Cookieへ移行。`/api/auth/me` でログイン状態を復元し、API呼び出しは `credentials: include` でCookie認証
   - Microsoft SSO のMSALキャッシュを `sessionStorage` に変更し、ブラウザ永続ストレージに認証トークンを残さない方針へ寄せた
   - プライベートウィンドウ向けに Bearer トークンフォールバックを追加。`/api/auth/login` `/api/auth/microsoft` のレスポンス body に `access_token` を含め、フロントは `sessionStorage` に保存し以後 `Authorization: Bearer` で併送。Cookie がブロックされる環境（クロスサイト 3rd-party Cookie）でも SSO 後にダッシュボードへ遷移できる。バックエンドの `get_current_user` は Authorization → Cookie の順で参照（既存）。SSE (`/api/orders/events`) は `EventSource` 仕様上 Authorization を付けられないため、プライベートでは購読不可（手動再取得は可）
+  - Microsoft SSO の `loginRedirect` に OIDC `max_age=28800`（8時間）を付与。最後の Entra 認証から 8 時間以上経過した状態でログインボタンを押すと、Entra が再認証（必要なら MFA 含む）を強制する。設定値は `frontend/src/auth/AuthContext.tsx` の `MS_LOGIN_MAX_AGE_SECONDS` 定数
   - 受注一覧にSSEライブ更新を追加。`/api/orders/events` をCookie認証で購読し、新着・更新イベント受信時に一覧とDashboard Agentパネルを再取得、新着行を一時ハイライト
   - 電話発注（Web）ページ（`/web-phone`）：Azure Speech SDK（STT）+ Azure Speech REST API（TTS）による電話発注デモ。顧客選択ドロップダウンで発注元を指定可能。Agent処理・在庫確認・受注保存は実際の電話チャネルと同一コードパスを使用し、ACS電話番号取得後はそのまま本番電話受注に切替可能
   - ダッシュボードの日付初期値・前日/翌日移動・デモデータ日付をJST基準に統一し、受注日/配送日フィルターのUTCずれを解消

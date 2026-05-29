@@ -17,6 +17,10 @@ import { AuthContext } from "./context";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const SSO_PENDING_KEY = "sso_redirect_pending";
 
+// OIDC `max_age`（秒）。最後の Entra 認証から N 秒以上経っていれば再認証（MFA 含む）を要求する。
+// 8時間ごとに業務時間内 1 回程度の MFA を期待する設定。
+const MS_LOGIN_MAX_AGE_SECONDS = "28800";
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -238,6 +242,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       sessionStorage.setItem(SSO_PENDING_KEY, "1");
       await msalInstance.loginRedirect({
         scopes: loginScopes,
+        extraQueryParameters: { max_age: MS_LOGIN_MAX_AGE_SECONDS },
       });
     } catch (err: unknown) {
       sessionStorage.removeItem(SSO_PENDING_KEY);
