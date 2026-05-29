@@ -14,7 +14,7 @@ from azure.communication.callautomation import (
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
 from src.models.message_history import MessageHistory
-from src.models.order import OrderSource
+from src.models.order import Order, OrderSource, OrderStatus
 from src.models.session import OrderSession
 from src.services.channel_locks import get_channel_user_lock
 from src.services.message_history_logger import (
@@ -27,6 +27,7 @@ from src.services.tenant_resolver import resolve_tenant_for_phone
 logger = logging.getLogger(__name__)
 
 SESSION_TIMEOUT_HOURS = 2
+HISTORY_CONTEXT_LIMIT = 20
 MAX_TURNS = 10
 GREETING_MESSAGE = "お電話ありがとうございます。ご注文内容をお話しください。"
 GOODBYE_MESSAGE = "ご注文ありがとうございました。失礼いたします。"
@@ -79,10 +80,6 @@ class PhoneCallHandler:
         self._openai_deployment_name = azure_openai_deployment_name
         self._speech_key = speech_service_key
         self._speech_endpoint = speech_service_endpoint
-        self._phone_sync_ai_enabled = os.getenv("PHONE_SYNC_AI_ENABLED", "true").lower() == "true"
-        self._phone_background_validation_enabled = (
-            os.getenv("PHONE_BACKGROUND_VALIDATION_ENABLED", "true").lower() == "true"
-        )
         self._phone_sync_ai_timeout_seconds = _get_float_env(
             "PHONE_SYNC_AI_TIMEOUT_SECONDS",
             PHONE_SYNC_AI_TIMEOUT_SECONDS,
@@ -273,6 +270,18 @@ class PhoneCallHandler:
         session = await self._ensure_session(state)
         state.session = session
         await self._save_call_message(state, "user", transcribed_text)
+        conversation_history = await self._list_recent_history(state)
+
+        known_customer_name = await self._resolve_customer_name(state)
+        current_order = await self._resolve_current_order(state, session)
+        if current_order:
+            session.customer_id = current_order.customer_id
+            session.current_order_id = current_order.id
+
+        response_text_holder: list[str] = []
+
+        async def capture_response(text: str) -> None:
+            response_text_holder.append(text)
 
         orchestrator = OrderOrchestrator(
             tenant_ctx=state.tenant_ctx,
@@ -281,44 +290,31 @@ class PhoneCallHandler:
             deployment_name=self._openai_deployment_name,
         )
 
-        known_customer_name = await self._resolve_customer_name(state)
-
         try:
-            if self._phone_sync_ai_enabled:
-                result = await asyncio.wait_for(
-                    orchestrator.process_phone_order_with_inventory(
-                        message=transcribed_text,
-                        caller_number=state.caller_number,
-                        pending_order_draft=session.pending_order_draft if session else None,
-                        known_customer_id=state.known_customer_id,
-                        known_customer_name=known_customer_name,
-                    ),
-                    timeout=self._phone_sync_ai_timeout_seconds,
-                )
-                if self._phone_background_validation_enabled and result.get("order_accepted"):
-                    asyncio.create_task(
-                        self._process_phone_order_background(
-                            state=state,
-                            message=transcribed_text,
-                            pending_order_draft=session.pending_order_draft if session else None,
-                        )
-                    )
-            else:
-                result = await self._process_phone_order_full_sync(orchestrator, state, transcribed_text, session)
+            result = await asyncio.wait_for(
+                orchestrator.process_order_message(
+                    message=transcribed_text,
+                    line_user_id=state.caller_number,
+                    reply_token=None,
+                    source=OrderSource.PHONE,
+                    response_callback=capture_response,
+                    conversation_history=conversation_history,
+                    pending_order_draft=session.pending_order_draft if session else None,
+                    session_id=session.id if session else None,
+                    known_customer_id=state.known_customer_id,
+                    known_customer_name=known_customer_name,
+                    current_order=current_order,
+                ),
+                timeout=self._phone_sync_ai_timeout_seconds,
+            )
+            if response_text_holder and not result.get("response"):
+                result["response"] = response_text_holder[0]
         except TimeoutError:
             logger.warning(
                 "Phone sync AI timed out for call %s after %.1fs",
                 call_connection_id,
                 self._phone_sync_ai_timeout_seconds,
             )
-            if self._phone_background_validation_enabled:
-                asyncio.create_task(
-                    self._process_phone_order_background(
-                        state=state,
-                        message=transcribed_text,
-                        pending_order_draft=session.pending_order_draft if session else None,
-                    )
-                )
             await self._play_tts(state, PHONE_SYNC_FALLBACK_MESSAGE)
             await self._save_call_message(state, "assistant", PHONE_SYNC_FALLBACK_MESSAGE)
             state.order_confirmed = True
@@ -336,94 +332,67 @@ class PhoneCallHandler:
             return {"call_connection_id": call_connection_id, "error": "agent_failed"}
 
         order_id = result.get("order_id")
-        if order_id or result.get("order_accepted"):
+        if order_id:
             state.order_confirmed = True
             state.last_order_id = order_id
 
+        session_repo = state.tenant_ctx.get_connector("ISessionRepository")
         if result.get("session_status") == "awaiting_reply":
             state.order_confirmed = False
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
-            await state.tenant_ctx.get_connector("ISessionRepository").update_session(session)
+            session.pending_action_type = result.get("pending_action_type") or session.pending_action_type
+            session.customer_id = result.get("customer_id") or session.customer_id
+            session.current_order_id = result.get("current_order_id") or session.current_order_id
+            session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
+            session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS)
+            await session_repo.update_session(session)
+        elif order_id:
+            session.status = "completed"
+            session.pending_order_draft = None
+            session.pending_action_type = None
+            session.customer_id = result.get("customer_id") or session.customer_id
+            if result.get("current_order_cleared"):
+                session.current_order_id = None
+                session.current_order_snapshot = None
+                session.current_order_editable = False
+            else:
+                session.current_order_id = result.get("current_order_id") or session.current_order_id
+                session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
+                session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
+            await session_repo.update_session(session)
 
         response_text = result.get("response", "")
         if response_text:
             await self._play_tts(state, response_text)
             await self._save_call_message(state, "assistant", response_text)
 
-        return {
-            "call_connection_id": call_connection_id,
-            "status": "processed",
-            "order_id": order_id,
-            "response": response_text,
-            "session_status": result.get("session_status"),
-            "phone_sync_status": result.get("phone_sync_status"),
-        }
-
-    async def _process_phone_order_full_sync(
-        self,
-        orchestrator: OrderOrchestrator,
-        state: CallState,
-        message: str,
-        session: OrderSession,
-    ) -> dict:
-        response_text_holder: list[str] = []
-
-        async def capture_response(text: str) -> None:
-            response_text_holder.append(text)
-
-        result = await orchestrator.process_order_message(
-            message=message,
-            line_user_id=state.caller_number,
-            reply_token=None,
-            source=OrderSource.PHONE,
-            response_callback=capture_response,
-            pending_order_draft=session.pending_order_draft,
-            session_id=session.id,
-            known_customer_id=state.known_customer_id,
-            known_customer_name=await self._resolve_customer_name(state),
-        )
-        if response_text_holder and not result.get("response"):
-            result["response"] = response_text_holder[0]
+        result["call_connection_id"] = call_connection_id
+        result["status"] = "processed"
         return result
 
-    async def _process_phone_order_background(
-        self,
-        state: CallState,
-        message: str,
-        pending_order_draft: dict | None,
-    ) -> None:
+    async def _resolve_current_order(self, state: CallState, session: OrderSession) -> Order | None:
+        customer_id = session.customer_id or state.known_customer_id
+        if not customer_id:
+            try:
+                customer_repo = state.tenant_ctx.get_connector("ICustomerRepository")
+                customer = await customer_repo.find_by_identifier(state.tenant_ctx.tenant_id, state.caller_number)
+                if customer:
+                    customer_id = customer.id
+            except Exception:
+                logger.warning("Failed to resolve customer for current_order lookup")
+
+        if not customer_id:
+            return None
+
         try:
-            orchestrator = OrderOrchestrator(
-                tenant_ctx=state.tenant_ctx,
-                azure_openai_endpoint=self._openai_endpoint,
-                azure_openai_key=self._openai_key,
-                deployment_name=self._openai_deployment_name,
-            )
-
-            async def ignore_customer_response(_: str) -> None:
-                return None
-
-            result = await orchestrator.process_order_message(
-                message=message,
-                line_user_id=state.caller_number,
-                reply_token=None,
-                source=OrderSource.PHONE,
-                response_callback=ignore_customer_response,
-                pending_order_draft=pending_order_draft,
-                session_id=state.session.id if state.session else None,
-                known_customer_id=state.known_customer_id,
-                known_customer_name=await self._resolve_customer_name(state),
-            )
-            if result.get("order_id"):
-                state.last_order_id = result["order_id"]
-            logger.info(
-                "Background phone validation completed for call %s: %s",
-                state.call_connection_id,
-                result,
-            )
+            order_repo = state.tenant_ctx.get_connector("IOrderRepository")
+            orders = await order_repo.list_by_customer(customer_id, limit=10)
+            return _pick_current_order(orders)
         except Exception:
-            logger.exception("Background phone validation failed for call %s", state.call_connection_id)
+            logger.warning("Failed to load current order for call %s", state.call_connection_id)
+            return None
 
     async def _resolve_customer_name(self, state: CallState) -> str | None:
         if not state.known_customer_id:
@@ -588,6 +557,21 @@ class PhoneCallHandler:
             ),
         )
 
+    async def _list_recent_history(self, state: CallState) -> list[MessageHistory]:
+        history_repo = get_message_history_repo(state.tenant_ctx)
+        if history_repo is None:
+            return []
+        try:
+            return await history_repo.list_recent_messages(
+                state.tenant_ctx.tenant_id,
+                "phone",
+                state.caller_number,
+                HISTORY_CONTEXT_LIMIT,
+            )
+        except Exception:
+            logger.exception("Failed to load phone message history; continuing without memory")
+            return []
+
     async def _ensure_session(self, state: CallState) -> OrderSession:
         session_repo = state.tenant_ctx.get_connector("ISessionRepository")
 
@@ -607,3 +591,11 @@ class PhoneCallHandler:
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS),
             )
             return await session_repo.create_session(session)
+
+
+def _pick_current_order(orders: list[Order]) -> Order | None:
+    open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
+    candidates = [order for order in orders if order.status in open_statuses]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda order: order.updated_at, reverse=True)[0]

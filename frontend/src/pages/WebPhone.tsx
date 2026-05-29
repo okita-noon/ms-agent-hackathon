@@ -12,7 +12,6 @@ import {
 interface Turn {
   role: "user" | "assistant" | "system";
   text: string;
-  raw?: WebPhoneResponse;
   ts: string;
 }
 
@@ -85,10 +84,10 @@ export default function WebPhone() {
   const [callConnectionId, setCallConnectionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [expandedRaw, setExpandedRaw] = useState<number | null>(null);
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [interimText, setInterimText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognizerRef = useRef<any>(null);
@@ -183,7 +182,6 @@ export default function WebPhone() {
     setCallConnectionId(null);
     setTurns([]);
     setError(null);
-    setExpandedRaw(null);
     setInterimText("");
     setPhase("idle");
     setIsSpeaking(false);
@@ -198,10 +196,14 @@ export default function WebPhone() {
       const text = res.response || (res.error ? `[エラー] ${res.error}` : "[応答なし]");
       setTurns((prev) => [
         ...prev,
-        { role: "assistant", text, raw: res, ts: now() },
+        { role: "assistant", text, ts: now() },
       ]);
 
-      if (res.order_id) addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      if (res.order_id) {
+        addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      } else if (res.review_order_id) {
+        addSystemTurn(`要対応 — 受注ID: ${res.review_order_id}`);
+      }
 
       setPhase("connected");
 
@@ -221,6 +223,7 @@ export default function WebPhone() {
     if (!messageText.trim() || loading) return;
     setError(null);
     setPhase("processing");
+    setDraftMessage("");
     setTurns((prev) => [
       ...prev,
       { role: "user", text: messageText.trim(), ts: now() },
@@ -323,6 +326,10 @@ export default function WebPhone() {
     "在庫確認したい",
     "キャンセルしたい",
   ];
+
+  function handleDraftSubmit() {
+    void sendTextMessage(draftMessage);
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] max-w-4xl">
@@ -434,37 +441,6 @@ export default function WebPhone() {
                   <div className="bg-gray-100 text-gray-900 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed">
                     {turn.text}
                   </div>
-                  {turn.raw && (
-                    <div className="mt-1.5">
-                      <button
-                        onClick={() => setExpandedRaw(expandedRaw === i ? null : i)}
-                        className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-                      >
-                        <svg
-                          className={`w-3 h-3 transition-transform ${expandedRaw === i ? "rotate-90" : ""}`}
-                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                        詳細
-                        {turn.raw.order_id && (
-                          <span className="ml-1 bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-medium">
-                            受注: {turn.raw.order_id}
-                          </span>
-                        )}
-                        {turn.raw.session_status && (
-                          <span className="ml-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs font-medium">
-                            {turn.raw.session_status}
-                          </span>
-                        )}
-                      </button>
-                      {expandedRaw === i && (
-                        <pre className="mt-1 text-xs bg-gray-900 text-green-400 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
-                          {JSON.stringify(turn.raw, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -544,18 +520,53 @@ export default function WebPhone() {
 
       {/* Quick messages */}
       {isActive && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {QUICK_MESSAGES.map((msg) => (
-            <button
-              key={msg}
-              onClick={() => sendTextMessage(msg)}
-              disabled={loading}
-              className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 transition-colors"
-            >
-              {msg}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <label htmlFor="web-phone-text-input" className="text-xs font-medium text-gray-600">
+                テキスト入力
+              </label>
+              <span className="text-[11px] text-gray-400">音声の代わりにそのまま送信できます</span>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                id="web-phone-text-input"
+                type="text"
+                value={draftMessage}
+                onChange={(e) => setDraftMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    handleDraftSubmit();
+                  }
+                }}
+                disabled={loading}
+                placeholder="例: りんご10箱お願いします"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <button
+                onClick={handleDraftSubmit}
+                disabled={loading || !draftMessage.trim()}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-40"
+              >
+                テキストで送信
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-3">
+            {QUICK_MESSAGES.map((msg) => (
+              <button
+                key={msg}
+                onClick={() => sendTextMessage(msg)}
+                disabled={loading}
+                className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 transition-colors"
+              >
+                {msg}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Error */}

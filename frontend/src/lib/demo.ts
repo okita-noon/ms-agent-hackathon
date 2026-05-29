@@ -53,6 +53,9 @@ export function getDemoMessages(orderId: string, order?: Order): Message[] {
       { id: "dm-006-4", role: "assistant", text: "かしこまりました。東北便（自社便）で手配いたします。ご注文ありがとうございます。", channel: "phone", created_at: `${today}T15:00:42Z` },
     ],
   };
+  if (order && order.items.length > 0) {
+    return generateDemoMessages(orderId, order);
+  }
   if (msgs[orderId]) return msgs[orderId];
   if (!order || order.items.length === 0) return [];
   return generateDemoMessages(orderId, order);
@@ -66,7 +69,7 @@ function generateDemoMessages(orderId: string, order: Order): Message[] {
     "Web電話": "phone",
   };
   const channel = sourceToChannel[order.source] || "line";
-  const baseTime = order.order_date || new Date().toISOString();
+  const baseTime = order.created_at || order.updated_at || order.order_date || new Date().toISOString();
   const base = new Date(baseTime);
   const ts = (offsetSec: number) => new Date(base.getTime() + offsetSec * 1000).toISOString();
 

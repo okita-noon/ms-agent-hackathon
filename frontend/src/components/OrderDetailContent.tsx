@@ -207,8 +207,7 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
       <div className="border border-gray-100 rounded-xl bg-gray-50/40 p-4 space-y-3 max-h-72 overflow-y-auto">
         {messages.map((msg) => {
           const isCustomer = msg.role === "user";
-          const isPhone = channel === "phone";
-          const alignRight = isPhone ? isCustomer : !isCustomer;
+          const alignRight = !isCustomer;
           return (
             <div key={msg.id} className={`flex ${alignRight ? "justify-end" : "justify-start"}`}>
               <div
@@ -220,7 +219,7 @@ function MessageThread({ orderId, order }: { orderId: string; order?: Order }) {
               >
                 <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.text}</p>
                 <p className={`text-[10px] mt-1 ${alignRight ? "text-brand-400" : "text-gray-400"}`}>
-                  {isCustomer ? (isPhone ? "発注側" : "お客様") : "受注側"} ・ {formatTime(msg.created_at)}
+                  {isCustomer ? (channel === "phone" ? "発注側" : "お客様") : "受注側"} ・ {formatTime(msg.created_at)}
                 </p>
               </div>
             </div>
