@@ -295,10 +295,15 @@ class PhoneCallHandler:
                         pending_order_draft=session.pending_order_draft if session else None,
                         known_customer_id=state.known_customer_id,
                         known_customer_name=known_customer_name,
+                        session_id=session.id if session else None,
                     ),
                     timeout=self._phone_sync_ai_timeout_seconds,
                 )
-                if self._phone_background_validation_enabled and result.get("order_accepted"):
+                if (
+                    self._phone_background_validation_enabled
+                    and result.get("order_accepted")
+                    and not result.get("order_id")
+                ):
                     asyncio.create_task(
                         self._process_phone_order_background(
                             state=state,

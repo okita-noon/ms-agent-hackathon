@@ -620,6 +620,9 @@ class TestPhoneOrderWithInventory:
             unit="箱",
             is_sufficient=True,
         )
+        inventory.reserve.return_value = True
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-PHONE")
         intake_draft = {
             "customer_id": "C-001",
             "customer_name": "ビストロ青葉",
@@ -644,8 +647,11 @@ class TestPhoneOrderWithInventory:
 
         assert result["phone_sync_status"] == "inventory_checked"
         assert result["order_accepted"] is True
+        assert result["order_id"] == "ORD-PHONE"
+        assert result["order_saved"] is True
         assert "在庫は確認できました" in result["response"]
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
+        order_repo.save.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_phone_small_talk_returns_conversational_response_without_order_processing(self, mock_tenant_ctx):
@@ -697,6 +703,9 @@ class TestPhoneOrderWithInventory:
             unit="個",
             is_sufficient=True,
         )
+        inventory.reserve.return_value = True
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-KIWI-PHONE")
         intake_draft = {
             "items": [
                 {
@@ -720,6 +729,7 @@ class TestPhoneOrderWithInventory:
             )
 
         assert result["order_accepted"] is True
+        assert result["order_id"] == "ORD-KIWI-PHONE"
         assert result["pending_order_draft"]["customer_id"] == "C-001"
         assert result["pending_order_draft"]["customer_name"] == "ビストロ青葉"
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)

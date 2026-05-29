@@ -36,15 +36,17 @@ Azure AI Speech 文字起こし
   → IntentUnderstandingService（雑談・注文照会・在庫照会・注文を先に分岐）
   → Phone Order Agent（顧客特定・商品正規化・注文ドラフト化）
   → IInventoryService.check（アプリケーションコードで同期在庫確認）
-  → TTS: 「りんご10箱ですね。在庫は確認できました。ご注文を受け付けます」
-  → 既存 Orchestrator / Intake / Exception / Inventory / Communication（非同期で正式検証・登録）
+  → 在庫OKなら create_order_from_draft（Cosmos DB保存・在庫引当）
+  → TTS: 「りんご10箱ですね。在庫は確認できました。ご注文を受け付けます。受注No: ORD-...」
+  → Learning Service（非同期でパターン学習）
 ```
 
 Phone Order Agent は在庫判断や引当をLLMに任せない。LLMは注文抽出に集中し、在庫確認は Connector 経由の決定的な処理として実行する。
 挨拶・天気の話・感謝だけのような社交発話は、Phone Order Agent に渡す前に `small_talk` として短く応答し、注文がある場合は商品名と数量を促す。
 「今の注文は？」のような注文照会は LINE と同じ未配送受注サマリ分岐を使い、電話・メールでも注文抽出を誤発火させない。
 これにより電話1ターンあたりのLLM呼び出しを原則1回に抑え、既定20秒以内の応答を目標にする。
-タイムアウト時は受付済みメッセージを返し、裏で既存マルチAgent処理を継続する。
+在庫OKで顧客確認が不要な注文は同期応答内で保存し、受注一覧に即時表示できるようにする。
+タイムアウト時や同期保存前に例外が起きた場合は受付済みメッセージを返し、裏で既存マルチAgent処理を継続する。
 
 ## Agent 間フロー（具体例）
 
