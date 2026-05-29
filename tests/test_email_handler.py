@@ -44,6 +44,24 @@ class TestNormalizeBody:
         assert "<" not in result
 
     @pytest.mark.asyncio
+    async def test_html_style_removed_and_newlines_preserved(self, service):
+        html = """
+        <html>
+        <head>
+        <style>p {margin-top:0; margin-bottom:0}</style>
+        </head>
+        <body>
+        大丈夫<br>
+        差出人: Order AI<br>
+        送信日時: 2026年5月29日 22:27
+        </body>
+        </html>
+        """
+        result = await service.normalize_body(html)
+        assert "margin-top" not in result
+        assert "大丈夫\n差出人: Order AI\n送信日時: 2026年5月29日 22:27" in result
+
+    @pytest.mark.asyncio
     async def test_quoted_lines_removed(self, service):
         text = "注文します\n> 前回のメッセージ\n> もう1行"
         result = await service.normalize_body(text)

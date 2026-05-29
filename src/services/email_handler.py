@@ -62,9 +62,53 @@ class _EmailBodyTextExtractor(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self._parts: list[str] = []
+        self._ignored_tags_depth = 0
+        self._block_tags = {
+            "p",
+            "div",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "li",
+            "tr",
+            "blockquote",
+            "header",
+            "footer",
+            "section",
+            "article",
+            "table",
+            "tbody",
+            "thead",
+            "ul",
+            "ol",
+        }
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_lower = tag.lower()
+        if tag_lower in ("style", "script"):
+            self._ignored_tags_depth += 1
+        elif tag_lower == "br":
+            if self._ignored_tags_depth == 0:
+                self._parts.append("\n")
+        elif tag_lower in self._block_tags:
+            if self._ignored_tags_depth == 0:
+                if self._parts and not self._parts[-1].endswith("\n"):
+                    self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_lower = tag.lower()
+        if tag_lower in ("style", "script"):
+            self._ignored_tags_depth = max(0, self._ignored_tags_depth - 1)
+        elif tag_lower in self._block_tags:
+            if self._ignored_tags_depth == 0:
+                if self._parts and not self._parts[-1].endswith("\n"):
+                    self._parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        if data:
+        if self._ignored_tags_depth == 0 and data:
             self._parts.append(data)
 
     def get_text(self) -> str:

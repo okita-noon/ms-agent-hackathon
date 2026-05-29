@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.utils.business_date import today_jst
+
 from src.agents.orchestrator import (
     FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS,
     _apply_known_customer_to_intake,
@@ -41,13 +43,14 @@ def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
 
 
 def _make_current_order(status: OrderStatus = OrderStatus.ACCEPTED) -> Order:
+    today = today_jst()
     return Order(
         uid="ORD-CURRENT",
         tenant_id="T-TEST",
         customer_id="C-001",
         customer_name="テスト社",
-        order_date=date.today(),
-        delivery_date=date.today(),
+        order_date=today,
+        delivery_date=today,
         source=OrderSource.LINE,
         status=status,
         items=[
