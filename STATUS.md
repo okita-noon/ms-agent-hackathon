@@ -87,7 +87,7 @@
   - 電話発注（Web）の説明文を審査員向けに変更し、内部情報寄りのターン数・音声基盤注記を非表示化
   - 電話発注（Web）の自由テキスト入力欄を削除し、音声入力と定型文ボタンに整理
   - ログイン画面のサブコピーを「受注業務をスマートに」に変更
-  - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該案件が消える
+  - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。表示条件は **注文の `status == 要対応`**（needs_review に限らず、同一注文に紐づく在庫不足・数量異常などの例外を選択中でも表示）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該注文の要対応タグ起因の案件が消える
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check

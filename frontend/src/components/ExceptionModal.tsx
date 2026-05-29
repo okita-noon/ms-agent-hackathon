@@ -221,7 +221,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onOpenOrde
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {selectedExc.type === "needs_review" && selectedOrder.status === "要対応" && (
+                    {selectedOrder.status === "要対応" && (
                       resolveConfirmId === selectedExc.id ? (
                         <button
                           type="button"
