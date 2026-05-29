@@ -58,6 +58,7 @@
 - [x] 注文・在庫・意図分類の業務サービス層（`OrderApplicationService`, `InventoryApplicationService`, `OrderMemoryService`, `IntentUnderstandingService`）を追加。自然文キャンセル、LLM Intent による曖昧キャンセル分類、在庫不足後の数量だけ返信（例:「じゃあ1kg」）、LINE/メール/電話の「いつもの」「前と同じ」注文復元をテスト付きで対応
 - [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能
 - [x] Cosmos DB 本番デモデータの未来日受注（`DEMO-20260527-*`）を2026-05-26基準へ補正し、再投入用シードJSONも同様に更新
+- [x] 受注ステータス更新 API `PUT /api/orders/{order_id}/status`（要対応→受注済み等、完了/キャンセル状態への戻し以外を許可、SSE `order_updated` を発火）
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
@@ -86,6 +87,7 @@
   - 電話発注（Web）の説明文を審査員向けに変更し、内部情報寄りのターン数・音声基盤注記を非表示化
   - 電話発注（Web）の自由テキスト入力欄を削除し、音声入力と定型文ボタンに整理
   - ログイン画面のサブコピーを「受注業務をスマートに」に変更
+  - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該案件が消える
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check

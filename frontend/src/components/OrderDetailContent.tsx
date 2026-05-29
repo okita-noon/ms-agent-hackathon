@@ -2,7 +2,7 @@
  * 受注詳細の共通コンテンツ。
  * OrderDetailModal と ExceptionModal の右ペインで再利用する。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AgentExceptionCase,
   AgentExceptionSeverity,
@@ -10,7 +10,7 @@ import type {
   Message,
   Order,
 } from "../lib/api";
-import { fetchOrderMessages, previewAgentResolution, updateOrderMemo } from "../lib/api";
+import { fetchOrderMessages, previewAgentResolution, updateOrderMemo, updateOrderStatus } from "../lib/api";
 import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
@@ -328,20 +328,109 @@ export interface OrderDetailContentProps {
   order: Order;
   exceptions?: AgentExceptionCase[];
   onMemoUpdated?: (order: Order) => void;
+  /**
+   * 「対応済みにする」ボタンを非表示にする（ExceptionModal が footer で同等のアクションを
+   * 提供する場合に true）。デフォルト false。
+   */
+  hideResolveAction?: boolean;
 }
 
-export default function OrderDetailContent({ order, exceptions, onMemoUpdated }: OrderDetailContentProps) {
+export default function OrderDetailContent({ order, exceptions, onMemoUpdated, hideResolveAction = false }: OrderDetailContentProps) {
   const orderId = order.uid || order.id || "";
   const orderExceptions = exceptions?.filter((e) => e.order_id === orderId) ?? [];
 
+  // 「対応済みにする」2タップ式: 1タップ目で confirm 状態に入り、3秒以内の 2タップ目で確定
+  const [resolveConfirm, setResolveConfirm] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const confirmTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current !== null) window.clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  // 対象注文が変わったら confirm 状態をリセット
+  useEffect(() => {
+    setResolveConfirm(false);
+    setResolveError(null);
+  }, [orderId]);
+
+  function armResolveConfirm() {
+    setResolveError(null);
+    setResolveConfirm(true);
+    if (confirmTimerRef.current !== null) window.clearTimeout(confirmTimerRef.current);
+    confirmTimerRef.current = window.setTimeout(() => {
+      setResolveConfirm(false);
+      confirmTimerRef.current = null;
+    }, 3000);
+  }
+
+  async function handleResolve() {
+    if (confirmTimerRef.current !== null) {
+      window.clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const updated = await updateOrderStatus(orderId, "受注済み");
+      onMemoUpdated?.(updated);
+      setResolveConfirm(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "対応済み更新に失敗しました";
+      setResolveError(msg);
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  const showResolveButton = !hideResolveAction && order.status === "要対応" && !!orderId;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h4 className="text-lg font-bold text-gray-900">{order.customer_name}</h4>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-lg font-bold text-gray-900 truncate">{order.customer_name}</h4>
           <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
         </div>
-        <StatusBadge status={order.status} />
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <StatusBadge status={order.status} />
+          {showResolveButton && (
+            resolveConfirm ? (
+              <button
+                type="button"
+                disabled={resolving}
+                onClick={handleResolve}
+                className="btn-press inline-flex items-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {resolving ? "更新中…" : "もう一度押して確定"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={resolving}
+                onClick={armResolveConfirm}
+                className="btn-press inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-60"
+                title="要対応タグを外し、受注済みに変更します"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                対応済みにする
+              </button>
+            )
+          )}
+          {resolveError && (
+            <p className="text-[11px] text-red-600 max-w-[180px] text-right" role="alert">
+              {resolveError}
+            </p>
+          )}
+        </div>
       </div>
 
       {orderExceptions.length > 0 && (

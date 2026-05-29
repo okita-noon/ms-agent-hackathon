@@ -125,6 +125,24 @@ export async function updateOrderMemo(orderId: string, memo: string | null): Pro
   return resp.json();
 }
 
+export async function updateOrderStatus(orderId: string, status: string): Promise<Order> {
+  const resp = await authFetch(`${API_BASE}/api/orders/${orderId}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`;
+    try {
+      const body = await resp.json();
+      if (body?.detail) detail = String(body.detail);
+    } catch {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+  return resp.json();
+}
+
 
 export async function fetchOrders(
   date: string | null,

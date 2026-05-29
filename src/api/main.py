@@ -967,6 +967,67 @@ async def update_order_memo(
     return updated.model_dump(mode="json")
 
 
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+
+_STATUS_UPDATE_TERMINAL: frozenset[str] = frozenset({"完了", "キャンセル"})
+
+
+@app.put("/api/orders/{order_id}/status")
+async def update_order_status(
+    order_id: str,
+    payload: OrderStatusUpdate,
+    tenant_id: str = Depends(get_tenant_id),
+):
+    from src.models.order import OrderStatus
+
+    try:
+        new_status = OrderStatus(payload.status)
+    except ValueError:
+        valid = ", ".join(s.value for s in OrderStatus)
+        raise HTTPException(
+            status_code=400,
+            detail=f"不正なステータスです: '{payload.status}'。有効な値: {valid}",
+        ) from None
+
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    repo = tenant_ctx.get_connector("IOrderRepository")
+    order = await repo.find_by_id(tenant_id, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail=f"受注ID「{order_id}」が見つかりません。IDをご確認ください。",
+        )
+
+    # 完了・キャンセル済みの再オープンは禁止
+    if order.status.value in _STATUS_UPDATE_TERMINAL and new_status != order.status:
+        raise HTTPException(
+            status_code=409,
+            detail=f"ステータス「{order.status.value}」の受注は変更できません。",
+        )
+
+    if order.status == new_status:
+        return order.model_dump(mode="json")
+
+    await repo.update_status(tenant_id, order_id, new_status)
+    updated = await repo.find_by_id(tenant_id, order_id)
+    if not updated:
+        raise HTTPException(status_code=500, detail="ステータス更新後の受注取得に失敗しました。")
+
+    await dashboard_event_broker.publish(
+        "order_updated",
+        tenant_id,
+        {
+            "order_id": updated.id,
+            "reason": "status_updated",
+            "delivery_date": updated.delivery_date.isoformat() if updated.delivery_date else None,
+            "order_date": updated.order_date.isoformat(),
+        },
+    )
+    return updated.model_dump(mode="json")
+
+
 @app.get("/api/orders/{order_id}/messages")
 async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
