@@ -194,6 +194,37 @@ class TestHandleRecognizeCompleted:
         call_kwargs = mock_orchestrator.process_phone_order_with_inventory.call_args
         assert call_kwargs.kwargs["message"] == "りんご10箱"
         assert call_kwargs.kwargs["caller_number"] == "+81312345678"
+        assert call_kwargs.kwargs["session_id"].startswith("sess-phone-")
+
+    @pytest.mark.asyncio
+    async def test_does_not_start_background_validation_when_sync_order_saved(self, mock_tenant_ctx):
+        handler = _make_handler()
+        _register_call_state(handler, mock_tenant_ctx)
+
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_phone_order_with_inventory.return_value = {
+            "response": "りんご10箱、在庫は確認できました。",
+            "order_accepted": True,
+            "order_id": "ORD-PHONE",
+            "phone_sync_status": "inventory_checked",
+        }
+
+        with (
+            patch(
+                "src.services.phone_handler.OrderOrchestrator",
+                return_value=mock_orchestrator,
+            ),
+            patch.object(handler, "_process_phone_order_background", new_callable=AsyncMock) as mock_background,
+            patch.object(handler, "_play_tts", new_callable=AsyncMock),
+        ):
+            result = await handler.handle_event(_make_recognize_completed_event(speech="りんご10箱"))
+
+        assert result["order_id"] == "ORD-PHONE"
+        mock_background.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_creates_session_on_first_turn(self, mock_tenant_ctx):

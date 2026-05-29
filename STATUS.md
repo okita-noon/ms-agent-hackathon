@@ -23,7 +23,7 @@
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
 - [x] 電話 Webhook ハンドラ（ACS Call Automation・音声認識・TTS応答）
 - [x] 電話番号取得前のデモ受注API（`POST /api/phone-demo/message`、音声認識済みテキストをPhoneチャネル処理へ注入）
-- [x] Phone Order Agent による電話同期応答（注文抽出 + `IInventoryService.check` の同期在庫確認 + 20秒タイムアウト時フォールバック + 非同期正式検証）
+- [x] Phone Order Agent による電話同期応答（注文抽出 + `IInventoryService.check` の同期在庫確認 + 在庫OK時の同期受注保存 + 20秒タイムアウト時フォールバック）
 - [x] 電話/LINEの在庫問い合わせ応答（受注・引当を行わず `IInventoryService.check` で回答）
 - [x] 電話・メールにも LINE と同じ会話分岐を拡張。挨拶・天気の話・感謝だけの発話は `small_talk` として注文抽出前に自然応答し、「今の注文は？」は電話・メールでも未配送受注サマリを返す。メールは直近会話履歴を Orchestrator に渡して確認待ち文脈を維持
 - [x] チャネル×ユーザー単位の非同期ロック（並行処理の安全性）

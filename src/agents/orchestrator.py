@@ -731,6 +731,7 @@ class OrderOrchestrator:
         pending_order_draft: dict | None = None,
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
+        session_id: str | None = None,
     ) -> dict:
         """電話中の同期応答用: 1 Agentで注文抽出し、在庫はコードで確認する."""
         memory_ctx = _format_memory_context(conversation_history, pending_order_draft)
@@ -818,7 +819,12 @@ class OrderOrchestrator:
                                 item["unit"] = unit
                             break
                     draft.pop("inventory_checked", None)
-                    return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
+                    return await self._build_phone_sync_inventory_result(
+                        draft=draft,
+                        intake_text="",
+                        original_message=message,
+                        session_id=session_id,
+                    )
 
         if known_customer_id and (_is_usual_order_request(message) or _is_previous_order_request(message)):
             memory_service = OrderMemoryService(self._ctx)
@@ -830,7 +836,12 @@ class OrderOrchestrator:
             if draft:
                 if known_customer_name and not draft.get("customer_name"):
                     draft["customer_name"] = known_customer_name
-                return await self._build_phone_sync_inventory_result(draft=draft, intake_text="")
+                return await self._build_phone_sync_inventory_result(
+                    draft=draft,
+                    intake_text="",
+                    original_message=message,
+                    session_id=session_id,
+                )
 
         phone_agent = self._make_phone_order_agent()
         intake_text, _elapsed = await self._invoke_agent(phone_agent, prompt)
@@ -868,6 +879,8 @@ class OrderOrchestrator:
             draft=draft,
             intake_text=intake_text,
             intake_draft=intake_draft,
+            original_message=message,
+            session_id=session_id,
         )
 
     async def _build_phone_sync_inventory_result(
@@ -876,6 +889,8 @@ class OrderOrchestrator:
         draft: dict,
         intake_text: str,
         intake_draft: dict | None = None,
+        original_message: str = "",
+        session_id: str | None = None,
     ) -> dict:
         invalid_quantity_items = _find_non_positive_quantity_items(draft)
         if invalid_quantity_items:
@@ -914,6 +929,34 @@ class OrderOrchestrator:
             ]
             if partial_stock:
                 draft["inventory_checked"] = inventory_results
+        else:
+            route = await _resolve_delivery_route_from_customer(draft, self._ctx)
+            lead_time = await _resolve_lead_time(draft, self._ctx)
+            min_d, max_d = delivery_estimator.estimate(
+                route,
+                lead_time=lead_time,
+                tenant_config=self._ctx.config,
+            )
+            draft["delivery_date"] = min_d
+            saved_order = await self.create_order_from_draft(
+                draft,
+                source=OrderSource.PHONE,
+                session_id=session_id,
+                status=OrderStatus.ACCEPTED,
+            )
+            asyncio.create_task(self._run_learning(saved_order, original_message))
+            result.update(
+                {
+                    "response": _insert_order_id(response, saved_order.id),
+                    "order_id": saved_order.id,
+                    "order_saved": True,
+                    "customer_id": saved_order.customer_id,
+                    "current_order_id": saved_order.id,
+                    "current_order_snapshot": _build_current_order_snapshot(saved_order),
+                    "current_order_editable": _is_order_editable(saved_order),
+                    "delivery_estimate": delivery_estimator.format_estimate(min_d, max_d),
+                }
+            )
         return result
 
     async def _try_handle_memory_order(
