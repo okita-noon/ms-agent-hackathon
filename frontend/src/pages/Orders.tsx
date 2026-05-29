@@ -450,7 +450,11 @@ export default function Orders() {
                     <tr
                       key={orderId}
                       className={`row-hover cursor-pointer group ${
-                        recentOrderIds.has(orderId) ? "bg-green-50 animate-new-order" : ""
+                        recentOrderIds.has(orderId)
+                          ? "bg-green-50 animate-new-order"
+                          : normalizeStatus(o.status) === "要対応"
+                          ? "row-review"
+                          : ""
                       }`}
                       onClick={() => setSelected(o)}
                     >
