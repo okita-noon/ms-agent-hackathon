@@ -199,7 +199,11 @@ export default function WebPhone() {
         { role: "assistant", text, ts: now() },
       ]);
 
-      if (res.order_id) addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      if (res.order_id) {
+        addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+      } else if (res.review_order_id) {
+        addSystemTurn(`要対応 — 受注ID: ${res.review_order_id}`);
+      }
 
       setPhase("connected");
 
