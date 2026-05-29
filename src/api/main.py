@@ -70,7 +70,7 @@ async def _create_graph_subscription() -> str | None:
         payload = {
             "changeType": "created",
             "notificationUrl": callback_url,
-            "resource": f"/users/{mailbox}/messages",
+            "resource": f"/users/{mailbox}/mailFolders('Inbox')/messages",
             "expirationDateTime": expiry.strftime("%Y-%m-%dT%H:%M:%S.0000000Z"),
             "clientState": os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook"),
         }
