@@ -18,6 +18,7 @@ Created: 2026-05-28
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -37,9 +38,9 @@ DEFAULT_STOCK: dict[str, int] = {
     "P-004": 1000,  # ぶどう
     "P-005": 1000,  # もも
     "P-006": 1000,  # いちご
-    "P-007": 30,    # メロン: 在庫不足テスト用
-    "P-008": 30,    # スイカ: 在庫不足テスト用
-    "P-009": 1000,  # 梨
+    "P-007": 20,    # メロン: 在庫不足テスト用（ケース30: 50個注文→不足→3個で確定）
+    "P-008": 30,    # スイカ: 在庫不足テスト用（ケース4: 50個注文→不足→代替確定）
+    "P-009": 10,    # 梨: 在庫超過テスト用（ケース35: 100個注文→超過で確定しない）
     "P-010": 1000,  # マンゴー
     "P-011": 1000,  # キウイ
     "P-012": 30,    # さくらんぼ: 在庫不足テスト用
@@ -51,6 +52,14 @@ DEFAULT_STOCK: dict[str, int] = {
 }
 
 TENANT_ID = "T-001"
+
+# expected_stock.json から DEFAULT_STOCK を生成（min値を使用）
+_EXPECTED_STOCK_FILE = Path(__file__).resolve().parents[1] / "check_stock" / "expected_stock.json"
+if _EXPECTED_STOCK_FILE.exists():
+    _expected = json.loads(_EXPECTED_STOCK_FILE.read_text(encoding="utf-8"))
+    DEFAULT_STOCK = {p["product_id"]: p["min"] for p in _expected["products"]}
+else:
+    DEFAULT_STOCK = {p: DEFAULT_STOCK[p] for p in DEFAULT_STOCK}
 
 
 def _load_dotenv(path: Path) -> None:
