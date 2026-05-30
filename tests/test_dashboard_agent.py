@@ -619,3 +619,79 @@ class TestDashboardAgentApi:
         body = resp.json()
         assert body["enabled"] is False
         assert body["preview"] is None
+
+
+class TestAnomalyRulesRefactor:
+    """dashboard_agent が anomaly_rules 委譲後も挙動が変わらないことを確認する。"""
+
+    def _make_order(self, qty: float, product_id: str = "P-001") -> Order:
+        from src.utils.business_date import today_jst
+
+        return Order(
+            uid="ORD-TEST",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="テスト",
+            order_date=today_jst(),
+            delivery_date=today_jst(),
+            source=OrderSource.LINE,
+            status=OrderStatus.ACCEPTED,
+            items=[
+                OrderItem(
+                    product_id=product_id,
+                    product_name="バナナ",
+                    quantity=qty,
+                    unit="kg",
+                    temperature_zone=TemperatureZone.AMBIENT,
+                )
+            ],
+        )
+
+    def _make_profile(self, avg: float, std: float) -> CustomerOrderProfile:
+        return CustomerOrderProfile(
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            product_stats={
+                "P-001": ProductStats(
+                    product_id="P-001",
+                    product_name="バナナ",
+                    total_orders=5,
+                    avg_qty=avg,
+                    std_dev=std,
+                    typical_unit="kg",
+                )
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_high_anomaly_severity(self):
+        """z>=6 の数量異常は high severity で検知される（委譲後も同じ）。"""
+        from src.services.dashboard_agent import _quantity_anomaly
+
+        item = self._make_order(100.0).items[0]  # avg=10, std=2 → z=45
+        stats = self._make_profile(10, 2).product_stats["P-001"]
+        result = _quantity_anomaly(item, stats)
+        assert result is not None
+        assert result["severity"] == "high"
+        assert result["z_score"] is not None and result["z_score"] >= 6.0
+        assert "evidence" in result
+
+    @pytest.mark.asyncio
+    async def test_medium_anomaly_severity(self):
+        """3<z<6 の数量異常は medium severity で検知される。"""
+        from src.services.dashboard_agent import _quantity_anomaly
+
+        item = self._make_order(18.0).items[0]  # avg=10, std=2 → z=4
+        stats = self._make_profile(10, 2).product_stats["P-001"]
+        result = _quantity_anomaly(item, stats)
+        assert result is not None
+        assert result["severity"] == "medium"
+
+    @pytest.mark.asyncio
+    async def test_normal_qty_returns_none(self):
+        """正常数量（z<=3）は None を返す。"""
+        from src.services.dashboard_agent import _quantity_anomaly
+
+        item = self._make_order(12.0).items[0]  # avg=10, std=2 → z=1
+        stats = self._make_profile(10, 2).product_stats["P-001"]
+        assert _quantity_anomaly(item, stats) is None

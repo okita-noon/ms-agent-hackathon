@@ -2050,3 +2050,60 @@ class TestIsNegativeReply:
 
     def test_with_number_not_negative(self):
         assert not _is_negative_reply("いや15kgで")
+
+
+class TestAnomalySeveritySavePlan:
+    """_evaluate_anomaly_severity / _decide_save_status の単体テスト。"""
+
+    from src.agents.orchestrator import _decide_save_status  # noqa: E402
+
+    def test_high_anomaly_returns_needs_review(self):
+        from src.agents.orchestrator import _decide_save_status
+
+        status = _decide_save_status(
+            has_high_anomaly=True,
+            has_partial_stock=False,
+            has_only_out_of_stock=False,
+        )
+        assert status.value == "要対応"
+
+    def test_partial_stock_returns_needs_review(self):
+        from src.agents.orchestrator import _decide_save_status
+
+        status = _decide_save_status(
+            has_high_anomaly=False,
+            has_partial_stock=True,
+            has_only_out_of_stock=False,
+        )
+        assert status.value == "要対応"
+
+    def test_out_of_stock_returns_needs_review(self):
+        from src.agents.orchestrator import _decide_save_status
+
+        status = _decide_save_status(
+            has_high_anomaly=False,
+            has_partial_stock=False,
+            has_only_out_of_stock=True,
+        )
+        assert status.value == "要対応"
+
+    def test_normal_returns_accepted(self):
+        from src.agents.orchestrator import _decide_save_status
+
+        status = _decide_save_status(
+            has_high_anomaly=False,
+            has_partial_stock=False,
+            has_only_out_of_stock=False,
+        )
+        assert status.value == "受注済み"
+
+    def test_medium_anomaly_alone_returns_accepted(self):
+        from src.agents.orchestrator import _decide_save_status
+
+        # medium は ACCEPTED で通す（remarks に警告だけ残す）
+        status = _decide_save_status(
+            has_high_anomaly=False,
+            has_partial_stock=False,
+            has_only_out_of_stock=False,
+        )
+        assert status.value == "受注済み"
