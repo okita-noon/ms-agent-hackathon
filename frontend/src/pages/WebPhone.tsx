@@ -78,71 +78,6 @@ function playRingbackTone(): Promise<void> {
 
 type CallPhase = "idle" | "starting" | "connected" | "listening" | "processing";
 
-interface QuickMessageItem {
-  label: string;
-  text: string;
-  description?: string;
-}
-
-interface QuickMessageGroup {
-  category: string;
-  items: QuickMessageItem[];
-}
-
-const QUICK_MESSAGE_GROUPS: QuickMessageGroup[] = [
-  {
-    category: "新規発注 (通常)",
-    items: [
-      { label: "りんご5箱", text: "りんご5箱お願いします", description: "冷蔵のりんご5箱を発注します" },
-      { label: "バナナとみかん", text: "バナナ10kgとみかん20個", description: "複数商品をまとめて発注します" },
-      { label: "いちご・ぶどう・もも", text: "いちご3パックとぶどう4房、あと温室のももを2箱", description: "3つの商品を一度に発注します" },
-    ],
-  },
-  {
-    category: "追加・変更・一部取消",
-    items: [
-      { label: "ぶどう追加", text: "ぶどうも追加でお願いします", description: "現在注文に商品を追加します" },
-      { label: "数量を15箱に変更", text: "さっきのりんごを15箱に変更して", description: "既存商品の数量を変更します" },
-      { label: "みかんを100個に増量", text: "やっぱりみかんを100個に増やして", description: "既存商品の数量を増やします" },
-      { label: "バナナをキャンセル", text: "バナナだけキャンセルで", description: "特定の商品のみキャンセルします" },
-      { label: "ももをキャンセル", text: "さっき頼んだももをキャンセルしたい", description: "特定の商品のみキャンセルします" },
-    ],
-  },
-  {
-    category: "全体取消",
-    items: [
-      { label: "全体キャンセル", text: "やっぱり全部キャンセルで", description: "注文全体をキャンセルします" },
-      { label: "注文の取り消し", text: "今日の注文は取り消してください", description: "注文全体をキャンセルします" },
-    ],
-  },
-  {
-    category: "いつもの・前回",
-    items: [
-      { label: "いつものお願い", text: "いつものお願い", description: "学習された顧客の発注パターンから注文します" },
-      { label: "前回と同じ", text: "前回と同じものを注文したい", description: "過去の注文履歴から同じ内容を復元します" },
-    ],
-  },
-  {
-    category: "在庫・代替",
-    items: [
-      { label: "スイカ在庫確認", text: "スイカの在庫ありますか？", description: "商品の在庫数・引当可能数を確認します" },
-      { label: "メロン在庫確認", text: "メロンの在庫状況を教えて", description: "商品の在庫数・引当可能数を確認します" },
-      { label: "「それでいいです」", text: "それでいいです", description: "代替提案や一部不足時の確認に対する肯定の返答" },
-      { label: "「はい、お願いします」", text: "はい、お願いします", description: "提案に対する肯定の返答" },
-    ],
-  },
-  {
-    category: "あいまい・例外・トラブル",
-    items: [
-      { label: "さっきのやつを減らす", text: "さっきのやつ減らしてください", description: "対象商品を特定できない曖昧な変更依頼" },
-      { label: "適当によろしく", text: "適当によろしく", description: "内容が曖昧な注文依頼" },
-      { label: "明日配送に変更", text: "明日配送に変更してください", description: "配送日や時間帯の変更依頼" },
-      { label: "商品が傷んでいた", text: "昨日届いたりんごが傷んでいました", description: "品質トラブルの報告（要対応として受注保存）" },
-      { label: "数量が違っていた", text: "頼んだ数と違っていました", description: "数量トラブルの報告（要対応として受注保存）" },
-    ],
-  },
-];
-
 export default function WebPhone() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
@@ -153,7 +88,6 @@ export default function WebPhone() {
   const [interimText, setInterimText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<string>(QUICK_MESSAGE_GROUPS[0].category);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognizerRef = useRef<any>(null);
@@ -613,59 +547,22 @@ export default function WebPhone() {
             </div>
           </div>
 
-          {/* Quick templates grouped by category */}
-          <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50/50 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                テスト用テンプレート
-              </span>
-              <span className="text-[11px] text-gray-400">クリックするだけで会話に送信できます</span>
-            </div>
-
-            {/* Tab navigation */}
-            <div className="flex gap-1 overflow-x-auto pb-1.5 mb-3 border-b border-gray-200 scrollbar-thin">
-              {QUICK_MESSAGE_GROUPS.map((group) => (
-                <button
-                  key={group.category}
-                  onClick={() => setActiveTab(group.category)}
-                  className={`text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all ${
-                    activeTab === group.category
-                      ? "bg-brand-600 text-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/60 hover:text-gray-900"
-                  }`}
-                >
-                  {group.category}
-                </button>
-              ))}
-            </div>
-
-            {/* Template Buttons Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto pr-1">
-              {QUICK_MESSAGE_GROUPS.find((g) => g.category === activeTab)?.items.map((item) => (
-                <button
-                  key={item.text}
-                  onClick={() => sendTextMessage(item.text)}
-                  disabled={loading}
-                  title={`${item.text}${item.description ? ` - ${item.description}` : ""}`}
-                  className="group flex flex-col items-start text-left p-2 rounded-lg border border-gray-200 bg-white hover:border-brand-400 hover:bg-brand-50/10 hover:shadow-sm disabled:opacity-40 transition-all cursor-pointer animate-fade-in"
-                >
-                  <span className="text-xs font-semibold text-gray-800 group-hover:text-brand-700 transition-colors">
-                    {item.label}
-                  </span>
-                  <span className="text-[11px] text-gray-500 mt-0.5 truncate w-full group-hover:text-gray-600">
-                    {item.text}
-                  </span>
-                  {item.description && (
-                    <span className="text-[9px] text-gray-400 mt-0.5 italic group-hover:text-gray-500 transition-colors truncate w-full">
-                      {item.description}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {[
+              "りんご10箱お願いします",
+              "バナナ20kgとみかん50個",
+              "在庫確認したい",
+              "キャンセルしたい",
+            ].map((msg) => (
+              <button
+                key={msg}
+                onClick={() => sendTextMessage(msg)}
+                disabled={loading}
+                className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 transition-colors"
+              >
+                {msg}
+              </button>
+            ))}
           </div>
         </>
       )}
