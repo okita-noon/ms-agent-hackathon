@@ -1105,6 +1105,17 @@ async def list_products(tenant_id: str = Depends(get_tenant_id)):
     return {"products": [p.model_dump() for p in products]}
 
 
+@app.get("/api/products/suggest")
+async def suggest_products(q: str, tenant_id: str = Depends(get_tenant_id)):
+    """AI Search の Suggester によるオートコンプリート。未構成時は空配列を返す。"""
+    tenant_ctx = resolve_tenant_by_id(tenant_id)
+    master = tenant_ctx.get_connector("IProductMaster")
+    if hasattr(master, "suggest"):
+        suggestions = await master.suggest(tenant_id, q)
+        return {"suggestions": suggestions}
+    return {"suggestions": []}
+
+
 @app.get("/api/inventory")
 async def list_inventory(tenant_id: str = Depends(get_tenant_id)):
     tenant_ctx = resolve_tenant_by_id(tenant_id)
