@@ -42,6 +42,7 @@ from src.services.line_template_renderer import (
     format_line_order_items,
     render_line_template,
 )
+from src.services.anomaly_rules import classify_quantity_anomaly
 from src.services.intent_understanding import IntentResult, IntentUnderstandingService, OrderIntent, is_rule_full_cancel
 from src.services.inventory_application import InventoryApplicationService
 from src.services.order_application import EDITABLE_ORDER_STATUSES, OrderApplicationService
@@ -1288,7 +1289,31 @@ class OrderOrchestrator:
                 debug_log.append(f"[保存] 要対応注文の保存失敗: {exc}")
                 logger.exception("Failed to save review order (out of stock)")
         elif has_partial_stock:
-            debug_log.append("[保存] 部分在庫 → 顧客確認待ち、保存しない")
+            # 一部在庫不足 → NEEDS_REVIEWで保存しつつ、顧客確認文は従来どおり返す
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    shortage_remarks = "; ".join(
+                        f"{item.get('product_name', '商品')}: "
+                        f"注文{_format_qty(item.get('required_qty'))}{item.get('unit', '')}, "
+                        f"在庫{_format_qty(item.get('available_qty'))}{item.get('unit', '')}"
+                        for item in checked_items
+                        if not item.get("is_sufficient")
+                    )
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        status=OrderStatus.NEEDS_REVIEW,
+                        remarks=f"一部在庫不足: {shortage_remarks}" if shortage_remarks else "一部在庫不足のため要対応",
+                    )
+                    debug_log.append(f"[保存] 一部在庫不足→要対応として保存: {saved_order.id}")
+                    logger.info("Created review order %s (partial stock)", saved_order.id)
+                    result["review_order_id"] = saved_order.id
+            except Exception as exc:
+                debug_log.append(f"[保存] 一部在庫不足注文の保存失敗: {exc}")
+                logger.exception("Failed to save partial-stock review order")
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
@@ -1310,6 +1335,18 @@ class OrderOrchestrator:
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
                     )
+
+                    # 数量異常 severity を評価（high → NEEDS_REVIEW保存）
+                    anomaly_eval = await _evaluate_anomaly_severity(draft, self._ctx)
+                    save_status = _decide_save_status(
+                        has_high_anomaly=anomaly_eval["has_high"],
+                        has_partial_stock=False,
+                        has_only_out_of_stock=False,
+                    )
+                    save_remarks: str | None = None
+                    if anomaly_eval["remarks_lines"]:
+                        save_remarks = "; ".join(anomaly_eval["remarks_lines"])
+                        debug_log.append(f"[保存] 数量警告あり: {save_remarks}")
 
                     # LINE: 追加注文パターン判定（new/add/confirm_overlap）
                     if source == OrderSource.LINE:
@@ -1384,13 +1421,22 @@ class OrderOrchestrator:
                         source=source,
                         session_id=session_id,
                         existing_order=existing_order_arg,
-                        status=OrderStatus.ACCEPTED,
+                        status=save_status,
+                        remarks=save_remarks,
                     )
-                    asyncio.create_task(self._run_learning(saved_order, message))
-                    debug_log.append(f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}")
-                    logger.info("Created order %s from single-agent pipeline", saved_order.id)
+                    if save_status == OrderStatus.NEEDS_REVIEW:
+                        asyncio.create_task(self._run_learning(saved_order, message))
+                        debug_log.append(f"[保存] 数量異常→要対応として保存: {saved_order.id}")
+                        logger.info("Created review order %s (quantity anomaly)", saved_order.id)
+                        result["review_order_id"] = saved_order.id
+                    else:
+                        asyncio.create_task(self._run_learning(saved_order, message))
+                        debug_log.append(
+                            f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}"
+                        )
+                        logger.info("Created order %s from single-agent pipeline", saved_order.id)
                     result["order_id"] = saved_order.id
-                    result["order_saved"] = True
+                    result["order_saved"] = save_status == OrderStatus.ACCEPTED
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
@@ -1761,7 +1807,31 @@ class OrderOrchestrator:
                 debug_log.append(f"[保存] 要対応注文の保存失敗: {exc}")
                 logger.exception("[multi-agent] Failed to save review order (out of stock)")
         elif has_partial_stock:
-            debug_log.append("[保存] 部分在庫 → 顧客確認待ち、保存しない")
+            # 一部在庫不足 → NEEDS_REVIEWで保存しつつ、顧客確認文は従来どおり返す
+            try:
+                draft = _build_draft_from_intake(intake_draft)
+                if draft:
+                    shortage_remarks = "; ".join(
+                        f"{item.get('product_name', '商品')}: "
+                        f"注文{_format_qty(item.get('required_qty'))}{item.get('unit', '')}, "
+                        f"在庫{_format_qty(item.get('available_qty'))}{item.get('unit', '')}"
+                        for item in checked_items
+                        if not item.get("is_sufficient")
+                    )
+                    saved_order = await self.create_order_from_draft(
+                        draft,
+                        source=source,
+                        session_id=session_id,
+                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        status=OrderStatus.NEEDS_REVIEW,
+                        remarks=f"一部在庫不足: {shortage_remarks}" if shortage_remarks else "一部在庫不足のため要対応",
+                    )
+                    debug_log.append(f"[保存] 一部在庫不足→要対応として保存: {saved_order.id}")
+                    logger.info("[multi-agent] Created review order %s (partial stock)", saved_order.id)
+                    result["review_order_id"] = saved_order.id
+            except Exception as exc:
+                debug_log.append(f"[保存] 一部在庫不足注文の保存失敗: {exc}")
+                logger.exception("[multi-agent] Failed to save partial-stock review order")
         elif not needs_confirmation:
             try:
                 draft = _build_draft_from_intake(intake_draft)
@@ -1783,6 +1853,18 @@ class OrderOrchestrator:
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
                     )
+
+                    # 数量異常 severity を評価（high → NEEDS_REVIEW保存）
+                    anomaly_eval = await _evaluate_anomaly_severity(draft, self._ctx)
+                    save_status = _decide_save_status(
+                        has_high_anomaly=anomaly_eval["has_high"],
+                        has_partial_stock=False,
+                        has_only_out_of_stock=False,
+                    )
+                    save_remarks: str | None = None
+                    if anomaly_eval["remarks_lines"]:
+                        save_remarks = "; ".join(anomaly_eval["remarks_lines"])
+                        debug_log.append(f"[保存] 数量警告あり: {save_remarks}")
 
                     # LINE: 追加注文パターン判定（new/add/confirm_overlap）
                     if source == OrderSource.LINE:
@@ -1856,13 +1938,21 @@ class OrderOrchestrator:
                         source=source,
                         session_id=session_id,
                         existing_order=existing_order_arg,
-                        status=OrderStatus.ACCEPTED,
+                        status=save_status,
+                        remarks=save_remarks,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
-                    debug_log.append(f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}")
-                    logger.info("[multi-agent] Created order %s", saved_order.id)
+                    if save_status == OrderStatus.NEEDS_REVIEW:
+                        debug_log.append(f"[保存] 数量異常→要対応として保存: {saved_order.id}")
+                        logger.info("[multi-agent] Created review order %s (quantity anomaly)", saved_order.id)
+                        result["review_order_id"] = saved_order.id
+                    else:
+                        debug_log.append(
+                            f"[保存] 受注確定: {saved_order.id}, delivery_date={saved_order.delivery_date}"
+                        )
+                        logger.info("[multi-agent] Created order %s", saved_order.id)
                     result["order_id"] = saved_order.id
-                    result["order_saved"] = True
+                    result["order_saved"] = save_status == OrderStatus.ACCEPTED
                     result["customer_id"] = saved_order.customer_id
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
@@ -3403,6 +3493,72 @@ def _is_affirmative_reply(message: str) -> bool:
         "確定",
     }
     return normalized in affirmative_words or normalized.endswith("でお願いします")
+
+
+async def _evaluate_anomaly_severity(
+    intake_draft: dict,
+    ctx: "TenantContext",
+) -> dict:
+    """intake_draft の items を anomaly_rules で評価し severity 情報を返す。
+
+    Returns:
+        {has_high, has_medium, remarks_lines}
+          has_high:      high severity の異常が1件以上ある
+          has_medium:    medium severity の異常が1件以上ある（highなし）
+          remarks_lines: 担当者向け警告文のリスト
+    """
+    items = intake_draft.get("items", [])
+    if not items:
+        return {"has_high": False, "has_medium": False, "remarks_lines": []}
+
+    customer_id = intake_draft.get("customer_id")
+    profile = None
+    if customer_id:
+        try:
+            store = ctx.get_connector("IOrderIntelligenceStore")
+            profile = await store.get_customer_profile(ctx.tenant_id, customer_id)
+        except Exception:
+            pass
+
+    has_high = False
+    has_medium = False
+    remarks_lines: list[str] = []
+
+    for item in items:
+        qty = item.get("quantity")
+        unit = item.get("unit") or ""
+        product_id = item.get("product_id")
+        stats = None
+        if profile and product_id and hasattr(profile, "product_stats"):
+            raw = profile.product_stats.get(product_id)
+            # モックや想定外オブジェクトは None として扱う
+            from src.models.intelligence import ProductStats as _PS
+
+            stats = raw if isinstance(raw, _PS) else None
+        if qty is None:
+            continue
+        result = classify_quantity_anomaly(float(qty), unit, stats)
+        if result is None:
+            continue
+        if result["severity"] == "high":
+            has_high = True
+        else:
+            has_medium = True
+        remarks_lines.append(f"[数量警告] {item.get('product_name', '?')}: {result['summary']}")
+
+    return {"has_high": has_high, "has_medium": has_medium, "remarks_lines": remarks_lines}
+
+
+def _decide_save_status(
+    *,
+    has_high_anomaly: bool,
+    has_partial_stock: bool,
+    has_only_out_of_stock: bool,
+) -> OrderStatus:
+    """high系の異常があれば NEEDS_REVIEW、それ以外は ACCEPTED を返す。"""
+    if has_high_anomaly or has_partial_stock or has_only_out_of_stock:
+        return OrderStatus.NEEDS_REVIEW
+    return OrderStatus.ACCEPTED
 
 
 def _is_negative_reply(message: str) -> bool:

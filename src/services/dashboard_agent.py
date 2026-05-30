@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from src.connectors.context import TenantContext
 from src.models.intelligence import CustomerOrderProfile, ProductStats
 from src.models.order import Order, OrderItem, OrderStatus
+from src.services.anomaly_rules import classify_quantity_anomaly
 
 ExceptionCaseType = Literal[
     "quantity_anomaly",
@@ -35,8 +36,6 @@ ExceptionSeverity = Literal["high", "medium", "low"]
 
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 SEVERITY_RANK: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
-MIN_PROFILE_ORDERS = 3
-FALLBACK_QTY_THRESHOLD = 100.0
 TERMINAL_STATUSES: frozenset[OrderStatus] = frozenset({OrderStatus.COMPLETED, OrderStatus.CANCELLED})
 
 
@@ -305,53 +304,27 @@ async def _classify_inventory(order: Order, tenant_id: str, inventory: Any) -> l
 
 
 def _quantity_anomaly(item: OrderItem, stats: ProductStats | None) -> dict[str, Any] | None:
+    """classify_quantity_anomaly の結果に Evidence リストを付加して返す。"""
     qty = item.quantity
     if qty is None:
         return None
-    if stats and stats.total_orders >= MIN_PROFILE_ORDERS:
-        if stats.std_dev > 0:
-            z_score = abs(qty - stats.avg_qty) / stats.std_dev
-            if z_score <= 3.0:
-                return None
-            severity: ExceptionSeverity = "high" if z_score >= 6 else "medium"
-            return {
-                "severity": severity,
-                "summary": (
-                    f"通常 {stats.avg_qty:g}{stats.typical_unit} 前後のところ "
-                    f"{qty:g}{item.unit} で受注しています（Zスコア {z_score:.1f}）。"
-                ),
-                "evidence": [
-                    Evidence(label="今回数量", value=f"{qty:g}{item.unit}"),
-                    Evidence(label="通常数量", value=f"{stats.avg_qty:g}{stats.typical_unit}"),
-                    Evidence(label="Zスコア", value=f"{z_score:.1f}"),
-                ],
-                "z_score": z_score,
-            }
-        if qty != stats.avg_qty:
-            return {
-                "severity": "medium",
-                "summary": (
-                    f"通常 {stats.avg_qty:g}{stats.typical_unit} 固定のところ {qty:g}{item.unit} で受注しています。"
-                ),
-                "evidence": [
-                    Evidence(label="今回数量", value=f"{qty:g}{item.unit}"),
-                    Evidence(label="通常数量", value=f"{stats.avg_qty:g}{stats.typical_unit}"),
-                ],
-                "z_score": None,
-            }
+    result = classify_quantity_anomaly(qty, item.unit or "", stats)
+    if result is None:
         return None
-    # プロファイル未蓄積の場合のフォールバック検知（multi-agent-design の "データ不足" 対応）
-    if qty >= FALLBACK_QTY_THRESHOLD:
-        return {
-            "severity": "medium",
-            "summary": (
-                f"過去パターンが未蓄積で {qty:g}{item.unit} の大口受注を検知しました。"
-                "桁誤りの可能性を確認してください。"
-            ),
-            "evidence": [Evidence(label="今回数量", value=f"{qty:g}{item.unit}")],
-            "z_score": None,
-        }
-    return None
+
+    # Evidence リストを組み立てる（dashboard_agent 固有の表示用）
+    evidence: list[Evidence] = [Evidence(label="今回数量", value=f"{qty:g}{item.unit}")]
+    if result["typical_qty"] is not None and result["typical_unit"] is not None:
+        evidence.append(Evidence(label="通常数量", value=f"{result['typical_qty']:g}{result['typical_unit']}"))
+    if result["z_score"] is not None:
+        evidence.append(Evidence(label="Zスコア", value=f"{result['z_score']:.1f}"))
+
+    return {
+        "severity": result["severity"],
+        "summary": result["summary"],
+        "evidence": evidence,
+        "z_score": result["z_score"],
+    }
 
 
 def _stats_for(profile: CustomerOrderProfile | None, product_id: str) -> ProductStats | None:

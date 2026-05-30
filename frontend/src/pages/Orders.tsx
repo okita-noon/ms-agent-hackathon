@@ -81,7 +81,6 @@ export default function Orders() {
   }, [agentExceptions]);
 
   const highExceptionCount = agentExceptions.filter((e) => e.severity === "high").length;
-  const mediumExceptionCount = agentExceptions.filter((e) => e.severity === "medium").length;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -237,7 +236,10 @@ export default function Orders() {
   const acceptedOrderCount = orders.filter((o) =>
     ACCEPTED_ORDER_STATUSES.has(normalizeStatus(o.status))
   ).length;
-  const reviewOrderCount = orders.length - acceptedOrderCount;
+  // キャンセルを除外し、status=要対応 のみ正確にカウント
+  const reviewOrderCount = orders.filter(
+    (o) => normalizeStatus(o.status) === "要対応"
+  ).length;
   const hasFilters = Boolean(dateFilterEnabled || statusFilter || query.trim());
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
@@ -337,27 +339,26 @@ export default function Orders() {
       {triageAvailable && agentLoading && agentExceptions.length === 0 && (
         <AgentLoadingBanner />
       )}
-      {triageAvailable && agentExceptions.length > 0 && (
+      {triageAvailable && (reviewOrderCount > 0 || agentExceptions.length > 0) && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3 fade-in">
           <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-amber-900">
-                foogent AI: {agentExceptions.length}件の確認事項
+                foogent AI: 要対応 {reviewOrderCount} 件
               </span>
-              {highExceptionCount > 0 && (
+              {highExceptionCount > 0 ? (
                 <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                  高 {highExceptionCount}
+                  うち急ぎ {highExceptionCount} 件
                 </span>
-              )}
-              {mediumExceptionCount > 0 && (
-                <span className="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                  中 {mediumExceptionCount}
+              ) : (
+                <span className="inline-flex items-center rounded-md bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">
+                  急ぎなし
                 </span>
               )}
             </div>
             <p className="text-xs text-amber-700 mt-0.5">
-              数量異常・在庫不足など、担当者の確認が必要な受注を検出しました
+              数量異常・在庫不足など、担当者の確認が必要な受注があります
             </p>
           </div>
           <button
@@ -555,9 +556,33 @@ export default function Orders() {
         exceptions={agentExceptions}
       />
 
-      {exceptionModalOpen && agentExceptions.length > 0 && (
+      {exceptionModalOpen && (reviewOrderCount > 0 || agentExceptions.length > 0) && (
         <ExceptionModal
-          exceptions={agentExceptions}
+          exceptions={(() => {
+            // AI例外に紐づかない要対応注文を擬似ケースとして後続に追加
+            const exceptionOrderIds = new Set(agentExceptions.map((e) => e.order_id));
+            const pseudoCases = orders
+              .filter(
+                (o) =>
+                  normalizeStatus(o.status) === "要対応" &&
+                  !exceptionOrderIds.has(o.uid ?? o.id ?? "")
+              )
+              .map((o) => ({
+                id: `pseudo-needs-review-${o.uid ?? o.id ?? ""}`,
+                order_id: o.uid ?? o.id ?? "",
+                customer_id: o.customer_id ?? "",
+                customer_name: o.customer_name ?? "",
+                type: "needs_review" as const,
+                severity: "medium" as const,
+                title: "担当者確認が必要な受注",
+                summary: "AIが自動処理できず「要対応」となっています。",
+                suggested_action:
+                  "注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
+                evidence: [{ label: "ステータス", value: "要対応" }],
+                metadata: {},
+              }));
+            return [...agentExceptions, ...pseudoCases];
+          })()}
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
           onMemoUpdated={(updated) => {
