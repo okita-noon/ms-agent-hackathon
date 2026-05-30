@@ -226,7 +226,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                           type="button"
                           disabled={resolving}
                           onClick={() => handleResolve(selectedExc.id, selectedExc.order_id)}
-                          className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed ring-2 ring-emerald-500 ring-offset-1"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -238,7 +238,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                           type="button"
                           disabled={resolving}
                           onClick={() => armResolveConfirm(selectedExc.id)}
-                          className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60"
+                          className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 px-3 py-1.5 text-xs font-semibold shadow-xs transition-all disabled:opacity-60"
                           title="要対応タグを外し、受注済みに変更します"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
