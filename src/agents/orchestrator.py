@@ -190,12 +190,20 @@ def _build_small_talk_response(
     customer_name: str | None = None,
 ) -> str:
     normalized = re.sub(r"\s+", "", message).lower()
-    weather_reply = "本当に気持ちのよいお天気ですね。"
     thanks_reply = "こちらこそありがとうございます。"
     greeting_reply = "お電話ありがとうございます。" if source == OrderSource.PHONE else "ご連絡ありがとうございます。"
 
     if any(word in normalized for word in ("天気", "晴れ", "暑い", "寒い", "雨")):
-        base = weather_reply
+        if any(word in normalized for word in ("雨", "ゲリラ", "台風", "嵐", "土砂降り", "小雨")):
+            base = "雨の日は足元にお気をつけください。"
+        elif any(word in normalized for word in ("暑い", "猛暑", "熱い")):
+            base = "暑い日が続きますね。熱中症にお気をつけください。"
+        elif any(word in normalized for word in ("寒い", "冷える", "凍る")):
+            base = "寒い日が続きますね。お体に気をつけてお過ごしください。"
+        elif any(word in normalized for word in ("晴れ", "快晴")):
+            base = "本当に気持ちのよいお天気ですね。"
+        else:
+            base = "そうですね、今日のお天気はいかがですか。"
     elif "ありがとう" in normalized or "助かります" in normalized:
         base = thanks_reply
     elif source == OrderSource.EMAIL and customer_name:
