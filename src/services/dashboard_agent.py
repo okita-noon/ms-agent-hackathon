@@ -152,10 +152,15 @@ class DashboardAgentService:
             specific_cases.extend(_classify_items(order, profile))
             specific_cases.extend(await _classify_inventory(order, tenant_id, inventory))
 
-            if specific_cases:
-                cases.extend(specific_cases)
-            else:
-                cases.extend(_classify_status(order))
+            status_cases = _classify_status(order)
+            if status_cases:
+                # needs_review は medium がデフォルト。specific_cases に high があれば high に昇格
+                has_high = any(c.severity == "high" for c in specific_cases)
+                for sc in status_cases:
+                    if sc.type == "needs_review" and has_high:
+                        sc = sc.model_copy(update={"severity": "high"})
+                    cases.append(sc)
+            cases.extend(specific_cases)
 
         cases.sort(key=lambda c: (SEVERITY_RANK.get(c.severity, 99), c.order_id))
         return cases
@@ -197,7 +202,7 @@ def _classify_status(order: Order) -> list[ExceptionCase]:
             _build_case(
                 order=order,
                 case_type="needs_review",
-                severity="high",
+                severity="medium",
                 title="担当者確認が必要な受注",
                 summary="AIが自動処理できず「要対応」となっています。",
                 suggested_action="注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
