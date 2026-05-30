@@ -1003,6 +1003,7 @@ async def update_order_memo(
         tenant_id,
         {
             "order_id": updated.id,
+            "customer_name": updated.customer_name,
             "reason": "memo_updated",
             "delivery_date": updated.delivery_date.isoformat() if updated.delivery_date else None,
             "order_date": updated.order_date.isoformat(),
@@ -1064,6 +1065,7 @@ async def update_order_status(
         tenant_id,
         {
             "order_id": updated.id,
+            "customer_name": updated.customer_name,
             "reason": "status_updated",
             "delivery_date": updated.delivery_date.isoformat() if updated.delivery_date else None,
             "order_date": updated.order_date.isoformat(),

@@ -57,6 +57,7 @@ class OrderApplicationService:
             self._ctx.tenant_id,
             {
                 "order_id": order.id,
+                "customer_name": order.customer_name,
                 "status": OrderStatus.CANCELLED.value,
                 "reason": "status_updated",
                 "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
