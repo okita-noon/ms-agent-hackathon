@@ -464,12 +464,24 @@ class EmailIngestionService:
                 ),
             )
 
+        order_id = result.get("order_id")
+
+        if order_id:
+            session.current_order_id = order_id
+            order_repo = self._ctx.get_connector("IOrderRepository")
+            order = await order_repo.find_by_id(self._ctx.tenant_id, order_id)
+            if order and order.session_id and order.session_id != session.id:
+                if session.id not in (order.related_session_ids or []):
+                    order.related_session_ids = list(order.related_session_ids or []) + [session.id]
+                    order.updated_at = datetime.utcnow()
+                    await order_repo.save(order)
+
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
             session.expires_at = datetime.utcnow() + timedelta(hours=EMAIL_SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
-        elif result.get("order_id"):
+        elif order_id:
             session.status = "completed"
             session.pending_order_draft = None
             await session_repo.update_session(session)

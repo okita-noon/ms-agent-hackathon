@@ -91,6 +91,7 @@ class Order(BaseModel):
     remarks: str | None = None
     memo: str | None = None
     session_id: str | None = None
+    related_session_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
