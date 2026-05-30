@@ -96,6 +96,50 @@ class SqlCustomerRepository:
                 rows = await cur.fetchall()
                 return [_row_to_customer(r) for r in rows]
 
+    async def next_customer_id(self, tenant_id: str) -> str:
+        query = """
+        SELECT MAX(CAST(REPLACE(customer_id, 'C-', '') AS INT))
+        FROM customers
+        WHERE tenant_id = ? AND customer_id LIKE 'C-[0-9]%'
+        """
+        async with await self._get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(query, (tenant_id,))
+                row = await cur.fetchone()
+                max_num = row[0] if row and row[0] else 0
+                return f"C-{max_num + 1:03d}"
+
+    async def create(self, tenant_id: str, customer: Customer) -> Customer:
+        query = """
+        INSERT INTO customers (customer_id, tenant_id, name, short_name, line_user_id,
+                               email, phone, fax, default_route, default_carrier,
+                               default_time_slot, delivery_lead_time, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        pref = customer.delivery_preference
+        async with await self._get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    query,
+                    (
+                        customer.id,
+                        tenant_id,
+                        customer.name,
+                        customer.short_name,
+                        customer.line_user_id,
+                        customer.email,
+                        customer.phone,
+                        customer.fax,
+                        pref.default_route.value if pref.default_route else None,
+                        pref.default_carrier.value if pref.default_carrier else None,
+                        pref.default_time_slot,
+                        customer.delivery_lead_time.value if customer.delivery_lead_time else None,
+                        1 if customer.active else 0,
+                    ),
+                )
+                await conn.commit()
+        return customer
+
     async def update(self, tenant_id: str, customer_id: str, fields: dict) -> Customer:
         allowed = {
             "name",

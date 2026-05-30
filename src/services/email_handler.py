@@ -372,24 +372,23 @@ class EmailIngestionService:
                 inbound.customer_id = customer.id
                 inbound.customer_name = customer.name
 
-        demo_mode = os.environ.get("EMAIL_DEMO_MODE", "false").strip().lower() == "true"
-        if not customer and demo_mode:
-            demo_customer_id = os.environ.get("EMAIL_DEMO_CUSTOMER_ID", "").strip()
-            if demo_customer_id:
-                customer = await customer_repo.get_by_id(self._ctx.tenant_id, demo_customer_id)
-            if not customer:
-                customers = await customer_repo.list_all(self._ctx.tenant_id)
-                if customers:
-                    customer = customers[0]
-            if customer:
+        if not customer and inbound.channel_user_id:
+            from src.services.line_handler import _build_new_customer
+
+            next_id = await customer_repo.next_customer_id(self._ctx.tenant_id)
+            new_customer = _build_new_customer(self._ctx.tenant_id, next_id, email=inbound.channel_user_id)
+            try:
+                customer = await customer_repo.create(self._ctx.tenant_id, new_customer)
                 inbound.customer_id = customer.id
                 inbound.customer_name = customer.name
                 logger.info(
-                    "Demo mode: unregistered email %s mapped to customer %s (%s)",
-                    inbound.channel_user_id,
+                    "Created new customer %s (%s) for unregistered email %s",
                     customer.id,
                     customer.name,
+                    inbound.channel_user_id,
                 )
+            except Exception:
+                logger.exception("Failed to create customer for email %s", inbound.channel_user_id)
 
         session = None
         if inbound.conversation_id:
