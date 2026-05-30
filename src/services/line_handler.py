@@ -201,6 +201,7 @@ class LineWebhookHandler:
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
                 current_order=current_order,
+                shortage_review_order_id=session.shortage_review_order_id,
             )
         except Exception:
             logger.exception("Agent processing failed for user %s", user_id)
@@ -250,12 +251,16 @@ class LineWebhookHandler:
             session.current_order_id = result.get("current_order_id") or session.current_order_id
             session.current_order_snapshot = result.get("current_order_snapshot") or session.current_order_snapshot
             session.current_order_editable = result.get("current_order_editable", session.current_order_editable)
+            # 在庫不足NEEDS_REVIEW受注IDをセッションに記録（次回受注時の機会損失フォロー用）
+            if result.get("review_order_id"):
+                session.shortage_review_order_id = result["review_order_id"]
             session.expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
         elif result.get("order_id"):
             session.status = "completed"
             session.pending_order_draft = None
             session.pending_action_type = None
+            session.shortage_review_order_id = None  # 受注完了でフォロー情報をクリア
             session.customer_id = result.get("customer_id") or session.customer_id
             if result.get("current_order_cleared"):
                 session.current_order_id = None

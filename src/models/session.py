@@ -20,6 +20,7 @@ class OrderSession(BaseModel):
     status: str = "active"
     pending_order_draft: dict | None = None
     pending_action_type: str | None = None
+    shortage_review_order_id: str | None = None  # 在庫不足NEEDS_REVIEW受注のID（機会損失フォロー用）
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime | None = None
     last_message_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

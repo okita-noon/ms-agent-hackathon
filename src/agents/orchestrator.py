@@ -374,6 +374,7 @@ class OrderOrchestrator:
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
         current_order: Order | None = None,
+        shortage_review_order_id: str | None = None,
     ) -> dict:
         result: dict = {
             "response": "",
@@ -711,6 +712,7 @@ class OrderOrchestrator:
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
                 current_order=current_order,
+                shortage_review_order_id=shortage_review_order_id,
             )
         if source == OrderSource.LINE:
             agent_result.setdefault("pending_action_type", line_action_type)
@@ -1052,6 +1054,7 @@ class OrderOrchestrator:
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
         current_order: Order | None = None,
+        shortage_review_order_id: str | None = None,
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
@@ -1422,6 +1425,13 @@ class OrderOrchestrator:
                     else:
                         add_plan = None
                         existing_order_arg = None
+
+                    # 在庫不足による変更注文の場合、機会損失フォロー用の注記を追加
+                    if shortage_review_order_id and save_status == OrderStatus.ACCEPTED:
+                        shortage_note = (
+                            f"在庫不足により数量変更あり（元受注: {shortage_review_order_id}）。担当者フォロー推奨"
+                        )
+                        save_remarks = f"{save_remarks}; {shortage_note}" if save_remarks else shortage_note
 
                     saved_order = await self.create_order_from_draft(
                         draft,

@@ -196,9 +196,13 @@ class DashboardAgentService:
         return _preview_inventory_shortage_body(case, alternatives_meta)
 
 
+_SHORTAGE_FOLLOWUP_MARKER = "在庫不足により数量変更あり"
+
+
 def _classify_status(order: Order) -> list[ExceptionCase]:
+    cases = []
     if order.status == OrderStatus.NEEDS_REVIEW:
-        return [
+        cases.append(
             _build_case(
                 order=order,
                 case_type="needs_review",
@@ -208,8 +212,21 @@ def _classify_status(order: Order) -> list[ExceptionCase]:
                 suggested_action="注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
                 evidence=[Evidence(label="ステータス", value=order.status.value)],
             )
-        ]
-    return []
+        )
+    # 在庫不足による数量変更受注 → 機会損失フォロー用に high で通知
+    if order.remarks and _SHORTAGE_FOLLOWUP_MARKER in order.remarks:
+        cases.append(
+            _build_case(
+                order=order,
+                case_type="needs_review",
+                severity="high",
+                title="在庫不足による数量変更あり（フォロー推奨）",
+                summary="在庫不足のため顧客が希望数量を減らして注文しました。在庫手配が可能か確認し、追加対応を検討してください。",
+                suggested_action="会話履歴で元の希望数量を確認し、仕入れ状況次第で顧客へ追加案内を行ってください。",
+                evidence=[Evidence(label="備考", value=order.remarks)],
+            )
+        )
+    return cases
 
 
 def _classify_items(order: Order, profile: CustomerOrderProfile | None) -> list[ExceptionCase]:
