@@ -6,11 +6,10 @@ interface Props {
   order: Order | null;
   onClose: () => void;
   onMemoUpdated?: (order: Order) => void;
-  onWillResolve?: (orderId: string) => void;
   exceptions?: AgentExceptionCase[];
 }
 
-export default function OrderDetailModal({ order, onClose, onMemoUpdated, onWillResolve, exceptions }: Props) {
+export default function OrderDetailModal({ order, onClose, onMemoUpdated, exceptions }: Props) {
   useEffect(() => {
     if (!order) return;
     function handleKeyDown(e: KeyboardEvent) {
@@ -54,7 +53,6 @@ export default function OrderDetailModal({ order, onClose, onMemoUpdated, onWill
             order={order}
             exceptions={exceptions}
             onMemoUpdated={onMemoUpdated}
-            onWillResolve={onWillResolve}
           />
         </div>
 
