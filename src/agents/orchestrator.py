@@ -53,6 +53,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
 HISTORY_CONTEXT_LIMIT = 20
 
+_SMALL_TALK_INSTRUCTIONS = (
+    "あなたは食品卸の受注担当AIアシスタントです。"
+    "顧客からの挨拶・雑談・天気の話などの社交的な発話に対して、"
+    "自然で温かみのある短い返答（1〜2文）を日本語で返してください。"
+    "文脈（晴れ・雨・暑い・寒いなど）に正確に合わせた返答をしてください。"
+    "返答テキストのみを出力し、説明や前置きは不要です。"
+)
+
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "_templates"
 _email_config_cache: dict | None = None
 
@@ -180,49 +188,6 @@ def _build_order_locked_response(source: OrderSource, order: Order) -> str:
     if source == OrderSource.LINE:
         return _build_line_from_template("order_locked_need_review.txt")
     return "このご注文はすでに処理が進んでいるため、自動で変更・キャンセルできません。担当者が確認いたします。"
-
-
-def _build_small_talk_response(
-    source: OrderSource,
-    message: str,
-    *,
-    pending_order_draft: dict | None = None,
-    customer_name: str | None = None,
-) -> str:
-    normalized = re.sub(r"\s+", "", message).lower()
-    thanks_reply = "こちらこそありがとうございます。"
-    greeting_reply = "お電話ありがとうございます。" if source == OrderSource.PHONE else "ご連絡ありがとうございます。"
-
-    if any(word in normalized for word in ("天気", "晴れ", "暑い", "寒い", "雨")):
-        if any(word in normalized for word in ("雨", "ゲリラ", "台風", "嵐", "土砂降り", "小雨")):
-            base = "雨の日は足元にお気をつけください。"
-        elif any(word in normalized for word in ("暑い", "猛暑", "熱い")):
-            base = "暑い日が続きますね。熱中症にお気をつけください。"
-        elif any(word in normalized for word in ("寒い", "冷える", "凍る")):
-            base = "寒い日が続きますね。お体に気をつけてお過ごしください。"
-        elif any(word in normalized for word in ("晴れ", "快晴")):
-            base = "本当に気持ちのよいお天気ですね。"
-        else:
-            base = "そうですね、今日のお天気はいかがですか。"
-    elif "ありがとう" in normalized or "助かります" in normalized:
-        base = thanks_reply
-    elif source == OrderSource.EMAIL and customer_name:
-        base = f"{customer_name}様、ご連絡ありがとうございます。"
-    else:
-        base = greeting_reply
-
-    if pending_order_draft:
-        prompt = "先ほどの確認中のご注文について、よろしければ内容をお知らせください。"
-    else:
-        prompt = "ご注文がありましたら、商品名と数量をお知らせください。"
-
-    if source == OrderSource.EMAIL:
-        return _build_email_from_template(
-            "メール返信_異常時.txt",
-            {"customer_name": customer_name or "お客"},
-            body=f"{base}\n\n{prompt}",
-        )
-    return f"{base}{prompt}"
 
 
 def _build_current_orders_response(source: OrderSource, summary: str, *, customer_name: str | None = None) -> str:
@@ -361,6 +326,40 @@ class OrderOrchestrator:
         elapsed = round(time.monotonic() - t0, 2)
         return result_text, elapsed
 
+    async def _build_small_talk_response(
+        self,
+        source: OrderSource,
+        message: str,
+        *,
+        pending_order_draft: dict | None = None,
+        customer_name: str | None = None,
+    ) -> str:
+        order_prompt = (
+            "先ほどの確認中のご注文について、よろしければ内容をお知らせください。"
+            if pending_order_draft
+            else "ご注文がありましたら、商品名と数量をお知らせください。"
+        )
+        try:
+            agent = ChatCompletionAgent(
+                kernel=self._build_kernel(),
+                name="SmallTalkAgent",
+                instructions=_SMALL_TALK_INSTRUCTIONS,
+            )
+            small_talk_text, _ = await self._invoke_agent(agent, message)
+            small_talk_text = small_talk_text.strip()
+        except Exception:
+            logger.warning("small talk LLM call failed, using fallback")
+            small_talk_text = "ご連絡ありがとうございます。"
+
+        body = f"{small_talk_text}\n{order_prompt}"
+        if source == OrderSource.EMAIL:
+            return _build_email_from_template(
+                "メール返信_異常時.txt",
+                {"customer_name": customer_name or "お客"},
+                body=body,
+            )
+        return body
+
     async def process_order_message(
         self,
         message: str,
@@ -415,7 +414,7 @@ class OrderOrchestrator:
 
         if intent_result.intent == OrderIntent.SMALL_TALK:
             debug_log.append("[判定] 雑談・挨拶として応答")
-            response_text = _build_small_talk_response(
+            response_text = await self._build_small_talk_response(
                 source,
                 message,
                 pending_order_draft=pending_order_draft,
