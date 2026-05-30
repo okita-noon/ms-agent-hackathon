@@ -134,7 +134,7 @@ function PageFallback() {
 
 function DashboardLayout() {
   return (
-    <div className="h-screen bg-surface flex flex-col">
+    <div className="min-h-screen bg-surface flex flex-col">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
