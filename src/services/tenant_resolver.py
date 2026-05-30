@@ -20,6 +20,15 @@ _PHONE_TENANT_MAP: dict[str, str] = {}
 _EMAIL_TENANT_MAP: dict[str, str] = {}
 
 
+def _product_master_config(sql_conn: str) -> ConnectorConfig:
+    """AI Search が構成済みならそちらを使い、未設定なら SQL LIKE にフォールバック。"""
+    endpoint = os.environ.get("AI_SEARCH_ENDPOINT", "")
+    api_key = os.environ.get("AI_SEARCH_KEY", "")
+    if endpoint and api_key:
+        return ConnectorConfig(type="ai_search", endpoint=endpoint, extra={"api_key": api_key})
+    return ConnectorConfig(type="azure_sql", connection=sql_conn)
+
+
 def _get_tenant_config(tenant_id: str) -> TenantConfig:
     """Return TenantConfig for the given tenant_id.
 
@@ -76,7 +85,7 @@ def _get_tenant_config(tenant_id: str) -> TenantConfig:
             "IOrderIntelligenceStore": ConnectorConfig(
                 type="cosmosdb", connection=cosmos_conn, database="intelligence"
             ),
-            "IProductMaster": ConnectorConfig(type="azure_sql", connection=sql_conn),
+            "IProductMaster": _product_master_config(sql_conn),
             "ICustomerRepository": ConnectorConfig(type="azure_sql", connection=sql_conn),
             "IInventoryService": ConnectorConfig(type="azure_sql", connection=sql_conn),
         },
