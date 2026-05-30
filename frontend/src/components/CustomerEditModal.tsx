@@ -45,10 +45,10 @@ export default function CustomerEditModal({ customer, onClose, onSave }: Props) 
     try {
       await onSave(customer.id, {
         name,
-        short_name: shortName || undefined,
-        line_user_id: lineUserId || undefined,
-        phone: phone || undefined,
-        email: email || undefined,
+        short_name: shortName || null,
+        line_user_id: lineUserId || null,
+        phone: phone || null,
+        email: email || null,
         delivery_lead_time: leadTime || null,
       });
       onClose();

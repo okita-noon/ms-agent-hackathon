@@ -77,15 +77,14 @@ export default function Customers() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/80 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3">ID</th>
-                  <th className="px-5 py-3">顧客名</th>
-                  <th className="px-5 py-3">略称</th>
-                  <th className="px-5 py-3">納品グループ</th>
-                  <th className="px-5 py-3">LINE連携</th>
-                  <th className="px-5 py-3">電話</th>
-                  <th className="px-5 py-3">メール</th>
-                  <th className="px-5 py-3">状態</th>
-                  <th className="px-5 py-3">操作</th>
+                  <th className="px-5 py-3 whitespace-nowrap">ID</th>
+                  <th className="px-5 py-3 whitespace-nowrap">顧客名</th>
+                  <th className="px-5 py-3 whitespace-nowrap">略称</th>
+                  <th className="px-5 py-3 whitespace-nowrap">納品グループ</th>
+                  <th className="px-5 py-3 whitespace-nowrap">LINE連携</th>
+                  <th className="px-5 py-3 whitespace-nowrap">電話</th>
+                  <th className="px-5 py-3 whitespace-nowrap">メール</th>
+                  <th className="px-5 py-3 whitespace-nowrap">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -105,28 +104,20 @@ export default function Customers() {
                     </td>
                     <td className="px-5 py-3.5">
                       {c.line_user_id ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
                           連携済み
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs text-gray-400 bg-gray-50 border border-gray-100">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs text-gray-400 bg-gray-50 border border-gray-100 whitespace-nowrap">
                           未登録
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-gray-500 text-xs tabular-nums">{c.phone || <span className="text-gray-300">-</span>}</td>
                     <td className="px-5 py-3.5 text-gray-500 text-xs">{c.email || <span className="text-gray-300">-</span>}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
-                        c.active
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-500 border-gray-200"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${c.active ? "bg-emerald-500" : "bg-gray-400"}`} />
-                        {c.active ? "有効" : "無効"}
-                      </span>
-                    </td>
                     <td className="px-5 py-3.5">
                       <button
                         onClick={() => setEditing(c)}
