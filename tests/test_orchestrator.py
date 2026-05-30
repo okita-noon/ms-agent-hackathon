@@ -14,6 +14,7 @@ from src.agents.orchestrator import (
     OrderOrchestrator,
     _check_draft_inventory,
     _build_draft_from_intake,
+    _classify_additional_order,
     _enforce_response_policy,
     _format_open_orders_summary,
     _format_memory_context,
@@ -22,6 +23,7 @@ from src.agents.orchestrator import (
     _is_current_order_inquiry,
     _is_full_order_cancel,
     _is_inventory_inquiry,
+    _is_negative_reply,
     _parse_order_items,
     _resolve_line_action_type,
 )
@@ -1909,3 +1911,137 @@ class TestLearningIntegration:
             )
 
             mock_learn.assert_not_called()
+
+
+class TestClassifyAdditionalOrder:
+    """_classify_additional_order 判定関数の純粋関数テスト。"""
+
+    def _make_order(
+        self,
+        delivery_date: date | None = None,
+        status: OrderStatus = OrderStatus.ACCEPTED,
+        product_id: str = "P-001",
+        quantity: float = 5.0,
+        unit: str = "箱",
+    ) -> Order:
+        from src.utils.business_date import today_jst
+
+        return Order(
+            uid="ORD-TEST",
+            tenant_id="T-TEST",
+            customer_id="C-001",
+            customer_name="テスト社",
+            order_date=today_jst(),
+            delivery_date=delivery_date or today_jst(),
+            source=OrderSource.LINE,
+            status=status,
+            items=[
+                OrderItem(
+                    product_id=product_id,
+                    product_name="りんご",
+                    quantity=quantity,
+                    unit=unit,
+                    temperature_zone=TemperatureZone.CHILLED,
+                )
+            ],
+        )
+
+    def _make_draft(
+        self,
+        delivery_date: date | str | None = None,
+        product_id: str = "P-002",
+        quantity: float = 3.0,
+        unit: str = "kg",
+    ) -> dict:
+        from src.utils.business_date import today_jst
+
+        dd = delivery_date if delivery_date is not None else today_jst()
+        return {
+            "customer_id": "C-001",
+            "delivery_date": dd,
+            "items": [
+                {
+                    "product_id": product_id,
+                    "product_name": "バナナ",
+                    "quantity": quantity,
+                    "unit": unit,
+                    "temperature_zone": "常温",
+                }
+            ],
+        }
+
+    def test_no_current_order_returns_new(self):
+        draft = self._make_draft()
+        plan = _classify_additional_order(None, draft, editable=False)
+        assert plan.mode == "new"
+        assert plan.use_existing_order is False
+
+    def test_not_editable_returns_new(self):
+        order = self._make_order(status=OrderStatus.SHIPPING)
+        draft = self._make_draft()
+        plan = _classify_additional_order(order, draft, editable=False)
+        assert plan.mode == "new"
+        assert plan.use_existing_order is False
+
+    def test_different_delivery_date_returns_new(self):
+        from datetime import timedelta
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst())
+        draft = self._make_draft(delivery_date=today_jst() + timedelta(days=1))
+        plan = _classify_additional_order(order, draft, editable=True)
+        assert plan.mode == "new"
+        assert plan.use_existing_order is False
+
+    def test_same_date_no_overlap_returns_add(self):
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001")
+        draft = self._make_draft(delivery_date=today_jst(), product_id="P-002")
+        plan = _classify_additional_order(order, draft, editable=True)
+        assert plan.mode == "add"
+        assert plan.use_existing_order is True
+        assert len(plan.added_items) == 1
+        # merged_items は既存1件 + 新規1件 = 2件
+        assert len(plan.merged_items) == 2
+
+    def test_same_date_overlap_returns_confirm_overlap(self):
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001", quantity=9.0, unit="kg")
+        draft = self._make_draft(delivery_date=today_jst(), product_id="P-001", quantity=9.0, unit="kg")
+        plan = _classify_additional_order(order, draft, editable=True)
+        assert plan.mode == "confirm_overlap"
+        assert plan.use_existing_order is True
+        assert len(plan.overlap_items) == 1
+        ov = plan.overlap_items[0]
+        assert ov["existing_qty"] == 9.0
+        assert ov["add_qty"] == 9.0
+        assert ov["total_qty"] == 18.0
+        # merged_items の数量が合算されている
+        merged_by_pid = {it["product_id"]: it for it in plan.merged_items}
+        assert merged_by_pid["P-001"]["quantity"] == 18.0
+
+    def test_delivery_date_as_string_is_parsed(self):
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001")
+        draft = self._make_draft(
+            delivery_date=today_jst().isoformat(),  # 文字列
+            product_id="P-002",
+        )
+        plan = _classify_additional_order(order, draft, editable=True)
+        assert plan.mode == "add"
+
+
+class TestIsNegativeReply:
+    def test_negative_words(self):
+        for msg in ["いいえ", "やめる", "やめます", "キャンセル", "結構です"]:
+            assert _is_negative_reply(msg), f"{msg!r} should be negative"
+
+    def test_affirmative_not_negative(self):
+        for msg in ["はい", "お願いします", "大丈夫"]:
+            assert not _is_negative_reply(msg), f"{msg!r} should not be negative"
+
+    def test_with_number_not_negative(self):
+        assert not _is_negative_reply("いや15kgで")
