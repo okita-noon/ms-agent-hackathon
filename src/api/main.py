@@ -519,28 +519,33 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
 
     response_text = result.get("response", "")
     base_index = len(history)
-    history.append(
-        MessageHistory(
-            id=f"web-user-{base_index}",
-            tenant_id=tenant_id,
-            session_id=session_id,
-            channel="line",
-            channel_user_id=line_user_id,
-            role="user",
-            text=payload.message,
-        )
+    user_msg = MessageHistory(
+        id=f"web-user-{session_id}-{base_index}",
+        tenant_id=tenant_id,
+        session_id=session_id,
+        channel="line",
+        channel_user_id=line_user_id,
+        role="user",
+        text=payload.message,
     )
-    history.append(
-        MessageHistory(
-            id=f"web-assistant-{base_index + 1}",
-            tenant_id=tenant_id,
-            session_id=session_id,
-            channel="line",
-            channel_user_id=line_user_id,
-            role="assistant",
-            text=response_text,
-        )
+    history.append(user_msg)
+    assistant_msg = MessageHistory(
+        id=f"web-assistant-{session_id}-{base_index + 1}",
+        tenant_id=tenant_id,
+        session_id=session_id,
+        channel="line",
+        channel_user_id=line_user_id,
+        role="assistant",
+        text=response_text,
     )
+    history.append(assistant_msg)
+
+    from src.services.message_history_logger import get_message_history_repo, save_message
+
+    history_repo = get_message_history_repo(tenant_ctx)
+    await save_message(history_repo, user_msg)
+    if response_text:
+        await save_message(history_repo, assistant_msg)
 
     pending = result.get("pending_order_draft")
     if result.get("order_saved") is True:
