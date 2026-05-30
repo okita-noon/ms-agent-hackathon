@@ -47,8 +47,42 @@ GRAPH_SUBSCRIPTION_RENEW_BUFFER_SECONDS = 3600
 _active_subscription_id: str | None = None
 
 
+async def _cleanup_duplicate_graph_subscriptions(token: str, callback_url: str) -> None:
+    """同じ notificationUrl を持つ既存 Subscription を全て削除する（重複蓄積防止）"""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://graph.microsoft.com/v1.0/subscriptions",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if resp.status_code != 200:
+                logger.warning("Graph Subscription 一覧取得失敗: %s", resp.status_code)
+                return
+            subscriptions = resp.json().get("value", [])
+            duplicates = [s for s in subscriptions if s.get("notificationUrl") == callback_url]
+            if not duplicates:
+                return
+            logger.info("既存 Graph Subscription %d 件を削除します", len(duplicates))
+            for sub in duplicates:
+                sub_id = sub.get("id")
+                del_resp = await client.delete(
+                    f"https://graph.microsoft.com/v1.0/subscriptions/{sub_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if del_resp.status_code in (200, 204):
+                    logger.info("Graph Subscription 削除完了: id=%s", sub_id)
+                else:
+                    logger.warning("Graph Subscription 削除失敗: id=%s status=%s", sub_id, del_resp.status_code)
+    except Exception:
+        logger.exception("Graph Subscription クリーンアップエラー")
+
+
 async def _create_graph_subscription() -> str | None:
-    """Graph APIのSubscriptionを作成し、メール受信通知を有効にする"""
+    """Graph APIのSubscriptionを作成し、メール受信通知を有効にする。
+    作成前に同一 notificationUrl の既存 Subscription を全削除して重複蓄積を防ぐ。
+    """
     mailbox = os.environ.get("GRAPH_MAILBOX_USER_ID")
     client_id = os.environ.get("GRAPH_CLIENT_ID")
     client_secret = os.environ.get("GRAPH_CLIENT_SECRET")
@@ -65,6 +99,10 @@ async def _create_graph_subscription() -> str | None:
         from src.services.email_handler import _token_cache
 
         token = await _token_cache.get_token(graph_tenant_id, client_id, client_secret)
+
+        # 作成前に同一 notificationUrl の既存 Subscription を全削除
+        await _cleanup_duplicate_graph_subscriptions(token, callback_url)
+
         expiry = datetime.now(timezone.utc) + timedelta(hours=GRAPH_SUBSCRIPTION_EXPIRY_HOURS)
 
         payload = {
@@ -612,11 +650,17 @@ async def email_webhook(
     azure_openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
     azure_openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
 
+    # 同一リクエスト内での重複 message_id はここでスキップ（複数 subscription が同一 value に混入する場合の防御）
+    queued_message_ids: set[str] = set()
     for notification in notifications:
         resource_data = notification.get("resourceData", {}) or {}
         message_id = resource_data.get("id")
         if not message_id:
             continue
+        if message_id in queued_message_ids:
+            logger.info("Email webhook: 同一リクエスト内重複をスキップ: message_id=%s", message_id)
+            continue
+        queued_message_ids.add(message_id)
         recipient_address = (
             notification.get("recipientAddress")
             or notification.get("toAddress")
