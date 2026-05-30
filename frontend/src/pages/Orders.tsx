@@ -80,7 +80,14 @@ export default function Orders() {
     return map;
   }, [agentExceptions]);
 
-  const highExceptionCount = agentExceptions.filter((e) => e.severity === "high").length;
+  // 要対応ステータスの受注に紐づく severity=high 例外数（バナー表示用）
+  const reviewOrderIds = useMemo(
+    () => new Set(orders.filter((o) => normalizeStatus(o.status) === "要対応").map((o) => o.id)),
+    [orders]
+  );
+  const highExceptionCount = agentExceptions.filter(
+    (e) => e.severity === "high" && reviewOrderIds.has(e.order_id)
+  ).length;
 
   const load = useCallback(async () => {
     setLoading(true);
