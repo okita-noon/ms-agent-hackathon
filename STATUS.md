@@ -17,7 +17,8 @@
 - [x] データモデル（8 Pydantic モデル）
 - [x] Connector インターフェース（7 Protocol）
 - [x] Cosmos DB アダプタ（受注・セッション・メッセージ履歴・パターン学習）
-- [x] Azure SQL アダプタ（商品・顧客・在庫）
+- [x] Azure SQL アダプタ（顧客・在庫）
+- [x] Azure AI Search アダプタ（商品マスタ検索。`ja.microsoft` アナライザーで漢字↔かな↔ローマ字の表記ゆれに対応。`AI_SEARCH_ENDPOINT`/`AI_SEARCH_KEY` 未設定時は SQL LIKE にフォールバック）
 - [x] Semantic Kernel Plugin（Intake・Inventory・Exception・Communication）
 - [x] Agent 定義 + Orchestrator（gpt-5.4-mini 連携）
 - [x] LINE Webhook ハンドラ（署名検証・セッション管理・会話履歴保存）
@@ -179,7 +180,6 @@
 
 | タスク | 見積もり | 備考 |
 |---|---|---|
-| AI Search インデックス作成 | 2h | 現在は SQL LIKE 検索。AI Search にすると「りんご」「リンゴ」「林檎」等の表記ゆれに対応 |
 | Embedding ベースのパターン検索 | 2h | `cosmos_intelligence_store.py` の `find_pattern_by_embedding` を AI Search ベクトル検索に置換 |
 | ピッキングリストPDF生成 | 2h | `src/models/picking.py` のモデルは定義済み。PDF生成ロジック + API エンドポイント追加 |
 | ダッシュボードにリアルタイム更新 | 1h | WebSocket or SSE で新規受注の自動反映 |
