@@ -209,7 +209,6 @@ function showDetail(order) {
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div><p class="text-xs text-gray-400">受注日</p><p class="font-medium">${order.order_date || '-'}</p></div>
-      <div><p class="text-xs text-gray-400">手配日</p><p class="font-medium">${order.preparation_date || '-'}</p></div>
       <div><p class="text-xs text-gray-400">配送日</p><p class="font-medium">${order.delivery_date || '-'}</p></div>
       <div><p class="text-xs text-gray-400">チャネル</p><p class="font-medium">${order.source}</p></div>
     </div>
