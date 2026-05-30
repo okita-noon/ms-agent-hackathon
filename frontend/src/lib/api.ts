@@ -117,11 +117,11 @@ export interface Customer {
   id: string;
   tenant_id: string;
   name: string;
-  short_name?: string;
-  line_user_id?: string;
-  email?: string;
-  phone?: string;
-  fax?: string;
+  short_name?: string | null;
+  line_user_id?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  fax?: string | null;
   delivery_lead_time?: DeliveryLeadTime | null;
   active: boolean;
 }
