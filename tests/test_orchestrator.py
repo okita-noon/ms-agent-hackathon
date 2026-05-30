@@ -848,6 +848,30 @@ class TestConversationBranching:
         callback.assert_awaited_once()
         mock_invoke.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_add_keyword_with_items_and_no_current_order_proceeds_as_new_order(self, mock_tenant_ctx):
+        """「追加で」でも商品名+数量がある場合は現在注文なしエラーにしない。"""
+        orch = _make_orchestrator(mock_tenant_ctx)
+        callback = AsyncMock()
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = (
+                '{"customer_id":"C-001","items":[{"product_id":"P-001","product_name":"りんご","quantity":3,"unit":"箱"}]}',
+                0.5,
+            )
+            await orch.process_order_message(
+                message="林檎3箱追加で",
+                line_user_id="U123",
+                source=OrderSource.LINE,
+                response_callback=callback,
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+                current_order=None,
+            )
+
+        # 現在注文なしエラーを返さずエージェント処理に進むこと
+        mock_invoke.assert_called()
+
 
 class TestLineOrderCorrections:
     @pytest.mark.asyncio

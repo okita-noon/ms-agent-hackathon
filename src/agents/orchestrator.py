@@ -670,7 +670,12 @@ class OrderOrchestrator:
                     await self._send_line_message(response_text, reply_token, line_user_id)
                 return result
 
-        if source == OrderSource.LINE and not current_order and _looks_like_change_only_message(message):
+        if (
+            source == OrderSource.LINE
+            and not current_order
+            and _looks_like_change_only_message(message)
+            and not _parse_order_items(message)
+        ):
             debug_log.append("[判定] 変更/取消要求だが現在注文なし")
             response_text = _build_line_from_template("order_no_current_order.txt")
             result.update({"response": response_text, "pending_action_type": line_action_type})
