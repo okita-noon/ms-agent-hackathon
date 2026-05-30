@@ -1,0 +1,2 @@
+${overlap_summary}
+合計 ${overlap_total_summary} でよろしいですか？

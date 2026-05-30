@@ -132,17 +132,23 @@ def _build_line_from_template(
     template_name: str,
     *,
     items: list[dict] | list[OrderItem] | None = None,
+    added_items: list[dict] | list[OrderItem] | None = None,
     delivery_estimate: str | None = None,
     time_slot: str | None = None,
     body: str | None = None,
     summary: str | None = None,
+    overlap_summary: str | None = None,
+    overlap_total_summary: str | None = None,
 ) -> str:
     return render_line_template(
         template_name,
         order_items=format_line_order_items(items),
+        added_items=format_line_order_items(added_items) if added_items is not None else "",
         delivery_estimate_line=build_delivery_estimate_line(delivery_estimate, time_slot=time_slot),
         body=body or "",
         summary=summary or "",
+        overlap_summary=overlap_summary or "",
+        overlap_total_summary=overlap_total_summary or "",
     )
 
 
@@ -459,13 +465,36 @@ class OrderOrchestrator:
             return result
 
         if pending_order_draft:
+            _is_overlap_merge = pending_order_draft.get("pending_kind") == "overlap_merge"
             _affirmative = _is_affirmative_reply(message)
+            _negative = _is_negative_reply(message)
             if _affirmative:
                 debug_log.append(f"[判定] 肯定返答 → ドラフト受注確定 (message={message!r})")
+            elif _negative and _is_overlap_merge:
+                debug_log.append(f"[判定] 否定返答 → overlap_merge 追加を見送り (message={message!r})")
             else:
                 debug_log.append(f"[判定] ドラフトあるが肯定返答ではない (message={message!r})")
         else:
             _affirmative = False
+            _negative = False
+            _is_overlap_merge = False
+
+        # overlap_merge の「いいえ」→ 追加見送り（元の注文を維持）
+        if pending_order_draft and _is_overlap_merge and _negative and not _affirmative:
+            response_text = "追加を見送りました。現在のご注文は元のままです。"
+            debug_log.append("[判定] overlap_merge 否定 → 追加見送り")
+            result["response"] = response_text
+            result["current_order_id"] = current_order.id if current_order else None
+            result["current_order_snapshot"] = _build_current_order_snapshot(current_order) if current_order else None
+            result["current_order_editable"] = current_order_editable
+            result["customer_id"] = pending_order_draft.get("customer_id")
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            result["debug_log"] = debug_log
+            return result
+
         if pending_order_draft and not _affirmative:
             pending_quantity_result = await self._try_handle_pending_quantity_reply(
                 message=message,
@@ -483,11 +512,13 @@ class OrderOrchestrator:
                 result["debug_log"] = debug_log
                 return result
         if pending_order_draft and _affirmative:
+            # overlap_merge の「はい」→ existing_order に合算済みitemsで更新
+            _existing_for_affirm = current_order if (source == OrderSource.LINE and current_order_editable) else None
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
                 source=source,
                 session_id=session_id,
-                existing_order=current_order if source == OrderSource.LINE and current_order_editable else None,
+                existing_order=_existing_for_affirm,
                 status=OrderStatus.ACCEPTED,
             )
             asyncio.create_task(self._run_learning(saved_order, message))
@@ -513,8 +544,10 @@ class OrderOrchestrator:
                 debug_log=debug_log,
             )
             if source == OrderSource.LINE:
+                # overlap_merge の「はい」→ update_confirm、通常確定 → confirm
+                affirm_template = "order_update_confirm.txt" if _is_overlap_merge else "order_confirm.txt"
                 response_text = _build_line_from_template(
-                    "order_update_confirm.txt" if current_order else "order_confirm.txt",
+                    affirm_template,
                     items=saved_order.items,
                     delivery_estimate=affirm_delivery_estimate,
                     time_slot=saved_order.delivery_time_slot,
@@ -1014,6 +1047,7 @@ class OrderOrchestrator:
         result["debug_log"] = debug_log
         self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
+        current_order_editable = _is_order_editable(current_order) if current_order else False
 
         # ── Step 1: Intake Agent ───────────────────────────────────────────────
         intake_agent = self._make_intake_agent(channel)
@@ -1272,11 +1306,80 @@ class OrderOrchestrator:
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
                     )
+
+                    # LINE: 追加注文パターン判定（new/add/confirm_overlap）
+                    if source == OrderSource.LINE:
+                        add_plan = _classify_additional_order(
+                            current_order,
+                            draft,
+                            editable=current_order_editable,
+                        )
+                        debug_log.append(f"[追加判定] mode={add_plan.mode}")
+                        if add_plan.mode == "confirm_overlap":
+                            # パターンC: 合計確認待ち（保存しない）
+                            overlap_lines = [
+                                f"・{ov['product_name']} {ov['existing_qty']}{ov['unit']}"
+                                for ov in add_plan.overlap_items
+                            ]
+                            total_lines = [
+                                f"・{ov['product_name']} {ov['total_qty']}{ov['unit']}" for ov in add_plan.overlap_items
+                            ]
+                            overlap_summary = "\n".join(overlap_lines)
+                            overlap_total_summary = "\n".join(total_lines)
+                            pending_draft_for_overlap = dict(draft)
+                            pending_draft_for_overlap["items"] = add_plan.merged_items
+                            pending_draft_for_overlap["pending_kind"] = "overlap_merge"
+                            pending_draft_for_overlap["original_items"] = (
+                                [
+                                    {
+                                        "product_id": it.product_id,
+                                        "product_name": it.product_name,
+                                        "quantity": it.quantity,
+                                        "unit": it.unit,
+                                        "temperature_zone": it.temperature_zone.value
+                                        if hasattr(it.temperature_zone, "value")
+                                        else str(it.temperature_zone),
+                                    }
+                                    for it in current_order.items
+                                ]
+                                if current_order
+                                else []
+                            )
+                            response_text = _build_line_from_template(
+                                "order_add_overlap_confirm.txt",
+                                overlap_summary=overlap_summary,
+                                overlap_total_summary=overlap_total_summary,
+                            )
+                            debug_log.append(
+                                f"[保存] 被り商品確認待ち: {[ov['product_name'] for ov in add_plan.overlap_items]}"
+                            )
+                            result["response"] = response_text
+                            result["session_status"] = "awaiting_reply"
+                            result["pending_order_draft"] = pending_draft_for_overlap
+                            result["customer_id"] = draft.get("customer_id")
+                            result["current_order_id"] = current_order.id if current_order else None
+                            result["current_order_snapshot"] = (
+                                _build_current_order_snapshot(current_order) if current_order else None
+                            )
+                            result["current_order_editable"] = current_order_editable
+                            if response_callback:
+                                await response_callback(response_text)
+                            else:
+                                await self._send_line_message(response_text, reply_token, line_user_id)
+                            result["debug_log"] = debug_log
+                            return result
+                        # パターンA(new) / パターンB(add): draft.items を合算済みに差し替え
+                        draft["items"] = add_plan.merged_items
+                        existing_order_arg = current_order if add_plan.use_existing_order else None
+                    else:
+                        add_plan = None
+                        existing_order_arg = None
+
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=existing_order_arg,
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
@@ -1288,6 +1391,9 @@ class OrderOrchestrator:
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
                     result["current_order_editable"] = _is_order_editable(saved_order)
+                    # add_plan を後段テンプレート選択で参照できるよう result に持たせる
+                    if add_plan is not None:
+                        result["_add_plan"] = add_plan
             except Exception as exc:
                 debug_log.append(f"[保存] 受注保存失敗: {exc}")
                 logger.exception("Failed to save order from single-agent pipeline")
@@ -1350,17 +1456,32 @@ class OrderOrchestrator:
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
-                template_name = "order_update_confirm.txt" if current_order else "order_confirm.txt"
-                debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
-                response_text = _build_line_from_template(
-                    template_name,
-                    items=saved_order.items,
-                    delivery_estimate=delivery_estimate_text,
-                    time_slot=saved_order.delivery_time_slot,
-                )
+                add_plan: _AdditionalOrderPlan | None = result.pop("_add_plan", None)
+                if add_plan is not None and add_plan.mode == "add":
+                    # パターンB: 被らない追加 → 2段表示
+                    template_name = "order_add_confirm.txt"
+                    debug_log.append(f"[応答] LINEテンプレート上書き: {template_name} (add)")
+                    response_text = _build_line_from_template(
+                        template_name,
+                        items=saved_order.items,
+                        added_items=add_plan.added_items,
+                        delivery_estimate=delivery_estimate_text,
+                        time_slot=saved_order.delivery_time_slot,
+                    )
+                else:
+                    # パターンA: 新規 or LINEでない
+                    template_name = "order_confirm.txt"
+                    debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
+                    response_text = _build_line_from_template(
+                        template_name,
+                        items=saved_order.items,
+                        delivery_estimate=delivery_estimate_text,
+                        time_slot=saved_order.delivery_time_slot,
+                    )
             elif source == OrderSource.PHONE and saved_order:
                 debug_log.append("[応答] 電話応答に受注No挿入")
                 response_text = _insert_order_id(response_text, saved_order.id)
+        result.pop("_add_plan", None)  # 未使用の場合もクリーンアップ
         debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
 
@@ -1402,6 +1523,7 @@ class OrderOrchestrator:
         result["debug_log"] = debug_log
         self._ctx._debug_log = debug_log
         channel = _source_to_channel(source)
+        current_order_editable = _is_order_editable(current_order) if current_order else False
 
         if known_customer_id and known_customer_name:
             lookup_instruction = (
@@ -1657,11 +1779,79 @@ class OrderOrchestrator:
                     debug_log.append(
                         f"[保存] delivery_date={draft.get('delivery_date')}, estimated={estimated_delivery_date}"
                     )
+
+                    # LINE: 追加注文パターン判定（new/add/confirm_overlap）
+                    if source == OrderSource.LINE:
+                        add_plan = _classify_additional_order(
+                            current_order,
+                            draft,
+                            editable=current_order_editable,
+                        )
+                        debug_log.append(f"[追加判定] mode={add_plan.mode}")
+                        if add_plan.mode == "confirm_overlap":
+                            # パターンC: 合計確認待ち（保存しない）
+                            overlap_lines = [
+                                f"・{ov['product_name']} {ov['existing_qty']}{ov['unit']}"
+                                for ov in add_plan.overlap_items
+                            ]
+                            total_lines = [
+                                f"・{ov['product_name']} {ov['total_qty']}{ov['unit']}" for ov in add_plan.overlap_items
+                            ]
+                            overlap_summary = "\n".join(overlap_lines)
+                            overlap_total_summary = "\n".join(total_lines)
+                            pending_draft_for_overlap = dict(draft)
+                            pending_draft_for_overlap["items"] = add_plan.merged_items
+                            pending_draft_for_overlap["pending_kind"] = "overlap_merge"
+                            pending_draft_for_overlap["original_items"] = (
+                                [
+                                    {
+                                        "product_id": it.product_id,
+                                        "product_name": it.product_name,
+                                        "quantity": it.quantity,
+                                        "unit": it.unit,
+                                        "temperature_zone": it.temperature_zone.value
+                                        if hasattr(it.temperature_zone, "value")
+                                        else str(it.temperature_zone),
+                                    }
+                                    for it in current_order.items
+                                ]
+                                if current_order
+                                else []
+                            )
+                            response_text = _build_line_from_template(
+                                "order_add_overlap_confirm.txt",
+                                overlap_summary=overlap_summary,
+                                overlap_total_summary=overlap_total_summary,
+                            )
+                            debug_log.append(
+                                f"[保存] 被り商品確認待ち: {[ov['product_name'] for ov in add_plan.overlap_items]}"
+                            )
+                            result["response"] = response_text
+                            result["session_status"] = "awaiting_reply"
+                            result["pending_order_draft"] = pending_draft_for_overlap
+                            result["customer_id"] = draft.get("customer_id")
+                            result["current_order_id"] = current_order.id if current_order else None
+                            result["current_order_snapshot"] = (
+                                _build_current_order_snapshot(current_order) if current_order else None
+                            )
+                            result["current_order_editable"] = current_order_editable
+                            if response_callback:
+                                await response_callback(response_text)
+                            else:
+                                await self._send_line_message(response_text, reply_token, line_user_id)
+                            result["debug_log"] = debug_log
+                            return result
+                        draft["items"] = add_plan.merged_items
+                        existing_order_arg = current_order if add_plan.use_existing_order else None
+                    else:
+                        add_plan = None
+                        existing_order_arg = None
+
                     saved_order = await self.create_order_from_draft(
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=existing_order_arg,
                         status=OrderStatus.ACCEPTED,
                     )
                     asyncio.create_task(self._run_learning(saved_order, message))
@@ -1673,6 +1863,8 @@ class OrderOrchestrator:
                     result["current_order_id"] = saved_order.id
                     result["current_order_snapshot"] = _build_current_order_snapshot(saved_order)
                     result["current_order_editable"] = _is_order_editable(saved_order)
+                    if add_plan is not None:
+                        result["_add_plan"] = add_plan
             except Exception as exc:
                 debug_log.append(f"[保存] 受注保存失敗: {exc}")
                 logger.exception("[multi-agent] Failed to save order")
@@ -1737,17 +1929,30 @@ class OrderOrchestrator:
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
-                template_name = "order_update_confirm.txt" if current_order else "order_confirm.txt"
-                debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
-                response_text = _build_line_from_template(
-                    template_name,
-                    items=saved_order.items,
-                    delivery_estimate=delivery_estimate_text,
-                    time_slot=saved_order.delivery_time_slot,
-                )
+                add_plan_multi: _AdditionalOrderPlan | None = result.pop("_add_plan", None)
+                if add_plan_multi is not None and add_plan_multi.mode == "add":
+                    template_name = "order_add_confirm.txt"
+                    debug_log.append(f"[応答] LINEテンプレート上書き: {template_name} (add)")
+                    response_text = _build_line_from_template(
+                        template_name,
+                        items=saved_order.items,
+                        added_items=add_plan_multi.added_items,
+                        delivery_estimate=delivery_estimate_text,
+                        time_slot=saved_order.delivery_time_slot,
+                    )
+                else:
+                    template_name = "order_confirm.txt"
+                    debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
+                    response_text = _build_line_from_template(
+                        template_name,
+                        items=saved_order.items,
+                        delivery_estimate=delivery_estimate_text,
+                        time_slot=saved_order.delivery_time_slot,
+                    )
             elif source == OrderSource.PHONE and saved_order:
                 debug_log.append("[応答] 電話応答に受注No挿入")
                 response_text = _insert_order_id(response_text, saved_order.id)
+        result.pop("_add_plan", None)
         debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
 
@@ -3194,3 +3399,175 @@ def _is_affirmative_reply(message: str) -> bool:
         "確定",
     }
     return normalized in affirmative_words or normalized.endswith("でお願いします")
+
+
+def _is_negative_reply(message: str) -> bool:
+    normalized = re.sub(r"\s+", "", message).lower()
+    # 数値を含む返答は数量訂正の可能性があるため否定とみなさない
+    if re.search(r"\d", normalized):
+        return False
+    negative_words = {
+        "いいえ",
+        "いや",
+        "やめる",
+        "やめます",
+        "やめておく",
+        "やめておきます",
+        "キャンセル",
+        "結構です",
+        "不要",
+        "やっぱりいい",
+        "やっぱりいらない",
+        "なしで",
+    }
+    return any(w in normalized for w in negative_words)
+
+
+class _AdditionalOrderPlan:
+    """_classify_additional_order の判定結果を保持するデータクラス。"""
+
+    __slots__ = ("mode", "merged_items", "added_items", "overlap_items", "use_existing_order")
+
+    def __init__(
+        self,
+        *,
+        mode: str,
+        merged_items: list[dict],
+        added_items: list[dict],
+        overlap_items: list[dict],
+        use_existing_order: bool,
+    ) -> None:
+        self.mode = mode  # "new" | "add" | "confirm_overlap"
+        self.merged_items = merged_items
+        self.added_items = added_items
+        self.overlap_items = overlap_items
+        self.use_existing_order = use_existing_order
+
+
+def _classify_additional_order(
+    current_order: "Order | None",
+    draft: dict,
+    *,
+    editable: bool,
+) -> _AdditionalOrderPlan:
+    """current_order と draft から追加注文の処理モードを判定する。
+
+    Returns _AdditionalOrderPlan:
+        mode: "new"            → 新規注文として別建て
+              "add"            → 同配送日・被りなし → 積み増し
+              "confirm_overlap"→ 同配送日・被りあり → 合計確認待ち
+    """
+    new_items: list[dict] = draft.get("items", [])
+
+    # パターンA: オープン注文なし / 編集不可
+    if current_order is None or not editable:
+        return _AdditionalOrderPlan(
+            mode="new",
+            merged_items=new_items,
+            added_items=new_items,
+            overlap_items=[],
+            use_existing_order=False,
+        )
+
+    # パターンA: 配送日が違う
+    draft_delivery = draft.get("delivery_date")
+    if draft_delivery is not None:
+        from datetime import date as _date
+
+        if isinstance(draft_delivery, str):
+            try:
+                draft_delivery = _date.fromisoformat(draft_delivery)
+            except ValueError:
+                draft_delivery = None
+    current_delivery = current_order.delivery_date
+    if draft_delivery is not None and current_delivery is not None and draft_delivery != current_delivery:
+        return _AdditionalOrderPlan(
+            mode="new",
+            merged_items=new_items,
+            added_items=new_items,
+            overlap_items=[],
+            use_existing_order=False,
+        )
+
+    # 同配送日: product_id で被りチェック
+    existing_by_pid: dict[str, dict] = {}
+    for item in current_order.items:
+        pid = item.product_id
+        if not pid:
+            continue
+        if pid in existing_by_pid:
+            existing_by_pid[pid]["quantity"] = (existing_by_pid[pid]["quantity"] or 0) + (item.quantity or 0)
+        else:
+            existing_by_pid[pid] = {
+                "product_id": pid,
+                "product_name": item.product_name,
+                "quantity": item.quantity or 0,
+                "unit": item.unit or "",
+                "temperature_zone": item.temperature_zone.value
+                if hasattr(item.temperature_zone, "value")
+                else str(item.temperature_zone),
+            }
+
+    overlap_pids: set[str] = set()
+    for item in new_items:
+        pid = item.get("product_id")
+        if pid and pid in existing_by_pid:
+            overlap_pids.add(pid)
+
+    if not overlap_pids:
+        # パターンB: 被りなし → 積み増し（既存 + 新規を結合）
+        existing_items_as_dicts = list(existing_by_pid.values())
+        merged = existing_items_as_dicts + new_items
+        return _AdditionalOrderPlan(
+            mode="add",
+            merged_items=merged,
+            added_items=new_items,
+            overlap_items=[],
+            use_existing_order=True,
+        )
+
+    # パターンC: 被りあり → 合計確認
+    # merged_items: 被り商品は合算、それ以外はそのまま結合
+    merged_by_pid: dict[str, dict] = {pid: dict(info) for pid, info in existing_by_pid.items()}
+    for item in new_items:
+        pid = item.get("product_id")
+        if not pid:
+            continue
+        if pid in merged_by_pid:
+            merged_by_pid[pid]["quantity"] = (merged_by_pid[pid]["quantity"] or 0) + (item.get("quantity") or 0)
+        else:
+            merged_by_pid[pid] = dict(item)
+
+    # 追加商品のうち被りでないものも加える
+    new_non_overlap = [it for it in new_items if it.get("product_id") not in existing_by_pid]
+    for item in new_non_overlap:
+        pid = item.get("product_id")
+        if pid and pid not in merged_by_pid:
+            merged_by_pid[pid] = dict(item)
+
+    merged = list(merged_by_pid.values())
+
+    # overlap_items: 確認メッセージ用
+    overlap_items = []
+    for pid in overlap_pids:
+        existing_qty = existing_by_pid[pid]["quantity"]
+        add_qty = sum(it.get("quantity") or 0 for it in new_items if it.get("product_id") == pid)
+        total_qty = existing_qty + add_qty
+        overlap_items.append(
+            {
+                "product_id": pid,
+                "product_name": existing_by_pid[pid]["product_name"],
+                "unit": existing_by_pid[pid]["unit"],
+                "existing_qty": existing_qty,
+                "add_qty": add_qty,
+                "total_qty": total_qty,
+            }
+        )
+
+    return _AdditionalOrderPlan(
+        mode="confirm_overlap",
+        merged_items=merged,
+        added_items=new_items,
+        overlap_items=overlap_items,
+        use_existing_order=True,
+    )
