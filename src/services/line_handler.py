@@ -281,7 +281,7 @@ class LineWebhookHandler:
             if customer:
                 return customer.id, customer.name
 
-            fallback_id = os.environ.get("LINE_FALLBACK_CUSTOMER_ID", "").strip()
+            fallback_id = os.environ.get("LINE_FALLBACK_CUSTOMER_ID", "C-011").strip() or "C-011"
             if fallback_id:
                 customer = await customer_repo.get_by_id(self._ctx.tenant_id, fallback_id)
             if not customer:
