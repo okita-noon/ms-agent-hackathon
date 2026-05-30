@@ -147,5 +147,22 @@
       "searchMode": "analyzingInfixMatching",
       "sourceFields": ["name", "display_name"]
     }
-  ]
+  ],
+  "semantic": {
+    "configurations": [
+      {
+        "name": "product-semantic",
+        "prioritizedFields": {
+          "titleField": { "fieldName": "name" },
+          "contentFields": [
+            { "fieldName": "search_text" },
+            { "fieldName": "display_name" }
+          ],
+          "keywordsFields": [
+            { "fieldName": "category" }
+          ]
+        }
+      }
+    ]
+  }
 }
