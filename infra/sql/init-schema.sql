@@ -105,18 +105,18 @@ INSERT INTO tenants (tenant_id, name, [plan]) VALUES
     (N'T-002', N'デモ環境B（食材メーカー）', N'demo');
 
 -- 顧客
-INSERT INTO customers (customer_id, tenant_id, name, short_name, default_route, default_carrier, delivery_lead_time) VALUES
-    (N'C-001', N'T-001', N'ビストロ青葉', N'青葉', N'北関東便', N'自社便',     N'翌日'),
-    (N'C-002', N'T-001', N'炭火焼鳥とり善', N'とり善', N'西日本便', N'芦川便',     N'中1日'),
-    (N'C-003', N'T-001', N'洋食キッチンつばめ', N'つばめ', N'中部便',   N'自社便',     N'翌日'),
-    (N'C-004', N'T-001', N'鮨処みなと', N'みなと', N'九州便',   N'自社便',     N'当日'),
-    (N'C-005', N'T-001', N'カフェ森ノ音', N'森ノ音', N'北海道便', N'芦川便',     N'中1日'),
-    (N'C-006', N'T-001', N'中華食堂龍華', N'龍華', N'東北便',   N'自社便',     N'中2日'),
-    (N'C-007', N'T-001', N'イタリア食堂イルソーレ', N'イルソーレ', N'関東便',   N'自社便',     N'翌日'),
-    (N'C-008', N'T-001', N'レストラン花水木', N'花水木', N'関西便',   N'芦川便',     N'中1日'),
-    (N'C-009', N'T-001', N'和食処こまち', N'こまち', N'中国便',   N'自社便',     N'当日'),
-    (N'C-010', N'T-001', N'ベーカリー麦の庭', N'麦の庭', N'四国便',   N'自社便',     N'中2日'),
-    (N'C-011', N'T-001', N'株式会社Zennハッカソン', N'Zenn社', N'北関東便', N'自社便', N'翌日');
+INSERT INTO customers (customer_id, tenant_id, name, short_name, email, default_route, default_carrier, delivery_lead_time) VALUES
+    (N'C-001', N'T-001', N'ビストロ青葉', N'青葉', NULL, N'北関東便', N'自社便',     N'翌日'),
+    (N'C-002', N'T-001', N'炭火焼鳥とり善', N'とり善', NULL, N'西日本便', N'芦川便',     N'中1日'),
+    (N'C-003', N'T-001', N'洋食キッチンつばめ', N'つばめ', NULL, N'中部便',   N'自社便',     N'翌日'),
+    (N'C-004', N'T-001', N'鮨処みなと', N'みなと', NULL, N'九州便',   N'自社便',     N'当日'),
+    (N'C-005', N'T-001', N'カフェ森ノ音', N'森ノ音', NULL, N'北海道便', N'芦川便',     N'中1日'),
+    (N'C-006', N'T-001', N'中華食堂龍華', N'龍華', NULL, N'東北便',   N'自社便',     N'中2日'),
+    (N'C-007', N'T-001', N'イタリア食堂イルソーレ', N'イルソーレ', NULL, N'関東便',   N'自社便',     N'翌日'),
+    (N'C-008', N'T-001', N'レストラン花水木', N'花水木', NULL, N'関西便',   N'芦川便',     N'中1日'),
+    (N'C-009', N'T-001', N'和食処こまち', N'こまち', NULL, N'中国便',   N'自社便',     N'当日'),
+    (N'C-010', N'T-001', N'ベーカリー麦の庭', N'麦の庭', NULL, N'四国便',   N'自社便',     N'中2日'),
+    (N'C-011', N'T-001', N'株式会社Zennハッカソン', N'Zenn社', N'ikirisa1234@aibaske1103gmail.onmicrosoft.com', N'北関東便', N'自社便', N'翌日');
 
 -- 商品
 INSERT INTO products (product_id, tenant_id, name, default_unit, temperature_zone, is_variable_weight, price_per_unit) VALUES

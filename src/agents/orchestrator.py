@@ -304,9 +304,7 @@ class OrderOrchestrator:
         )
 
     def _make_communication_agent(self, channel: str = "line") -> ChatCompletionAgent:
-        kernel = self._build_kernel(
-            (CommunicationPlugin(self._ctx), "communication"),
-        )
+        kernel = self._build_kernel()
         return ChatCompletionAgent(
             kernel=kernel,
             name="CommunicationAgent",
