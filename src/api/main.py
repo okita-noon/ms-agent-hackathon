@@ -1085,6 +1085,9 @@ async def get_order_messages(order_id: str, tenant_id: str = Depends(get_tenant_
 
     history_repo = tenant_ctx.get_connector("IMessageHistoryRepository")
     messages = await history_repo.list_by_session_id(tenant_id, order.session_id)
+    for rsid in order.related_session_ids or []:
+        messages.extend(await history_repo.list_by_session_id(tenant_id, rsid))
+    messages.sort(key=lambda m: m.created_at)
     filtered = [m for m in messages if m.role in ("user", "assistant")]
     return {
         "messages": [m.model_dump(mode="json") for m in filtered],
