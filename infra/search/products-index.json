@@ -154,11 +154,11 @@
         "name": "product-semantic",
         "prioritizedFields": {
           "titleField": { "fieldName": "name" },
-          "contentFields": [
+          "prioritizedContentFields": [
             { "fieldName": "search_text" },
             { "fieldName": "display_name" }
           ],
-          "keywordsFields": [
+          "prioritizedKeywordsFields": [
             { "fieldName": "category" }
           ]
         }
