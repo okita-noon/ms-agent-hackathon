@@ -114,27 +114,6 @@ class TestPickCurrentOrder:
         assert _pick_current_order([review_order]) is None
         assert _pick_current_order([review_order, accepted_order]).id == "ORD-ACCEPTED"
 
-    def test_skips_shipping_orders_so_new_orders_are_not_blocked(self):
-        shipping_order = Order(
-            uid="ORD-SHIPPING",
-            tenant_id="T-TEST",
-            customer_id="C-001",
-            customer_name="株式会社テスト",
-            order_date=date.today(),
-            source=OrderSource.LINE,
-            status=OrderStatus.SHIPPING,
-            items=[
-                OrderItem(
-                    product_id="P-001",
-                    product_name="りんご",
-                    quantity=5,
-                    unit="箱",
-                    temperature_zone=TemperatureZone.CHILLED,
-                )
-            ],
-        )
-        assert _pick_current_order([shipping_order]) is None
-
 
 class TestHandleWebhook:
     @pytest.mark.asyncio

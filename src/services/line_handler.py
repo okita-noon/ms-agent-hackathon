@@ -388,7 +388,8 @@ def _build_message_history_id(
 
 
 def _pick_current_order(orders: list[Order]) -> Order | None:
-    candidates = [order for order in orders if order.status == OrderStatus.ACCEPTED]
+    open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
+    candidates = [order for order in orders if order.status in open_statuses]
     if not candidates:
         return None
     return sorted(candidates, key=lambda order: order.updated_at, reverse=True)[0]
