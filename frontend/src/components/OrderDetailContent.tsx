@@ -363,9 +363,10 @@ export interface OrderDetailContentProps {
    * 提供する場合に true）。デフォルト false。
    */
   hideResolveAction?: boolean;
+  onWillResolve?: (orderId: string) => void;
 }
 
-export default function OrderDetailContent({ order, exceptions, onMemoUpdated, hideResolveAction = false }: OrderDetailContentProps) {
+export default function OrderDetailContent({ order, exceptions, onMemoUpdated, hideResolveAction = false, onWillResolve }: OrderDetailContentProps) {
   const orderId = order.uid || order.id || "";
   const orderExceptions = exceptions?.filter((e) => e.order_id === orderId) ?? [];
 
@@ -402,6 +403,7 @@ export default function OrderDetailContent({ order, exceptions, onMemoUpdated, h
       window.clearTimeout(confirmTimerRef.current);
       confirmTimerRef.current = null;
     }
+    onWillResolve?.(orderId);
     setResolving(true);
     setResolveError(null);
     try {

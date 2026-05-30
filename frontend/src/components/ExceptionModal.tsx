@@ -33,6 +33,7 @@ interface ExceptionModalProps {
   orders: Order[];
   onClose: () => void;
   onMemoUpdated?: (order: Order) => void;
+  onWillResolve?: (orderId: string) => void;
 }
 
 function formatTime(iso: string): string {
@@ -46,7 +47,7 @@ function formatTime(iso: string): string {
 
 /* ── Main modal ──────────────────────────────────────── */
 
-export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpdated }: ExceptionModalProps) {
+export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpdated, onWillResolve }: ExceptionModalProps) {
   const [selectedId, setSelectedId] = useState<string>(exceptions.length > 0 ? exceptions[0].id : "");
   // 2タップ式: 同じ exception に対して1回目を踏むと confirmId にセットされ、
   // 3秒以内に 2 回目を踏むと確定。タイムアウトで自動キャンセル。
@@ -95,6 +96,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
       window.clearTimeout(confirmTimerRef.current);
       confirmTimerRef.current = null;
     }
+    onWillResolve?.(orderId);
     setResolving(true);
     setResolveError(null);
     try {

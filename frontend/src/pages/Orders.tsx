@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   createOrderEventSource,
   fetchAgentExceptions,
@@ -66,6 +66,7 @@ export default function Orders() {
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
+  const silentUpdateIdsRef = useRef<Set<string>>(new Set());
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
 
@@ -184,19 +185,22 @@ export default function Orders() {
             });
           }, 6000);
 
-          const toastId = `${payload.order_id}-${Date.now()}`;
-          const toast: ToastItem = {
-            id: toastId,
-            order_id: payload.order_id,
-            customer_name: payload.customer_name,
-            source: payload.source,
-            received_at: new Date().toISOString(),
-            type: eventType,
-          };
-          setToasts((current) => [...current.slice(-3), toast]);
-          window.setTimeout(() => {
-            setToasts((current) => current.filter((t) => t.id !== toastId));
-          }, 5000);
+          if (!silentUpdateIdsRef.current.has(payload.order_id)) {
+            const toastId = `${payload.order_id}-${Date.now()}`;
+            const toast: ToastItem = {
+              id: toastId,
+              order_id: payload.order_id,
+              customer_name: payload.customer_name,
+              source: payload.source,
+              received_at: new Date().toISOString(),
+              type: eventType,
+            };
+            setToasts((current) => [...current.slice(-3), toast]);
+            window.setTimeout(() => {
+              setToasts((current) => current.filter((t) => t.id !== toastId));
+            }, 5000);
+          }
+          silentUpdateIdsRef.current.delete(payload.order_id);
         }
         void load();
         void loadAgentExceptions();
@@ -552,6 +556,7 @@ export default function Orders() {
           );
           setSelected(updated);
         }}
+        onWillResolve={(orderId) => silentUpdateIdsRef.current.add(orderId)}
         exceptions={agentExceptions}
       />
 
@@ -565,6 +570,7 @@ export default function Orders() {
               current.map((o) => ((o.uid || o.id) === (updated.uid || updated.id) ? updated : o))
             );
           }}
+          onWillResolve={(orderId) => silentUpdateIdsRef.current.add(orderId)}
         />
       )}
 
