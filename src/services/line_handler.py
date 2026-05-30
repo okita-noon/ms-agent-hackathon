@@ -5,7 +5,6 @@ import base64
 import hashlib
 import hmac
 import logging
-import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -13,6 +12,7 @@ import httpx
 
 from src.agents.orchestrator import DEFAULT_AZURE_OPENAI_DEPLOYMENT, OrderOrchestrator
 from src.connectors.context import TenantContext
+from src.models.customer import Customer, DeliveryLeadTime
 from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderSource, OrderStatus
 from src.models.session import OrderSession
@@ -274,29 +274,23 @@ class LineWebhookHandler:
         }
 
     async def _resolve_customer(self, line_user_id: str) -> tuple[str | None, str | None]:
-        """LINE User ID から顧客を解決する。未登録の場合はフォールバック顧客を返す。"""
+        """LINE User ID から顧客を解決する。未登録の場合は新規顧客を作成する。"""
         try:
             customer_repo = self._ctx.get_connector("ICustomerRepository")
             customer = await customer_repo.find_by_line_user_id(self._ctx.tenant_id, line_user_id)
             if customer:
                 return customer.id, customer.name
 
-            fallback_id = os.environ.get("LINE_FALLBACK_CUSTOMER_ID", "C-011").strip() or "C-011"
-            if fallback_id:
-                customer = await customer_repo.get_by_id(self._ctx.tenant_id, fallback_id)
-            if not customer:
-                customers = await customer_repo.list_all(self._ctx.tenant_id)
-                if customers:
-                    customer = customers[0]
-
-            if customer:
-                logger.info(
-                    "Unregistered LINE user %s mapped to fallback customer %s (%s)",
-                    line_user_id,
-                    customer.id,
-                    customer.name,
-                )
-                return customer.id, customer.name
+            next_id = await customer_repo.next_customer_id(self._ctx.tenant_id)
+            customer = _build_new_customer(self._ctx.tenant_id, next_id, line_user_id=line_user_id)
+            customer = await customer_repo.create(self._ctx.tenant_id, customer)
+            logger.info(
+                "Created new customer %s (%s) for unregistered LINE user %s",
+                customer.id,
+                customer.name,
+                line_user_id,
+            )
+            return customer.id, customer.name
         except Exception:
             logger.exception(
                 "Customer resolution failed for LINE user %s; proceeding without known_customer", line_user_id
@@ -423,3 +417,28 @@ def _build_current_order_snapshot(order: Order) -> dict:
             for item in order.items
         ],
     }
+
+
+def _build_new_customer(
+    tenant_id: str,
+    customer_id: str,
+    *,
+    line_user_id: str | None = None,
+    email: str | None = None,
+) -> Customer:
+    if line_user_id:
+        display_name = f"LINE新規顧客({line_user_id[-8:]})"
+    elif email:
+        local_part = email.split("@")[0] if "@" in email else email
+        display_name = f"メール新規顧客({local_part})"
+    else:
+        display_name = f"新規顧客({customer_id})"
+    return Customer(
+        id=customer_id,
+        tenant_id=tenant_id,
+        name=display_name,
+        short_name=display_name,
+        line_user_id=line_user_id,
+        email=email,
+        delivery_lead_time=DeliveryLeadTime.NEXT_DAY,
+    )

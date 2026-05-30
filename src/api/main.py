@@ -480,12 +480,20 @@ async def line_tester_message(request: Request, payload: LineTesterMessageReques
     known_customer_id = payload.customer_id
     known_customer_name = payload.customer_name
     if not known_customer_id:
-        fallback_customer_id = os.environ.get("LINE_TESTER_FALLBACK_CUSTOMER_ID", "C-011").strip() or "C-011"
+        from src.services.line_handler import _build_new_customer
+
         customer_repo = tenant_ctx.get_connector("ICustomerRepository")
-        fallback_customer = await customer_repo.get_by_id(tenant_id, fallback_customer_id)
-        if fallback_customer:
-            known_customer_id = fallback_customer.id
-            known_customer_name = fallback_customer.name
+        web_line_user_id = f"WEB-TESTER-{payload.session_id or 'anonymous'}"
+        existing = await customer_repo.find_by_line_user_id(tenant_id, web_line_user_id)
+        if existing:
+            known_customer_id = existing.id
+            known_customer_name = existing.name
+        else:
+            next_id = await customer_repo.next_customer_id(tenant_id)
+            new_customer = _build_new_customer(tenant_id, next_id, line_user_id=web_line_user_id)
+            new_customer = await customer_repo.create(tenant_id, new_customer)
+            known_customer_id = new_customer.id
+            known_customer_name = new_customer.name
     line_user_id = f"WEB-{known_customer_id}" if known_customer_id else "WEB-TESTER"
 
     history = [MessageHistory(**item) for item in payload.conversation_history]
