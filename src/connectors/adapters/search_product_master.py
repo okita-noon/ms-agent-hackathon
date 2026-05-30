@@ -13,6 +13,8 @@ from src.models.tenant import ConnectorConfig
 logger = logging.getLogger(__name__)
 
 _INDEX_NAME = "products"
+_SEMANTIC_CONFIG = "product-semantic"
+_SUGGESTER_NAME = "product-suggester"
 
 
 class SearchProductMaster:
@@ -20,7 +22,9 @@ class SearchProductMaster:
 
     Uses the ``ja.microsoft`` analyzer on the ``name`` / ``display_name``
     fields to handle Japanese kanji ↔ kana ↔ rōmaji variations that SQL LIKE
-    cannot resolve.
+    cannot resolve.  Semantic ranking re-scores results using language
+    understanding so that e.g. "林檎" ranks higher than a partial substring
+    match on an unrelated product.
 
     Tenant-config keys used (all optional – env-var fallbacks apply):
       - ``endpoint``:        AI Search service URL
@@ -58,11 +62,12 @@ class SearchProductMaster:
     # ------------------------------------------------------------------
 
     async def fuzzy_match(self, tenant_id: str, raw_name: str) -> Product | None:
-        """Search for the best-matching product by name using AI Search.
+        """Search for the best-matching product using semantic ranking.
 
-        Applies the same NFKC normalisation + quantity-stripping as the SQL
-        adapter, then issues a full-text query so the ``ja.microsoft`` analyzer
-        handles kana/kanji/rōmaji variation server-side.
+        1. NFKC normalise + strip quantity expressions
+        2. Full-text query with ``ja.microsoft`` analyser (handles kana/kanji/rōmaji)
+        3. Semantic re-ranking via ``product-semantic`` configuration
+        4. ``nameBoost`` scoring profile weights name > display_name > search_text
         """
         if self._client is None:
             return None
@@ -74,6 +79,21 @@ class SearchProductMaster:
         filter_expr = f"tenant_id eq '{tenant_id}' and active eq true"
 
         for term in terms:
+            try:
+                results = await self._client.search(
+                    search_text=term,
+                    filter=filter_expr,
+                    top=3,
+                    query_type="semantic",
+                    semantic_configuration_name=_SEMANTIC_CONFIG,
+                    search_fields=["name", "display_name", "search_text"],
+                )
+                async for doc in results:
+                    return _doc_to_product(doc)
+            except Exception:
+                pass
+
+            # semantic ranker が未構成の場合は simple にフォールバック
             try:
                 results = await self._client.search(
                     search_text=term,
@@ -122,6 +142,55 @@ class SearchProductMaster:
             logger.warning("SearchProductMaster.list_all error: %s", exc)
 
         return products
+
+    # ------------------------------------------------------------------
+    # Suggest / Autocomplete (AI Search 固有)
+    # ------------------------------------------------------------------
+
+    async def suggest(self, tenant_id: str, query: str, *, top: int = 5) -> list[dict[str, str]]:
+        """Return autocomplete suggestions using the ``product-suggester``.
+
+        Returns a list of ``{"product_id": ..., "name": ..., "display_name": ...}``.
+        This is an AI Search-specific capability with no SQL equivalent.
+        """
+        if self._client is None:
+            return []
+
+        normalized = unicodedata.normalize("NFKC", query).strip()
+        if not normalized:
+            return []
+
+        filter_expr = f"tenant_id eq '{tenant_id}' and active eq true"
+
+        try:
+            result = await self._client.suggest(
+                search_text=normalized,
+                suggester_name=_SUGGESTER_NAME,
+                filter=filter_expr,
+                top=top,
+                select=["product_id", "name", "display_name", "default_unit", "category", "temperature_zone"],
+            )
+            suggestions: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for item in result:
+                pid = item.get("product_id", "")
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                suggestions.append(
+                    {
+                        "product_id": pid,
+                        "name": item.get("name", ""),
+                        "display_name": item.get("display_name") or "",
+                        "default_unit": item.get("default_unit") or "",
+                        "category": item.get("category") or "",
+                        "temperature_zone": item.get("temperature_zone") or "",
+                    }
+                )
+            return suggestions
+        except Exception as exc:
+            logger.warning("SearchProductMaster.suggest error: %s", exc)
+            return []
 
 
 # ---------------------------------------------------------------------------
