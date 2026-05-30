@@ -628,19 +628,22 @@ class TestPhoneOrderUnified:
         async def capture(text):
             captured.append(text)
 
-        result = await orch.process_order_message(
-            message="今日はいい天気ですね",
-            line_user_id="+81312345678",
-            source=OrderSource.PHONE,
-            response_callback=capture,
-            known_customer_id="C-001",
-            known_customer_name="ビストロ青葉",
-        )
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = ("気持ちのよいお天気ですね。", 0.1)
+            result = await orch.process_order_message(
+                message="今日はいい天気ですね",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+                response_callback=capture,
+                known_customer_id="C-001",
+                known_customer_name="ビストロ青葉",
+            )
 
         assert result.get("intent") == "small_talk"
         assert "ご注文がありましたら" in result["response"]
         assert result.get("order_saved") is not True
         inventory.check.assert_not_called()
+        mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_phone_status_inquiry_resolves_customer_by_phone_number(self, mock_tenant_ctx, sample_customer):
@@ -806,6 +809,7 @@ class TestConversationBranching:
         callback = AsyncMock()
 
         with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = ("ご連絡ありがとうございます。", 0.1)
             result = await orch.process_order_message(
                 message="お世話になっております。今日はいい天気ですね。",
                 line_user_id="aoba@example.com",
@@ -818,7 +822,8 @@ class TestConversationBranching:
         assert result["intent"] == "small_talk"
         assert "商品名と数量" in result["response"]
         callback.assert_awaited_once()
-        mock_invoke.assert_not_called()
+        # small_talk は注文処理パイプラインを通らず LLM 返答生成のみ呼ぶ
+        mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_phone_order_status_inquiry_uses_common_branching(self, mock_tenant_ctx):
