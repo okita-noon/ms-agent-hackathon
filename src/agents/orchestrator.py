@@ -115,8 +115,14 @@ def _build_email_from_template(
     tpl = _load_template(template_name)
     customer_name = intake_draft.get("customer_name", "お客")
     items = intake_draft.get("items", [])
+
+    def _fmt_qty(v: object) -> str:
+        if isinstance(v, float):
+            return str(int(v)) if v.is_integer() else f"{v:g}"
+        return str(v) if v is not None else ""
+
     order_lines = "\n".join(
-        f"・{it.get('product_name', '')}: {it.get('quantity', '')} {it.get('unit', '')}" for it in items
+        f"・{it.get('product_name', '')}: {_fmt_qty(it.get('quantity'))} {it.get('unit', '')}" for it in items
     )
     email_body = tpl.safe_substitute(
         customer_name=customer_name,
