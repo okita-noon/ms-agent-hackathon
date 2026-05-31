@@ -2,6 +2,83 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
+const DEMO_EMAIL = "kiyo1234@aibaske1103gmail.onmicrosoft.com";
+const DEMO_PASSWORD = "Foogent2026!Recv";
+
+function HelpPane({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">foogent とは？</h2>
+          <p className="text-xs text-gray-400 mt-0.5">AI受発注自動一元管理システム</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="px-6 py-5 space-y-6">
+        {/* デモアカウント */}
+        <div className="rounded-xl bg-brand-50 border border-brand-200 p-4">
+          <p className="text-xs font-bold text-brand-700 mb-2">🔑 デモアカウント</p>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 w-16 shrink-0">ID</span>
+              <code className="text-gray-800 font-mono text-[10px] break-all">{DEMO_EMAIL}</code>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 w-16 shrink-0">パスワード</span>
+              <code className="text-gray-800 font-mono">{DEMO_PASSWORD}</code>
+            </div>
+          </div>
+        </div>
+
+        {/* 機能紹介 */}
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-bold text-gray-700 mb-1.5">📦 受注管理</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              LINE・電話・メールから届いた注文をAIが自動解析し、受注一覧に集約します。ステータスは自動で「受注済み → 配送中 → 完了」と遷移します。
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-700 mb-1.5">⚠️ AI例外・要対応</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              数量異常・在庫不足など担当者の判断が必要な受注を自動検出します。「高（急ぎ）」「中」の2段階でアラートを表示します。
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-700 mb-1.5">🔄 ステータスの流れ</p>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 flex-wrap">
+              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">要対応</span>
+              <span>→</span>
+              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">受注済み</span>
+              <span>→</span>
+              <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">配送中</span>
+              <span>→</span>
+              <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">完了</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-700 mb-1.5">📊 在庫・顧客管理</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              商品在庫のリアルタイム確認と、顧客ごとの納品リードタイム・注文パターンを管理できます。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Login() {
   const { login, loginWithMicrosoft } = useAuth();
   const navigate = useNavigate();
@@ -10,6 +87,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [msLoading, setMsLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -17,9 +95,6 @@ export default function Login() {
     setPwLoading(true);
     try {
       await login(email, password);
-      // setUser と同じタイミングで URL を /orders に変更することで、
-      // AuthenticatedRouter が /login → <Navigate> → null → /orders という
-      // 中間ステップを踏まずにダッシュボードを直接レンダリングできる
       navigate("/orders", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
@@ -44,26 +119,27 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        {/* Logo / Title */}
-        <div className="text-center mb-8">
-          <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" className="h-16 mx-auto mb-2" />
-          <span className="text-3xl font-bold">
-            <span className="text-gray-700">foo</span>
-            <span className="text-orange-500">gent</span>
-          </span>
-          <p className="text-sm text-gray-500 mt-1">
-            受注業務をスマートに
-          </p>
-        </div>
+      {/* カード全体: helpOpen でにゅるっと横に広がる */}
+      <div
+        className="flex bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-500 ease-in-out"
+        style={{ width: helpOpen ? "min(760px, 95vw)" : "min(384px, 95vw)" }}
+      >
+        {/* 左: ログインフォーム */}
+        <div className="w-full max-w-sm shrink-0 p-6" style={{ minWidth: "min(384px, 95vw)", maxWidth: "384px" }}>
+          {/* Logo */}
+          <div className="text-center mb-6">
+            <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" className="h-14 mx-auto mb-2" />
+            <span className="text-3xl font-bold">
+              <span className="text-gray-700">foo</span>
+              <span className="text-orange-500">gent</span>
+            </span>
+            <p className="text-sm text-gray-500 mt-1">受注業務をスマートに</p>
+          </div>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                メールアドレス
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">メールアドレス</label>
               <input
                 type="email"
                 value={email}
@@ -74,9 +150,7 @@ export default function Login() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                パスワード
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">パスワード</label>
               <input
                 type="password"
                 value={password}
@@ -102,19 +176,15 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-5">
+          <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-white px-3 text-xs text-gray-400">
-                または
-              </span>
+              <span className="bg-white px-3 text-xs text-gray-400">または</span>
             </div>
           </div>
 
-          {/* Microsoft SSO */}
           <button
             onClick={handleMicrosoft}
             disabled={msLoading || pwLoading}
@@ -128,12 +198,31 @@ export default function Login() {
             </svg>
             Microsoft アカウントでログイン
           </button>
+
+          {/* 使い方ボタン */}
+          <button
+            type="button"
+            onClick={() => setHelpOpen((v) => !v)}
+            className="w-full mt-4 flex items-center justify-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {helpOpen ? "閉じる" : "使い方・デモアカウント情報"}
+          </button>
+
+          <p className="text-center text-[11px] text-gray-400 mt-3">foogent v1.0</p>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-[11px] text-gray-400 mt-4">
-          foogent v1.0
-        </p>
+        {/* 右: ヘルプペイン（にゅるっと出てくる） */}
+        <div
+          className="border-l border-gray-100 overflow-hidden transition-all duration-500 ease-in-out"
+          style={{ width: helpOpen ? "min(376px, calc(95vw - 384px))" : "0px", opacity: helpOpen ? 1 : 0 }}
+        >
+          <div className="w-[376px]">
+            <HelpPane onClose={() => setHelpOpen(false)} />
+          </div>
+        </div>
       </div>
     </div>
   );
