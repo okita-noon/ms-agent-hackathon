@@ -83,15 +83,16 @@ function HelpPane({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <p className="text-xs font-bold text-gray-700 mb-1.5">🔄 ステータスの流れ</p>
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 flex-wrap">
-              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">要対応</span>
-              <span>→</span>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 flex-wrap mb-2">
               <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">受注済み</span>
               <span>→</span>
               <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">配送中</span>
               <span>→</span>
               <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">完了</span>
             </div>
+            <p className="text-[11px] text-gray-400">
+              ※ <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">要対応</span> は数量異常・在庫不足など異常時のみ表示。担当者が確認後に受注済みへ移行します。
+            </p>
           </div>
           <div>
             <p className="text-xs font-bold text-gray-700 mb-1.5">📊 在庫・顧客管理</p>
