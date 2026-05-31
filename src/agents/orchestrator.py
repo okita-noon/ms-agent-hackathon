@@ -697,6 +697,7 @@ class OrderOrchestrator:
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
                 current_order=current_order,
+                intent=intent_result.intent,
             )
         else:
             debug_log.append("[パイプライン] シングルエージェント")
@@ -712,6 +713,7 @@ class OrderOrchestrator:
                 known_customer_id=known_customer_id,
                 known_customer_name=known_customer_name,
                 current_order=current_order,
+                intent=intent_result.intent,
                 shortage_review_order_id=shortage_review_order_id,
             )
         if source == OrderSource.LINE:
@@ -1055,6 +1057,7 @@ class OrderOrchestrator:
         known_customer_name: str | None = None,
         current_order: Order | None = None,
         shortage_review_order_id: str | None = None,
+        intent: OrderIntent | None = None,
     ) -> dict:
         """旧ロジック: 単一Orchestrator Agentで全処理を実行する."""
         result: dict = {}
@@ -1153,6 +1156,7 @@ class OrderOrchestrator:
                 pending_order_draft=pending_order_draft,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
             result["response"] = response_text
             if response_callback:
@@ -1499,6 +1503,7 @@ class OrderOrchestrator:
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -1520,6 +1525,7 @@ class OrderOrchestrator:
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
@@ -1583,6 +1589,7 @@ class OrderOrchestrator:
         known_customer_id: str | None = None,
         known_customer_name: str | None = None,
         current_order: Order | None = None,
+        intent: OrderIntent | None = None,
     ) -> dict:
         """新ロジック: 4つの専門Agentを順番に呼び出すパイプライン."""
         result: dict = {}
@@ -1680,6 +1687,7 @@ class OrderOrchestrator:
                 intake_text=intake_text,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
             result["response"] = response_text
             if response_callback:
@@ -2015,6 +2023,7 @@ class OrderOrchestrator:
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
             response_text = _build_email_from_template(
                 "メール返信_異常時.txt",
@@ -2037,6 +2046,7 @@ class OrderOrchestrator:
                 delivery_estimate=delivery_estimate_text,
                 current_order=current_order,
                 debug_log=debug_log,
+                intent=intent,
             )
         if not inventory_shortage_response:
             if source == OrderSource.LINE and saved_order and not needs_confirmation:
@@ -2099,6 +2109,7 @@ class OrderOrchestrator:
         delivery_estimate: str | None = None,
         current_order: Order | None = None,
         debug_log: list[str] | None = None,
+        intent: OrderIntent | None = None,
     ) -> str:
         """Communication Agentで返信メッセージを生成する. 失敗時は既存のOrchestratorにフォールバック."""
         try:
@@ -2157,6 +2168,8 @@ class OrderOrchestrator:
                 response_text,
                 needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
                 inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+                source=source,
+                intent=intent,
             )
             if debug_log is not None and enforced != response_text:
                 debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
@@ -2177,6 +2190,7 @@ class OrderOrchestrator:
                 processing_note=processing_note,
                 delivery_estimate=delivery_estimate,
                 current_order=current_order,
+                intent=intent,
             )
 
     async def process_email(
@@ -2257,6 +2271,7 @@ class OrderOrchestrator:
         delivery_estimate: str | None = None,
         current_order: Order | None = None,
         debug_log: list[str] | None = None,
+        intent: OrderIntent | None = None,
     ) -> str:
         channel = _source_to_channel(source)
         orchestrator_agent = self._make_orchestrator_agent(channel)
@@ -2343,6 +2358,8 @@ class OrderOrchestrator:
             response_text,
             needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
             inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+            source=source,
+            intent=intent,
         )
         if debug_log is not None and enforced != response_text:
             debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
@@ -3092,16 +3109,26 @@ def _enforce_response_policy(
     *,
     needs_confirmation: bool,
     inventory_needs_review: bool,
+    source: "OrderSource | None" = None,
+    intent: "OrderIntent | None" = None,
 ) -> str:
     if not (needs_confirmation or inventory_needs_review):
+        return response_text
+
+    # キャンセル系 intent は注文確定ではないので書き換え不要
+    _CANCEL_INTENTS = {OrderIntent.FULL_CANCEL, OrderIntent.PARTIAL_CANCEL}
+    if intent in _CANCEL_INTENTS:
         return response_text
 
     normalized = re.sub(r"\s+", "", response_text)
     if not any(pattern in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS):
         return response_text
 
+    is_phone = source == OrderSource.PHONE
     if inventory_needs_review:
         replacement = "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
+    elif is_phone:
+        replacement = "ご注文内容を確認しました。数量や内容に確認が必要ですので、担当者が改めてご連絡いたします。"
     else:
         replacement = (
             "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"

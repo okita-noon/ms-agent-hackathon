@@ -34,6 +34,7 @@ from src.models.message_history import MessageHistory
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.models.product import Product, UnitType
 from src.models.session import OrderSession
+from src.services.intent_understanding import OrderIntent
 
 
 def _make_orchestrator(mock_tenant_ctx) -> OrderOrchestrator:
@@ -1211,6 +1212,54 @@ class TestResponsePolicy:
         response = "在庫状況を確認中です。担当者が確認して折り返します。"
 
         assert _enforce_response_policy(response, needs_confirmation=True, inventory_needs_review=True) == response
+
+    def test_skips_policy_for_full_cancel_intent(self):
+        response = "キャンセルを承りました。ご注文を取り消しいたしました。"
+
+        # FULL_CANCEL のときは「承りました」を含んでいても書き換えない
+        result = _enforce_response_policy(
+            response,
+            needs_confirmation=True,
+            inventory_needs_review=False,
+            intent=OrderIntent.FULL_CANCEL,
+        )
+        assert result == response
+
+    def test_skips_policy_for_partial_cancel_intent(self):
+        response = "一部キャンセルを承りました。"
+
+        result = _enforce_response_policy(
+            response,
+            needs_confirmation=True,
+            inventory_needs_review=False,
+            intent=OrderIntent.PARTIAL_CANCEL,
+        )
+        assert result == response
+
+    def test_applies_policy_for_new_order_intent_with_confirmation_needed(self):
+        response = "ご注文承りました。りんご150kgで確定しました。"
+
+        result = _enforce_response_policy(
+            response,
+            needs_confirmation=True,
+            inventory_needs_review=False,
+            intent=OrderIntent.NEW_ORDER,
+        )
+        assert result != response
+        assert "確認が必要" in result
+
+    def test_phone_specific_message_when_needs_confirmation(self):
+        response = "ご注文承りました。"
+
+        result = _enforce_response_policy(
+            response,
+            needs_confirmation=True,
+            inventory_needs_review=False,
+            source=OrderSource.PHONE,
+            intent=OrderIntent.NEW_ORDER,
+        )
+        assert "担当者が改めてご連絡" in result
+        assert "返信してください" not in result
 
 
 class TestMemoryContext:
