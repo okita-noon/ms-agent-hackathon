@@ -4,6 +4,7 @@ import {
   fetchAgentExceptions,
   fetchAgentFeatures,
   fetchOrders,
+  fetchReviewSummary,
   type AgentExceptionCase,
   type AgentFeatures,
   type Order,
@@ -66,6 +67,7 @@ export default function Orders() {
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
+  const [reviewTotalCount, setReviewTotalCount] = useState(0);
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
 
@@ -149,6 +151,17 @@ export default function Orders() {
     };
   }, []);
 
+  // 要対応の全件数を定期取得（バナー表示用・ページングに依存しない）
+  const loadReviewSummary = useCallback(() => {
+    fetchReviewSummary()
+      .then((data) => setReviewTotalCount(data.needs_review_total))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadReviewSummary();
+  }, [loadReviewSummary]);
+
   const loadAgentExceptions = useCallback(async () => {
     if (!triageAvailable) {
       setAgentExceptions([]);
@@ -218,6 +231,7 @@ export default function Orders() {
         }
         void load();
         void loadAgentExceptions();
+        loadReviewSummary();
       };
     }
 
@@ -236,7 +250,7 @@ export default function Orders() {
       events.close();
       setLiveStatus("offline");
     };
-  }, [dateFilterEnabled, date, dateField, load, loadAgentExceptions]);
+  }, [dateFilterEnabled, date, dateField, load, loadAgentExceptions, loadReviewSummary]);
 
   const displayOrders = useMemo(() => {
     const result = [...orders];
@@ -301,7 +315,7 @@ export default function Orders() {
           </span>
           <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            要対応 <span className="tabular-nums">{reviewOrderCount}</span>
+            要対応 <span className="tabular-nums">{reviewTotalCount}</span>
           </span>
           <span className="text-xs text-gray-400">
             {loading && orders.length === 0
@@ -358,13 +372,13 @@ export default function Orders() {
       {triageAvailable && agentLoading && agentExceptions.length === 0 && (
         <AgentLoadingBanner />
       )}
-      {triageAvailable && (reviewOrderCount > 0 || agentExceptions.length > 0) && (
+      {triageAvailable && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3 fade-in">
           <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-amber-900">
-                foogent AI: 要対応 {reviewOrderCount} 件
+                foogent AI: 要対応 {reviewTotalCount} 件
               </span>
               {highExceptionCount > 0 ? (
                 <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
@@ -575,7 +589,7 @@ export default function Orders() {
         exceptions={agentExceptions}
       />
 
-      {exceptionModalOpen && (reviewOrderCount > 0 || agentExceptions.length > 0) && (
+      {exceptionModalOpen && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
         <ExceptionModal
           exceptions={(() => {
             // AI例外に紐づかない要対応注文を擬似ケースとして後続に追加

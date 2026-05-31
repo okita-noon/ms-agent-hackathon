@@ -80,6 +80,14 @@ async def list_agent_exceptions(
     }
 
 
+@router.get("/review-summary")
+async def get_review_summary(tenant_id: str = Depends(get_tenant_id)) -> dict:
+    """要対応ステータスの総件数を返す（ページング・フィルタ無関係）。バナー表示用。"""
+    repo = resolve_tenant_by_id(tenant_id).get_connector("IOrderRepository")
+    _, total = await repo.list_orders(tenant_id, status="要対応", limit=1, offset=0)
+    return {"needs_review_total": total}
+
+
 @router.post("/resolutions/preview")
 async def preview_agent_resolution(
     request: ResolutionPreviewRequest,
