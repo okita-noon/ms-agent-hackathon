@@ -1,0 +1,65 @@
+name: Seed Demo Data Daily
+
+on:
+  schedule:
+    # UTC 00:00 = JST 09:00 — runs every morning
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      base_date:
+        description: 'Base date override (YYYY-MM-DD). Leave blank for today (JST).'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run (print only, no writes)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+env:
+  COSMOS_ACCOUNT: cosmos-orderai-dev2
+  RESOURCE_GROUP: rg-orderai-dev2
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install azure-cosmos
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get Cosmos DB connection string
+        run: |
+          CONN=$(az cosmosdb keys list \
+            --name ${{ env.COSMOS_ACCOUNT }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --type connection-strings \
+            --query "connectionStrings[?description=='Primary SQL Connection String'].connectionString" \
+            -o tsv)
+          echo "COSMOS_CONNECTION_STRING=$CONN" >> "$GITHUB_ENV"
+
+      - name: Seed demo orders
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.base_date }}" ]; then
+            ARGS="$ARGS --base-date ${{ github.event.inputs.base_date }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python scripts/seed_demo_daily.py $ARGS
