@@ -16,23 +16,25 @@ function CopyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-gray-500 w-16 shrink-0 text-xs">{label}</span>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="flex items-center gap-1 font-mono text-[10px] text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 hover:bg-gray-50 transition-colors min-w-0 flex-1"
-        title="クリックしてコピー"
-      >
-        <span className="truncate">{value}</span>
-        {copied ? (
-          <svg className="w-3 h-3 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        ) : (
-          <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-        )}
-      </button>
+      <div className="flex items-center gap-1 font-mono text-[10px] text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 min-w-0 flex-1">
+        <span className="truncate select-text flex-1">{value}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="shrink-0 hover:opacity-70 transition-opacity"
+          title="コピー"
+        >
+          {copied ? (
+            <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
