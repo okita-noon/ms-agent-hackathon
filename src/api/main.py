@@ -205,11 +205,54 @@ async def _recreate_graph_subscription() -> None:
         logger.error("Graph Subscription 再作成に失敗")
 
 
+async def _apply_pending_product_migrations() -> None:
+    """商品マスタに未追加の必須商品を挿入する（起動時一度だけ実行）。"""
+    import aioodbc
+
+    from src.connectors.adapters._sql_util import to_odbc_dsn
+
+    conn_str = os.environ.get("SQL_CONNECTION_STRING", "")
+    if not conn_str:
+        return
+    dsn = to_odbc_dsn(conn_str)
+    try:
+        async with await aioodbc.connect(dsn=dsn) as conn:
+            async with conn.cursor() as cur:
+                # トマト（P-020）が未登録なら追加
+                await cur.execute(
+                    "SELECT COUNT(1) FROM products WHERE tenant_id=? AND name=?",
+                    ("T-001", "トマト"),
+                )
+                row = await cur.fetchone()
+                if row and row[0] == 0:
+                    await cur.execute(
+                        "INSERT INTO products (product_id, tenant_id, name, default_unit, temperature_zone, is_variable_weight) VALUES (?,?,?,?,?,?)",
+                        ("P-020", "T-001", "トマト", "kg", "常温", 0),
+                    )
+                    await cur.execute(
+                        "INSERT INTO inventory (tenant_id, product_id, quantity, unit, reserved_qty) VALUES (?,?,?,?,?)",
+                        ("T-001", "P-020", 1000, "kg", 0),
+                    )
+                    for alias in ("とまと", "TOMATO", "tomato"):
+                        await cur.execute(
+                            "IF NOT EXISTS (SELECT 1 FROM product_aliases WHERE tenant_id=? AND product_id=? AND alias_name=?) INSERT INTO product_aliases (tenant_id, product_id, alias_name) VALUES (?,?,?)",
+                            ("T-001", "P-020", alias, "T-001", "P-020", alias),
+                        )
+                    await conn.commit()
+                    logger.info("起動時マイグレーション: トマト（P-020）を商品マスタに追加しました")
+                else:
+                    logger.info("起動時マイグレーション: トマトは既に登録済みです")
+    except Exception as exc:
+        logger.warning("起動時マイグレーション失敗（スキップ）: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _active_subscription_id  # noqa: PLW0603
     register_all_adapters()
     logger.info("Adapter registry initialized")
+
+    await _apply_pending_product_migrations()
 
     renew_task = None
     sub_id = await _create_graph_subscription()
