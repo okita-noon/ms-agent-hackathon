@@ -26,7 +26,6 @@ DEMO_USERS = [
     ("U-002", "T-001", "staff@maruyama.example.com", "丸山 花子", "local"),
     ("U-003", "T-002", "admin@suzuki.example.com", "鈴木 一郎", "local"),
     ("U-004", "T-002", "staff@suzuki.example.com", "鈴木 次郎", "local"),
-    ("U-DEMO", "T-001", "demo@foogent.example.com", "foogent デモ", "local"),
 ]
 
 UPSERT_SQL = """
