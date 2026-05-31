@@ -119,13 +119,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center px-4">
-      {/* カード全体: helpOpen でにゅるっと横に広がる */}
-      <div
-        className="flex bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-500 ease-in-out"
-        style={{ width: helpOpen ? "min(760px, 95vw)" : "min(384px, 95vw)" }}
-      >
-        {/* 左: ログインフォーム */}
-        <div className="w-full max-w-sm shrink-0 p-6" style={{ minWidth: "min(384px, 95vw)", maxWidth: "384px" }}>
+      {/* ログインカード: 常に中央固定 */}
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           {/* Logo */}
           <div className="text-center mb-6">
             <img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" className="h-14 mx-auto mb-2" />
@@ -214,16 +209,21 @@ export default function Login() {
           <p className="text-center text-[11px] text-gray-400 mt-3">foogent v1.0</p>
         </div>
 
-        {/* 右: ヘルプペイン（にゅるっと出てくる） */}
-        <div
-          className="border-l border-gray-100 overflow-hidden transition-all duration-500 ease-in-out"
-          style={{ width: helpOpen ? "min(376px, calc(95vw - 384px))" : "0px", opacity: helpOpen ? 1 : 0 }}
-        >
-          <div className="w-[376px]">
-            <HelpPane onClose={() => setHelpOpen(false)} />
-          </div>
-        </div>
+      {/* 右端ドロワー: fixed で画面右端からにゅるっと出てくる */}
+      <div
+        className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl border-l border-gray-200 z-50 transition-transform duration-500 ease-in-out overflow-y-auto"
+        style={{ transform: helpOpen ? "translateX(0)" : "translateX(100%)" }}
+      >
+        <HelpPane onClose={() => setHelpOpen(false)} />
       </div>
+
+      {/* オーバーレイ: ドロワー外クリックで閉じる */}
+      {helpOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setHelpOpen(false)}
+        />
+      )}
     </div>
   );
 }
