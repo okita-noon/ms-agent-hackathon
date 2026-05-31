@@ -1,0 +1,58 @@
+name: Restore Demo Inventory
+
+# Use when inventory runs low or gets corrupted during the review period.
+# Resets all products to default stock levels without any code changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_id:
+        description: 'Single product ID to reset (e.g. P-008). Leave blank to reset all.'
+        required: false
+        default: ''
+      qty:
+        description: 'Override quantity. Leave blank to use default levels.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run (print SQL only, no writes)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pymssql
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Restore inventory
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.product_id }}" ]; then
+            ARGS="$ARGS --product ${{ github.event.inputs.product_id }}"
+          fi
+          if [ -n "${{ github.event.inputs.qty }}" ]; then
+            ARGS="$ARGS --qty ${{ github.event.inputs.qty }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python scripts/add_stock/run.py $ARGS
