@@ -3089,6 +3089,9 @@ FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS = (
 )
 
 
+_CANCEL_CONTEXT_PATTERNS = ("キャンセル", "取り消し", "取消")
+
+
 def _enforce_response_policy(
     response_text: str,
     *,
@@ -3101,6 +3104,10 @@ def _enforce_response_policy(
 
     normalized = re.sub(r"\s+", "", response_text)
     if not any(pattern in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS):
+        return response_text
+
+    # キャンセル文脈の「承りました」は正当なので書き換えない
+    if any(pattern in normalized for pattern in _CANCEL_CONTEXT_PATTERNS):
         return response_text
 
     is_phone = source == OrderSource.PHONE
