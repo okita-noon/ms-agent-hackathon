@@ -80,14 +80,26 @@ export default function Orders() {
     return map;
   }, [agentExceptions]);
 
-  // 要対応ステータスの受注に紐づく severity=high 例外数（バナー表示用）
+  // 注文ごとの最重ランク: order_id → "high" | "medium"
+  const orderSeverityMap = useMemo(() => {
+    const map = new Map<string, "high" | "medium">();
+    for (const exc of agentExceptions) {
+      const cur = map.get(exc.order_id);
+      if (!cur || exc.severity === "high") map.set(exc.order_id, exc.severity as "high" | "medium");
+    }
+    return map;
+  }, [agentExceptions]);
+
+  // 要対応ステータスの受注に紐づく注文単位カウント（バナー表示用）
   const reviewOrderIds = useMemo(
     () => new Set(orders.filter((o) => normalizeStatus(o.status) === "要対応").map((o) => o.id)),
     [orders]
   );
-  const highExceptionCount = agentExceptions.filter(
-    (e) => e.severity === "high" && reviewOrderIds.has(e.order_id)
-  ).length;
+  // 急ぎ = 要対応かつ注文の最重ランクが high の注文数（注文単位・重複排除）
+  const highExceptionCount = useMemo(
+    () => [...reviewOrderIds].filter((id) => orderSeverityMap.get(id) === "high").length,
+    [reviewOrderIds, orderSeverityMap]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
