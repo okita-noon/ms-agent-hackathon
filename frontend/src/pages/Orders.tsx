@@ -368,7 +368,7 @@ export default function Orders() {
       {triageAvailable && agentLoading && agentExceptions.length === 0 && (
         <AgentLoadingBanner />
       )}
-      {triageAvailable && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
+      {triageAvailable && !agentLoading && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3 fade-in">
           <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
           <div className="flex-1 min-w-0">
