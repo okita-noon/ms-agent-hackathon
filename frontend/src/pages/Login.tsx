@@ -2,43 +2,6 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
-const DEMO_EMAIL = "demo@foogent.example.com";
-const DEMO_PASSWORD = "Foogent2026!Demo";
-
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-gray-500 w-16 shrink-0 text-xs">{label}</span>
-      <div className="flex items-center gap-1 font-mono text-[10px] text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 min-w-0 flex-1">
-        <span className="truncate select-text flex-1">{value}</span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="shrink-0 hover:opacity-70 transition-opacity"
-          title="コピー"
-        >
-          {copied ? (
-            <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function HelpPane({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -60,15 +23,6 @@ function HelpPane({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="px-6 py-5 space-y-6">
-        {/* デモアカウント */}
-        <div className="rounded-xl bg-brand-50 border border-brand-200 p-4">
-          <p className="text-xs font-bold text-brand-700 mb-2">🔑 デモアカウント</p>
-          <div className="space-y-1.5">
-            <CopyField label="ID" value={DEMO_EMAIL} />
-            <CopyField label="パスワード" value={DEMO_PASSWORD} />
-          </div>
-        </div>
-
         {/* 機能紹介 */}
         <div className="space-y-4">
           <div>
@@ -143,19 +97,6 @@ export default function Login() {
       );
     } finally {
       setMsLoading(false);
-    }
-  }
-
-  async function handleDemoLogin() {
-    setError("");
-    setPwLoading(true);
-    try {
-      await login(DEMO_EMAIL, DEMO_PASSWORD);
-      navigate("/orders", { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "ログインに失敗しました");
-    } finally {
-      setPwLoading(false);
     }
   }
 
@@ -246,16 +187,6 @@ export default function Login() {
               <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
             </svg>
             Microsoft アカウントでログイン
-          </button>
-
-          {/* デモでログインボタン */}
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={pwLoading || msLoading}
-            className="w-full mt-3 py-2.5 border border-brand-200 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-50"
-          >
-            {pwLoading ? "ログイン中..." : "🎮 デモでログイン"}
           </button>
 
           <p className="text-center text-[11px] text-gray-400 mt-3">foogent v1.0</p>

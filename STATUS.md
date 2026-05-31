@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-30（対応済みボタンの視認性を向上、よりボタンらしいデザインに改善）
+> 最終更新: 2026-05-31（セキュリティ対策としてログイン画面のデモアカウント表示・デモログインボタンを削除し、DB の U-DEMO ユーザーも削除）
 
 ## 実装済み
 
@@ -94,6 +94,7 @@
   - 受注詳細の注文会話履歴で、電話チャネルも受注側メッセージが右側に揃うよう表示を統一
   - ログイン画面のサブコピーを「受注業務をスマートに」に変更
   - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。表示条件は **注文の `status == 要対応`**（needs_review に限らず、同一注文に紐づく在庫不足・数量異常などの例外を選択中でも表示）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該注文の要対応タグ起因の案件が消える
+  - セキュリティ上の理由でログイン画面のヘルプペインから「🔑 デモアカウント」コピー欄、フォーム下部の「🎮 デモでログイン」ボタン、`DEMO_EMAIL`/`DEMO_PASSWORD` 定数を削除。併せて DB（Azure SQL `users` テーブル）の `U-DEMO` / `demo@foogent.example.com` レコードも削除し、`scripts/seed_users.py` の `DEMO_USERS` から該当エントリを除外（マイグレーション: `infra/sql/008-remove-demo-user.sql`）
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
