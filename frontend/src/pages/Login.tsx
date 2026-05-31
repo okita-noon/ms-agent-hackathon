@@ -72,7 +72,7 @@ function HelpPane({ onClose }: { onClose: () => void }) {
           <div>
             <p className="text-xs font-bold text-gray-700 mb-1.5">📦 受注管理</p>
             <p className="text-xs text-gray-500 leading-relaxed">
-              LINE・電話・メールから届いた注文をAIが自動解析し、受注一覧に集約します。ステータスは自動で「受注済み → 配送中 → 完了」と遷移します。
+              LINE・電話・メールから届いた注文をAIが自動解析し、受注一覧に集約します。注文が確定すると受注済みとなり、その後「配送中 → 完了」と自動遷移します。
             </p>
           </div>
           <div>
