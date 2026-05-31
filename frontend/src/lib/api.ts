@@ -310,6 +310,12 @@ export async function fetchAgentFeatures(): Promise<AgentFeatures> {
   return (await resp.json()) as AgentFeatures;
 }
 
+export async function fetchReviewSummary(): Promise<{ needs_review_total: number }> {
+  const resp = await authFetch(`${API_BASE}/api/agent/review-summary`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return (await resp.json()) as { needs_review_total: number };
+}
+
 export async function fetchAgentExceptions(
   date: string | null,
   filters: OrderFilters = {},
