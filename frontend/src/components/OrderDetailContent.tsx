@@ -15,6 +15,39 @@ import { SOURCE_COLORS } from "../lib/constants";
 import StatusBadge from "./StatusBadge";
 import TempBadge from "./TempBadge";
 
+/* ── CopyableOrderId ─────────────────────────────────── */
+
+function CopyableOrderId({ orderId }: { orderId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(orderId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-mono text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+      title="クリックしてコピー"
+    >
+      {orderId}
+      {copied ? (
+        <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 /* ── severity maps ───────────────────────────────────── */
 
 const SEVERITY_DETAIL: Record<
@@ -423,7 +456,10 @@ export default function OrderDetailContent({ order, exceptions, onMemoUpdated, h
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="text-lg font-bold text-gray-900 truncate">{order.customer_name}</h4>
-          <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
+            <CopyableOrderId orderId={order.id} />
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <StatusBadge status={order.status} />
