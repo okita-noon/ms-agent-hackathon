@@ -2,7 +2,7 @@
   "_comment": "LINE QCテスト用の期待在庫設定。min〜maxの範囲外になったら自動補正する。",
   "_tenant_id": "T-001",
   "products": [
-    {"product_id": "P-001", "name": "りんご",       "min": 0,    "max": 0,    "note": "欠品テスト用（ケース33）。常に0を維持"},
+    {"product_id": "P-001", "name": "りんご",       "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-002", "name": "バナナ",       "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-003", "name": "みかん",       "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-004", "name": "ぶどう",       "min": 500,  "max": 1000, "note": "通常注文用"},
@@ -15,7 +15,7 @@
     {"product_id": "P-011", "name": "キウイ",       "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-012", "name": "さくらんぼ",   "min": 20,   "max": 30,   "note": "在庫問い合わせテスト用（ケース10）"},
     {"product_id": "P-013", "name": "いちじく",     "min": 500,  "max": 1000, "note": "通常注文用"},
-    {"product_id": "P-014", "name": "レモン",       "min": 500,  "max": 1000, "note": "通常注文用"},
+    {"product_id": "P-014", "name": "レモン",       "min": 0,    "max": 0,    "note": "欠品テスト用。常に0を維持"},
     {"product_id": "P-015", "name": "アボカド",     "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-016", "name": "にんにく",     "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-017", "name": "ブルーベリー", "min": 500,  "max": 1000, "note": "通常注文用"},
