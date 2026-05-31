@@ -2,8 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
-const DEMO_EMAIL = "kiyo1234@aibaske1103gmail.onmicrosoft.com";
-const DEMO_PASSWORD = "Foogent2026!Recv";
+const DEMO_EMAIL = "demo@foogent.example.com";
+const DEMO_PASSWORD = "Foogent2026!Demo";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
