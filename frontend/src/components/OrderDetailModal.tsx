@@ -10,6 +10,8 @@ interface Props {
 }
 
 export default function OrderDetailModal({ order, onClose, onMemoUpdated, exceptions }: Props) {
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     if (!order) return;
     function handleKeyDown(e: KeyboardEvent) {
@@ -22,7 +24,6 @@ export default function OrderDetailModal({ order, onClose, onMemoUpdated, except
   if (!order) return null;
 
   const orderId = order.uid || order.id || "";
-  const [copied, setCopied] = useState(false);
 
   function handleCopyId() {
     navigator.clipboard.writeText(orderId).then(() => {
