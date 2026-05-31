@@ -92,7 +92,7 @@ export default function Orders() {
 
   // 要対応ステータスの受注に紐づく注文単位カウント（バナー表示用）
   const reviewOrderIds = useMemo(
-    () => new Set(orders.filter((o) => normalizeStatus(o.status) === "要対応").map((o) => o.id)),
+    () => new Set(orders.filter((o) => normalizeStatus(o.status) === "要対応").map((o) => o.id).filter((id): id is string => !!id)),
     [orders]
   );
   // 急ぎ = 要対応かつ注文の最重ランクが high の注文数（注文単位・重複排除）
