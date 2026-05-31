@@ -5,6 +5,38 @@ import { useAuth } from "../auth/useAuth";
 const DEMO_EMAIL = "kiyo1234@aibaske1103gmail.onmicrosoft.com";
 const DEMO_PASSWORD = "Foogent2026!Recv";
 
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-gray-500 w-16 shrink-0 text-xs">{label}</span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex items-center gap-1 font-mono text-[10px] text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 hover:bg-gray-50 transition-colors min-w-0 flex-1"
+        title="クリックしてコピー"
+      >
+        <span className="truncate">{value}</span>
+        {copied ? (
+          <svg className="w-3 h-3 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
 function HelpPane({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -29,15 +61,9 @@ function HelpPane({ onClose }: { onClose: () => void }) {
         {/* デモアカウント */}
         <div className="rounded-xl bg-brand-50 border border-brand-200 p-4">
           <p className="text-xs font-bold text-brand-700 mb-2">🔑 デモアカウント</p>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 w-16 shrink-0">ID</span>
-              <code className="text-gray-800 font-mono text-[10px] break-all">{DEMO_EMAIL}</code>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 w-16 shrink-0">パスワード</span>
-              <code className="text-gray-800 font-mono">{DEMO_PASSWORD}</code>
-            </div>
+          <div className="space-y-1.5">
+            <CopyField label="ID" value={DEMO_EMAIL} />
+            <CopyField label="パスワード" value={DEMO_PASSWORD} />
           </div>
         </div>
 
@@ -217,13 +243,6 @@ export default function Login() {
         <HelpPane onClose={() => setHelpOpen(false)} />
       </div>
 
-      {/* オーバーレイ: ドロワー外クリックで閉じる */}
-      {helpOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setHelpOpen(false)}
-        />
-      )}
     </div>
   );
 }
