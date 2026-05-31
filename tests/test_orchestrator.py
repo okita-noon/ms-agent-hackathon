@@ -18,6 +18,7 @@ from src.agents.orchestrator import (
     _enforce_response_policy,
     _format_open_orders_summary,
     _format_memory_context,
+    _intake_draft_reflects_message,
     _inventory_requires_operator_review,
     _is_affirmative_reply,
     _is_current_order_inquiry,
@@ -108,6 +109,45 @@ class TestParseOrderItems:
 
     def test_no_quantity(self):
         assert _parse_order_items("お願いします") == []
+
+    def test_strips_particle_wo(self):
+        items = _parse_order_items("いちじくを300箱お願いします！")
+        assert len(items) == 1
+        assert items[0]["raw_name"] == "いちじく"
+        assert items[0]["quantity"] == 300.0
+        assert items[0]["unit"] == "箱"
+
+    def test_keeps_non_wo_particles(self):
+        items = _parse_order_items("りんごに10箱")
+        assert len(items) == 1
+        assert items[0]["raw_name"] == "りんごに"
+
+
+class TestIntakeDraftReflectsMessage:
+    def test_matching_items(self):
+        draft = {"items": [{"product_name": "いちじく", "quantity": 300, "unit": "箱"}]}
+        assert _intake_draft_reflects_message(draft, "いちじくを300箱お願いします！") is True
+
+    def test_missing_items(self):
+        draft = {"items": [{"product_name": "梨", "quantity": 10, "unit": "個"}]}
+        assert _intake_draft_reflects_message(draft, "いちじくを300箱お願いします！") is False
+
+    def test_partial_match(self):
+        draft = {
+            "items": [
+                {"product_name": "りんご", "quantity": 10, "unit": "箱"},
+                {"product_name": "バナナ", "quantity": 20, "unit": "kg"},
+            ]
+        }
+        assert _intake_draft_reflects_message(draft, "りんご10箱、バナナ20kg") is True
+
+    def test_no_parseable_items_in_message(self):
+        draft = {"items": [{"product_name": "梨", "quantity": 10, "unit": "個"}]}
+        assert _intake_draft_reflects_message(draft, "お願いします") is True
+
+    def test_empty_draft_items(self):
+        draft = {"items": []}
+        assert _intake_draft_reflects_message(draft, "りんご10箱") is False
 
 
 class TestBuildDraftFromIntake:

@@ -1111,6 +1111,8 @@ class OrderOrchestrator:
             intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
+                "**重要**: 今回のメッセージに含まれる商品には必ず normalize_product を呼んで商品IDを取得すること。"
+                "現在注文の商品データをそのまま使い回さず、メッセージ内の商品名を正規化して正しい product_id を取得すること。\n"
                 "更新後の注文全体をJSON形式で返してください。\n"
                 f"チャネル: {source.value}\n"
                 f"{user_label}\n"
@@ -1141,6 +1143,29 @@ class OrderOrchestrator:
             known_customer_id=known_customer_id,
             known_customer_name=known_customer_name,
         )
+
+        if intake_mode == "現在注文更新" and intake_draft and intake_draft.get("items"):
+            if not _intake_draft_reflects_message(intake_draft, message):
+                debug_log.append("[Intake検証] ドラフトにメッセージの商品が未反映 → 新規注文モードでリトライ")
+                logger.warning("Intake draft does not reflect message items; retrying as new order")
+                retry_prompt = (
+                    f"以下の注文メッセージを処理してください。\n"
+                    f"チャネル: {source.value}\n"
+                    f"{user_label}\n"
+                    f"{memory_ctx}"
+                    f"メッセージ: {message}\n\n"
+                    f"まず {lookup_instruction}"
+                    f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
+                    f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
+                )
+                intake_text, retry_elapsed = await self._invoke_agent(intake_agent, retry_prompt)
+                debug_log.append(f"[Intake] リトライ応答 ({len(intake_text)}文字, {retry_elapsed}s)")
+                intake_draft = _apply_known_customer_to_intake(
+                    self._extract_json(intake_text),
+                    known_customer_id=known_customer_id,
+                    known_customer_name=known_customer_name,
+                )
+
         if not intake_draft or not intake_draft.get("items"):
             debug_log.append("[Intake] JSON抽出失敗 → フォールバック応答")
             debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
@@ -1644,6 +1669,8 @@ class OrderOrchestrator:
             intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
+                "**重要**: 今回のメッセージに含まれる商品には必ず normalize_product を呼んで商品IDを取得すること。"
+                "現在注文の商品データをそのまま使い回さず、メッセージ内の商品名を正規化して正しい product_id を取得すること。\n"
                 "更新後の注文全体をJSON形式で返してください。\n"
                 f"チャネル: {source.value}\n"
                 f"{user_label}\n"
@@ -1674,6 +1701,29 @@ class OrderOrchestrator:
             known_customer_id=known_customer_id,
             known_customer_name=known_customer_name,
         )
+
+        if intake_mode == "現在注文更新" and intake_draft and intake_draft.get("items"):
+            if not _intake_draft_reflects_message(intake_draft, message):
+                debug_log.append("[Intake検証] ドラフトにメッセージの商品が未反映 → 新規注文モードでリトライ")
+                logger.warning("[multi-agent] Intake draft does not reflect message items; retrying as new order")
+                retry_prompt = (
+                    f"以下の注文メッセージを処理してください。\n"
+                    f"チャネル: {source.value}\n"
+                    f"{user_label}\n"
+                    f"{memory_ctx}"
+                    f"メッセージ: {message}\n\n"
+                    f"まず {lookup_instruction}"
+                    f"次に注文内容を解析してJSON形式で注文ドラフトを返してください。"
+                    f"会話履歴がある場合は、直前のやり取りを踏まえて解釈してください。"
+                )
+                intake_text, retry_elapsed = await self._invoke_agent(intake_agent, retry_prompt)
+                debug_log.append(f"[Intake] リトライ応答 ({len(intake_text)}文字, {retry_elapsed}s)")
+                intake_draft = _apply_known_customer_to_intake(
+                    self._extract_json(intake_text),
+                    known_customer_id=known_customer_id,
+                    known_customer_name=known_customer_name,
+                )
+
         if not intake_draft or not intake_draft.get("items"):
             debug_log.append("[Intake] JSON抽出失敗 → Communication Agentフォールバック")
             debug_log.append(f"[Intake] Agent生テキスト冒頭: {intake_text[:200]!r}")
@@ -3348,6 +3398,7 @@ def _parse_order_items(message: str) -> list[dict]:
         if not match:
             continue
         raw_name = match.group("name").strip(" ・-　\t")
+        raw_name = re.sub(r"を$", "", raw_name).strip()
         if not raw_name:
             continue
         items.append(
@@ -3358,6 +3409,25 @@ def _parse_order_items(message: str) -> list[dict]:
             }
         )
     return items
+
+
+def _intake_draft_reflects_message(intake_draft: dict, message: str) -> bool:
+    """Intake ドラフトが顧客メッセージの商品を反映しているか検証する。"""
+    parsed_items = _parse_order_items(message)
+    if not parsed_items:
+        return True
+
+    draft_names = {(item.get("product_name") or "").lower() for item in intake_draft.get("items", [])}
+    if not draft_names:
+        return False
+
+    for parsed in parsed_items:
+        raw = parsed.get("raw_name", "").lower()
+        if not raw:
+            continue
+        if not any(raw in dn or dn in raw for dn in draft_names):
+            return False
+    return True
 
 
 def _format_memory_context(
