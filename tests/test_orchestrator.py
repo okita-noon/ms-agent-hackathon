@@ -1714,6 +1714,132 @@ class TestProcessOrderMessageSendsOnce:
             assert "5箱" in result["response"]
 
 
+class TestStockShortageInsist:
+    """B-15: 在庫不足提示後に顧客が強要望した場合、元数量で要対応注文を作成しエスカレートする。"""
+
+    @pytest.mark.asyncio
+    async def test_insist_creates_review_order_with_original_quantity(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        saved_orders: list[Order] = []
+
+        async def save_order(order: Order) -> str:
+            saved_orders.append(order)
+            return "ORD-INSIST"
+
+        order_repo.save = AsyncMock(side_effect=save_order)
+
+        pending_order_draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 80,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "inventory_checked": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "required_qty": 80,
+                    "unit": "箱",
+                    "available_qty": 50,
+                    "is_sufficient": False,
+                    "needs_confirmation": True,
+                }
+            ],
+        }
+
+        with patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send:
+            result = await orch.process_order_message(
+                message="どうしても80箱必要なので、なんとかお願いします",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                session_id="sess-insist",
+                pending_order_draft=pending_order_draft,
+            )
+
+        assert mock_send.call_count == 1
+        assert len(saved_orders) == 1
+        saved = saved_orders[0]
+        assert saved.status == OrderStatus.NEEDS_REVIEW
+        assert "顧客強要望" in (saved.remarks or "")
+        assert saved.items[0].quantity == 80
+        assert saved.items[0].product_id == "P-001"
+        assert result.get("review_order_id") == "ORD-INSIST"
+        assert result.get("pending_order_draft") is None
+        assert "担当者が確認" in result["response"]
+        assert "りんご 80箱" in result["response"]
+        # 確定表現は出力しない
+        normalized = result["response"].replace(" ", "")
+        assert all(pattern not in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS)
+
+    @pytest.mark.asyncio
+    async def test_skip_when_intent_is_not_insist(self, mock_tenant_ctx):
+        """intent が INSIST_ON_SHORTAGE でないときは B-15 ハンドラを通らない。
+
+        『はい』など単純な肯定返信を Intent 分類器（LLM 含む）が non-insist に判定した場合に、
+        強要望ハンドラが呼ばれず NEEDS_REVIEW 受注も作成されないことを担保する。
+        """
+        from src.services.intent_understanding import IntentResult
+
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-OTHER")
+
+        pending_order_draft = {
+            "customer_id": "C-001",
+            "customer_name": "ビストロ青葉",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 80,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "inventory_checked": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "required_qty": 80,
+                    "unit": "箱",
+                    "available_qty": 50,
+                    "is_sufficient": False,
+                    "needs_confirmation": True,
+                }
+            ],
+        }
+
+        async def _fake_classify_intent(message, *, source, has_current_order, has_pending_shortage=False):
+            assert has_pending_shortage is True  # 強要望チェックが scope されている
+            return IntentResult(intent=OrderIntent.UNCLEAR, confidence=0.5)
+
+        with (
+            patch.object(orch, "_classify_intent", side_effect=_fake_classify_intent),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock),
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock, return_value=("noop", 0.1)),
+            patch("src.agents.orchestrator._check_draft_inventory", return_value=[]),
+        ):
+            result = await orch.process_order_message(
+                message="はい",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                session_id="sess-affirm",
+                pending_order_draft=pending_order_draft,
+            )
+
+        # 強要望ハンドラを通っていないことを確認（顧客向け文言が違う）
+        assert "担当者が確認のうえ、改めてご連絡いたします" not in (result.get("response") or "")
+
+
 class TestEndToEndMessageFlow:
     """Integration-level test: handler + orchestrator together send exactly one message."""
 

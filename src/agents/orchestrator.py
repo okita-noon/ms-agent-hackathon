@@ -406,13 +406,38 @@ class OrderOrchestrator:
             debug_log.append(
                 f"[現在注文] {current_order.id} (status={current_order.status.value}, customer_id={current_order.customer_id})"
             )
-        intent_result = await self._classify_intent(message, source=source, has_current_order=current_order is not None)
+        has_pending_shortage = bool(pending_order_draft and pending_order_draft.get("inventory_checked"))
+        intent_result = await self._classify_intent(
+            message,
+            source=source,
+            has_current_order=current_order is not None,
+            has_pending_shortage=has_pending_shortage,
+        )
         line_action_type = _line_action_type_from_intent(intent_result.intent, current_order=current_order)
         current_order_editable = _is_order_editable(current_order)
         debug_log.append(
             f"[分類] intent={intent_result.intent.value}, action_type={line_action_type}, "
             f"confidence={intent_result.confidence}, editable={current_order_editable}"
         )
+
+        if (
+            intent_result.intent == OrderIntent.INSIST_ON_SHORTAGE
+            and pending_order_draft
+            and pending_order_draft.get("inventory_checked")
+        ):
+            insist_result = await self._handle_stock_shortage_insist(
+                line_user_id=line_user_id,
+                reply_token=reply_token,
+                source=source,
+                response_callback=response_callback,
+                pending_order_draft=pending_order_draft,
+                session_id=session_id,
+                debug_log=debug_log,
+            )
+            if insist_result:
+                result.update(insist_result)
+                result["debug_log"] = debug_log
+                return result
 
         if intent_result.intent == OrderIntent.SMALL_TALK:
             debug_log.append("[判定] 雑談・挨拶として応答")
@@ -752,14 +777,25 @@ class OrderOrchestrator:
             debug_log.append(f"[顧客解決] 経路=電話番号検索, customer_id={(customer.id if customer else '未特定')}")
         return customer.id if customer else None
 
-    async def _classify_intent(self, message: str, *, source: OrderSource, has_current_order: bool) -> IntentResult:
+    async def _classify_intent(
+        self,
+        message: str,
+        *,
+        source: OrderSource,
+        has_current_order: bool,
+        has_pending_shortage: bool = False,
+    ) -> IntentResult:
         async def llm_classifier(prompt: str) -> str:
             agent = self._make_orchestrator_agent(_source_to_channel(source))
             text, _elapsed = await self._invoke_agent(agent, prompt)
             return text
 
-        classifier = llm_classifier if has_current_order else None
-        return await IntentUnderstandingService(classifier).classify(message, has_current_order=has_current_order)
+        classifier = llm_classifier if (has_current_order or has_pending_shortage) else None
+        return await IntentUnderstandingService(classifier).classify(
+            message,
+            has_current_order=has_current_order,
+            has_pending_shortage=has_pending_shortage,
+        )
 
     async def _try_handle_memory_order(
         self,
@@ -902,6 +938,83 @@ class OrderOrchestrator:
             "current_order_snapshot": _build_current_order_snapshot(saved_order),
             "current_order_editable": _is_order_editable(saved_order),
         }
+        if response_callback:
+            await response_callback(response_text)
+        else:
+            await self._send_line_message(response_text, reply_token, line_user_id)
+        return result
+
+    async def _handle_stock_shortage_insist(
+        self,
+        *,
+        line_user_id: str,
+        reply_token: str | None,
+        source: OrderSource,
+        response_callback: Callable[[str], Awaitable[None]] | None,
+        pending_order_draft: dict,
+        session_id: str | None,
+        debug_log: list[str] | None = None,
+    ) -> dict | None:
+        """在庫不足の提示後、顧客が元数量での手配を強く望んだ場合のハンドラ。
+
+        元の希望数量で受注ドラフトを NEEDS_REVIEW として保存し、担当者が緊急仕入れ可否を
+        判断するエスカレーションを行う。顧客には確定表現を避けたテンプレ返信を返す。
+        """
+        if not pending_order_draft.get("items"):
+            if debug_log is not None:
+                debug_log.append("[在庫強要望] items が空のため処理スキップ")
+            return None
+
+        shortage_items_summary = _build_shortage_items_summary(pending_order_draft)
+        remarks_lines = _build_shortage_insist_remarks(pending_order_draft)
+        remarks = "在庫不足だが顧客強要望のため担当者手配確認"
+        if remarks_lines:
+            remarks = f"{remarks}: {'; '.join(remarks_lines)}"
+
+        draft_for_save = copy.deepcopy(pending_order_draft)
+        draft_for_save.pop("inventory_checked", None)
+        draft_for_save.pop("delivery_date", None)
+
+        saved_order: Order | None = None
+        try:
+            saved_order = await self.create_order_from_draft(
+                draft_for_save,
+                source=source,
+                session_id=session_id,
+                status=OrderStatus.NEEDS_REVIEW,
+                remarks=remarks,
+            )
+            if debug_log is not None:
+                debug_log.append(f"[在庫強要望] 要対応注文として保存: {saved_order.id}")
+            logger.info("Created review order %s (shortage insist)", saved_order.id)
+        except Exception:
+            logger.exception("Failed to save shortage-insist review order")
+            if debug_log is not None:
+                debug_log.append("[在庫強要望] 要対応注文の保存失敗")
+
+        if source == OrderSource.LINE:
+            response_text = render_line_template(
+                "stock_shortage_escalate.txt",
+                shortage_items_summary=shortage_items_summary,
+            )
+        elif source == OrderSource.EMAIL:
+            response_text = _build_email_from_template(
+                "メール返信_異常時.txt",
+                {"customer_name": pending_order_draft.get("customer_name") or "お客"},
+                body=(f"{shortage_items_summary}について、手配可能か担当者が確認のうえ、改めてご連絡いたします。"),
+            )
+        else:
+            response_text = f"{shortage_items_summary}について、手配可能か担当者が確認のうえ、改めてご連絡いたします。"
+
+        result: dict = {
+            "response": response_text,
+            "customer_id": pending_order_draft.get("customer_id"),
+            "session_status": "completed",
+            "pending_order_draft": None,
+        }
+        if saved_order is not None:
+            result["review_order_id"] = saved_order.id
+
         if response_callback:
             await response_callback(response_text)
         else:
@@ -2912,6 +3025,45 @@ def _build_inventory_review_remarks(inventory_result: dict | None) -> str:
         return "在庫不足または代替提案あり。担当者確認が必要"
 
     return "在庫不足または引当不可のため担当者確認"
+
+
+def _build_shortage_items_summary(pending_order_draft: dict) -> str:
+    """強要望されている商品の希望数量サマリ（顧客返信用）。
+
+    `inventory_checked` の不足対象商品を優先し、なければドラフトの全商品を返す。
+    """
+    checked_items = pending_order_draft.get("inventory_checked") or []
+    shortage_items = [item for item in checked_items if not item.get("is_sufficient")]
+    if shortage_items:
+        parts = []
+        for item in shortage_items:
+            name = item.get("product_name", "商品")
+            unit = item.get("unit", "")
+            qty = _format_qty(item.get("required_qty"))
+            parts.append(f"{name} {qty}{unit}")
+        return "・".join(parts)
+    parts = []
+    for item in pending_order_draft.get("items", []) or []:
+        name = item.get("product_name", "商品")
+        unit = item.get("unit", "")
+        qty = _format_qty(item.get("quantity"))
+        parts.append(f"{name} {qty}{unit}")
+    return "・".join(parts)
+
+
+def _build_shortage_insist_remarks(pending_order_draft: dict) -> list[str]:
+    """強要望で要対応にする際の担当者向け remarks 行を作る。"""
+    checked_items = pending_order_draft.get("inventory_checked") or []
+    lines: list[str] = []
+    for item in checked_items:
+        if item.get("is_sufficient"):
+            continue
+        name = item.get("product_name", "商品")
+        unit = item.get("unit", "")
+        required = _format_qty(item.get("required_qty"))
+        available = _format_qty(item.get("available_qty") or 0)
+        lines.append(f"{name}: 希望{required}{unit}, 在庫{available}{unit}")
+    return lines
 
 
 def _classify_inventory_shortage(checked_items: list[dict]) -> tuple[list[dict], list[dict]]:

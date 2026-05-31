@@ -17,6 +17,7 @@ class OrderIntent(StrEnum):
     REPEAT_USUAL_ORDER = "repeat_usual_order"
     INVENTORY_INQUIRY = "inventory_inquiry"
     ORDER_STATUS_INQUIRY = "order_status_inquiry"
+    INSIST_ON_SHORTAGE = "insist_on_shortage"
     UNCLEAR = "unclear"
 
 
@@ -41,23 +42,53 @@ class IntentUnderstandingService:
     def __init__(self, llm_classifier: LLMClassifier | None = None):
         self._llm_classifier = llm_classifier
 
-    async def classify(self, message: str, *, has_current_order: bool) -> IntentResult:
-        rule_result = _classify_by_rule(message, has_current_order=has_current_order)
+    async def classify(
+        self,
+        message: str,
+        *,
+        has_current_order: bool,
+        has_pending_shortage: bool = False,
+    ) -> IntentResult:
+        rule_result = _classify_by_rule(
+            message,
+            has_current_order=has_current_order,
+            has_pending_shortage=has_pending_shortage,
+        )
         if rule_result:
             return rule_result
 
         if self._llm_classifier:
-            classified = _parse_llm_intent(await self._llm_classifier(_build_intent_prompt(message, has_current_order)))
+            classified = _parse_llm_intent(
+                await self._llm_classifier(
+                    _build_intent_prompt(
+                        message,
+                        has_current_order=has_current_order,
+                        has_pending_shortage=has_pending_shortage,
+                    )
+                )
+            )
             if classified:
                 return classified
 
         return IntentResult(intent=OrderIntent.UNCLEAR, confidence=0.0)
 
 
-def _classify_by_rule(message: str, *, has_current_order: bool) -> IntentResult | None:
+def _classify_by_rule(
+    message: str,
+    *,
+    has_current_order: bool,
+    has_pending_shortage: bool = False,
+) -> IntentResult | None:
     normalized = re.sub(r"\s+", "", message).lower()
     if not normalized:
         return IntentResult(intent=OrderIntent.SMALL_TALK, confidence=0.9, reason="empty message")
+
+    if has_pending_shortage and _is_insist_on_shortage_by_rule(normalized):
+        return IntentResult(
+            intent=OrderIntent.INSIST_ON_SHORTAGE,
+            confidence=0.9,
+            reason="insistence keyword while shortage pending",
+        )
 
     if _is_small_talk(normalized):
         return IntentResult(intent=OrderIntent.SMALL_TALK, confidence=0.9, reason="social conversation")
@@ -106,15 +137,25 @@ def _parse_llm_intent(raw: str) -> IntentResult | None:
         return None
 
 
-def _build_intent_prompt(message: str, has_current_order: bool) -> str:
+def _build_intent_prompt(
+    message: str,
+    *,
+    has_current_order: bool,
+    has_pending_shortage: bool = False,
+) -> str:
     return (
         "次の食品卸の受注会話メッセージを intent JSON に分類してください。\n"
         "intent は small_talk, new_order, modify_current_order, partial_cancel, full_cancel, "
-        "repeat_previous_order, repeat_usual_order, inventory_inquiry, order_status_inquiry, unclear のいずれか。\n"
+        "repeat_previous_order, repeat_usual_order, inventory_inquiry, order_status_inquiry, "
+        "insist_on_shortage, unclear のいずれか。\n"
         "挨拶、天気の話、感謝だけなど、注文処理に入らない社交発話は small_talk としてください。\n"
         "現在注文が存在し、商品名と数量だけが送られている場合は、別注文の明示がない限り modify_current_order としてください。\n"
         "注文全体をやめる・取り消す意図は full_cancel、商品単位で外す意図は partial_cancel としてください。\n"
+        "直前に在庫不足を通知済み（pending_shortage=true）の状態で、顧客が在庫超過の元数量を維持してでも手配を強く望む発話"
+        "（例:『どうしてもこの数量で欲しい』『なんとかしてください』『無理してでも用意して』）は insist_on_shortage としてください。"
+        "ただし『はい』『それでお願いします』など提示在庫数量への単なる承諾は insist_on_shortage ではありません。\n"
         f"current_order_exists={has_current_order}\n"
+        f"pending_shortage={has_pending_shortage}\n"
         f"message={message}\n"
         '出力例: {"intent":"full_cancel","confidence":0.9,"requires_confirmation":false,"reason":"..."}'
     )
@@ -148,6 +189,48 @@ def _is_full_cancel_by_rule(normalized: str) -> bool:
 
 def _has_cancel_keyword(normalized: str) -> bool:
     return any(keyword in normalized for keyword in ("キャンセル", "取消", "取り消", "なし", "やめ"))
+
+
+def _is_insist_on_shortage_by_rule(normalized: str) -> bool:
+    if _has_cancel_keyword(normalized):
+        return False
+    strong_phrases = (
+        "どうしても",
+        "どーしても",
+        "なんとか",
+        "何とか",
+        "なんとかして",
+        "至急",
+        "緊急",
+        "無理してでも",
+        "無理を承知",
+        "ないと困",
+        "間に合わない",
+        "間に合いません",
+        "絶対必要",
+        "絶対欲しい",
+        "絶対にほしい",
+        "全部欲しい",
+        "全量欲しい",
+        "元の数量",
+        "元の量",
+        "元の数",
+    )
+    if any(phrase in normalized for phrase in strong_phrases):
+        return True
+    moderate_phrases = (
+        "急ぎで",
+        "急ぎなので",
+        "急ぎです",
+        "必要なので",
+        "必要です",
+        "必要だから",
+        "用意してください",
+        "用意してほしい",
+        "そろえてください",
+        "揃えてください",
+    )
+    return any(phrase in normalized for phrase in moderate_phrases)
 
 
 def _has_order_request_keyword(normalized: str) -> bool:
