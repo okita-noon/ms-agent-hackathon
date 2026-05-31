@@ -16,6 +16,7 @@ from src.agents.orchestrator import (
     _build_draft_from_intake,
     _classify_additional_order,
     _enforce_response_policy,
+    _extract_quantity_only_reply,
     _format_open_orders_summary,
     _format_memory_context,
     _intake_draft_reflects_message,
@@ -222,6 +223,14 @@ class TestApplyKnownCustomerToIntake:
 
         assert draft["customer_id"] == "C-999"
         assert draft["customer_name"] == "別顧客"
+
+
+class TestExtractQuantityOnlyReply:
+    def test_accepts_nishite_suffix(self):
+        assert _extract_quantity_only_reply("1000個にして。") == (1000.0, "個")
+
+    def test_accepts_nishitekudasai_suffix(self):
+        assert _extract_quantity_only_reply("やっぱり 12箱にしてください") == (12.0, "箱")
 
 
 @pytest.mark.asyncio
@@ -2241,6 +2250,19 @@ class TestClassifyAdditionalOrder:
         # merged_items の数量が合算されている
         merged_by_pid = {it["product_id"]: it for it in plan.merged_items}
         assert merged_by_pid["P-001"]["quantity"] == 18.0
+
+    def test_modify_mode_overlap_replaces_existing_quantity(self):
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001", quantity=5.0, unit="箱")
+        draft = self._make_draft(delivery_date=today_jst(), product_id="P-001", quantity=1000.0, unit="個")
+        plan = _classify_additional_order(order, draft, editable=True, is_modify_mode=True)
+        assert plan.mode == "replace"
+        assert plan.use_existing_order is True
+        assert plan.overlap_items == []
+        merged_by_pid = {it["product_id"]: it for it in plan.merged_items}
+        assert merged_by_pid["P-001"]["quantity"] == 1000.0
+        assert merged_by_pid["P-001"]["unit"] == "個"
 
     def test_delivery_date_as_string_is_parsed(self):
         from src.utils.business_date import today_jst

@@ -1506,6 +1506,7 @@ class OrderOrchestrator:
                             current_order,
                             draft,
                             editable=current_order_editable,
+                            is_modify_mode=intent == OrderIntent.MODIFY_CURRENT_ORDER,
                         )
                         debug_log.append(f"[追加判定] mode={add_plan.mode}")
                         if add_plan.mode == "confirm_overlap":
@@ -1680,8 +1681,11 @@ class OrderOrchestrator:
                         time_slot=saved_order.delivery_time_slot,
                     )
                 else:
-                    # パターンA: 新規 or LINEでない
-                    template_name = "order_confirm.txt"
+                    template_name = (
+                        "order_update_confirm.txt"
+                        if add_plan is not None and add_plan.use_existing_order
+                        else "order_confirm.txt"
+                    )
                     debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
                     response_text = _build_line_from_template(
                         template_name,
@@ -2060,6 +2064,7 @@ class OrderOrchestrator:
                             current_order,
                             draft,
                             editable=current_order_editable,
+                            is_modify_mode=intent == OrderIntent.MODIFY_CURRENT_ORDER,
                         )
                         debug_log.append(f"[追加判定] mode={add_plan.mode}")
                         if add_plan.mode == "confirm_overlap":
@@ -2225,7 +2230,11 @@ class OrderOrchestrator:
                         time_slot=saved_order.delivery_time_slot,
                     )
                 else:
-                    template_name = "order_confirm.txt"
+                    template_name = (
+                        "order_update_confirm.txt"
+                        if add_plan_multi is not None and add_plan_multi.use_existing_order
+                        else "order_confirm.txt"
+                    )
                     debug_log.append(f"[応答] LINEテンプレート上書き: {template_name}")
                     response_text = _build_line_from_template(
                         template_name,
@@ -2920,7 +2929,11 @@ def _format_invalid_quantity_response(items: list[dict], *, source: OrderSource)
 def _extract_quantity_only_reply(message: str) -> tuple[float, str | None] | None:
     normalized = re.sub(r"\s+", "", _normalize_quantity_text(message))
     normalized = re.sub(r"^(じゃあ|では|それなら|なら|それでは|やっぱり)", "", normalized)
-    normalized = re.sub(r"(でお願いします|お願いします|で|にします|に変更|ください|下さい|。|！|!)$", "", normalized)
+    normalized = re.sub(
+        r"(にしてください|にして|でお願いします|お願いします|で|にします|に変更|ください|下さい|。|！|!)$",
+        "",
+        normalized,
+    )
     match = re.fullmatch(r"(?P<qty>\d+(?:\.\d+)?)(?P<unit>kg|キロ|箱|個|本|袋|ケース|パック|玉|枚)?", normalized)
     if not match:
         return None
@@ -3863,7 +3876,7 @@ class _AdditionalOrderPlan:
         overlap_items: list[dict],
         use_existing_order: bool,
     ) -> None:
-        self.mode = mode  # "new" | "add" | "confirm_overlap"
+        self.mode = mode  # "new" | "add" | "replace" | "confirm_overlap"
         self.merged_items = merged_items
         self.added_items = added_items
         self.overlap_items = overlap_items
@@ -3875,12 +3888,14 @@ def _classify_additional_order(
     draft: dict,
     *,
     editable: bool,
+    is_modify_mode: bool = False,
 ) -> _AdditionalOrderPlan:
     """current_order と draft から追加注文の処理モードを判定する。
 
     Returns _AdditionalOrderPlan:
         mode: "new"            → 新規注文として別建て
               "add"            → 同配送日・被りなし → 積み増し
+              "replace"        → 変更モードかつ被りあり → 差し替え
               "confirm_overlap"→ 同配送日・被りあり → 合計確認待ち
     """
     new_items: list[dict] = draft.get("items", [])
@@ -3947,6 +3962,22 @@ def _classify_additional_order(
         return _AdditionalOrderPlan(
             mode="add",
             merged_items=merged,
+            added_items=new_items,
+            overlap_items=[],
+            use_existing_order=True,
+        )
+
+    if is_modify_mode:
+        # 変更モードでは被り商品を合算せず、新しい明細で差し替える。
+        merged_by_pid: dict[str, dict] = {pid: dict(info) for pid, info in existing_by_pid.items()}
+        for item in new_items:
+            pid = item.get("product_id")
+            if pid:
+                merged_by_pid[pid] = dict(item)
+
+        return _AdditionalOrderPlan(
+            mode="replace",
+            merged_items=list(merged_by_pid.values()),
             added_items=new_items,
             overlap_items=[],
             use_existing_order=True,
