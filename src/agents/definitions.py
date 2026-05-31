@@ -70,10 +70,12 @@ JSON形式で注文ドラフトを返してください:
 
 ### 例: 会話の流れに沿った解釈
 会話履歴:
-  顧客: 「りんごちょうだい」
-  AI: 「りんごのご注文ですね。何kgお送りしましょうか？」
+  顧客: 「バナナちょうだい」
+  AI: 「バナナのご注文ですね。何kgお送りしましょうか？」
 今回のメッセージ: 「10kg」
-→ りんご10kgの注文として処理: {items: [{product_name: "りんご", quantity: 10, unit: "kg"}]}
+→ バナナ10kgの注文として処理: {items: [{product_name: "バナナ", quantity: 10, unit: "kg"}]}
+
+- 商品の標準単位と顧客が指定した単位が異なる場合（例: りんごは「箱」単位なのに「kg」で注文）は needs_confirmation=true にして確認を求めること
 
 ## needs_confirmation の判定基準（重要）
 以下の条件をすべて満たす場合は **needs_confirmation=false** にすること:
