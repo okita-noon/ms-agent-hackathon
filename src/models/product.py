@@ -15,6 +15,7 @@ class UnitType(StrEnum):
     BUNCH = "房"
     BALL = "玉"
     CASE = "ケース"
+    DOZEN = "ダース"
 
 
 class Product(BaseModel):

@@ -18,6 +18,8 @@
     {"product_id": "P-014", "name": "レモン",       "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-015", "name": "アボカド",     "min": 500,  "max": 1000, "note": "通常注文用"},
     {"product_id": "P-016", "name": "にんにく",     "min": 500,  "max": 1000, "note": "通常注文用"},
-    {"product_id": "P-017", "name": "ブルーベリー", "min": 500,  "max": 1000, "note": "通常注文用"}
+    {"product_id": "P-017", "name": "ブルーベリー", "min": 500,  "max": 1000, "note": "通常注文用"},
+    {"product_id": "P-018", "name": "キャベツ",     "min": 200,  "max": 500,  "note": "通常注文用"},
+    {"product_id": "P-019", "name": "卵",           "min": 50,   "max": 100,  "note": "通常注文用"}
   ]
 }

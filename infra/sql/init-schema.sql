@@ -136,7 +136,9 @@ INSERT INTO products (product_id, tenant_id, name, default_unit, temperature_zon
     (N'P-014', N'T-001', N'レモン', N'個', N'常温', 0, NULL),
     (N'P-015', N'T-001', N'アボカド', N'個', N'冷蔵', 0, NULL),
     (N'P-016', N'T-001', N'にんにく', N'kg', N'常温', 0, NULL),
-    (N'P-017', N'T-001', N'ブルーベリー', N'箱', N'冷凍', 0, NULL);
+    (N'P-017', N'T-001', N'ブルーベリー', N'箱', N'冷凍', 0, NULL),
+    (N'P-018', N'T-001', N'キャベツ', N'kg', N'常温', 0, NULL),
+    (N'P-019', N'T-001', N'卵', N'ダース', N'冷蔵', 0, NULL);
 
 -- 在庫
 INSERT INTO inventory (tenant_id, product_id, quantity, unit) VALUES
@@ -156,7 +158,9 @@ INSERT INTO inventory (tenant_id, product_id, quantity, unit) VALUES
     (N'T-001', N'P-014', 70, N'個'),
     (N'T-001', N'P-015', 30, N'個'),
     (N'T-001', N'P-016', 50, N'kg'),
-    (N'T-001', N'P-017', 15, N'箱');
+    (N'T-001', N'P-017', 15, N'箱'),
+    (N'T-001', N'P-018', 500, N'kg'),
+    (N'T-001', N'P-019', 100, N'ダース');
 
 -- 配送ルート
 INSERT INTO delivery_routes (route_id, tenant_id, name, region, carriers) VALUES

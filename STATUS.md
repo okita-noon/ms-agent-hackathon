@@ -1,6 +1,6 @@
 # プロジェクト進捗状況
 
-> 最終更新: 2026-05-31（セキュリティ対策としてログイン画面のデモアカウント表示・デモログインボタンを削除し、DB の U-DEMO ユーザーも削除）
+> 最終更新: 2026-05-31（キャベツ・卵を商品マスタに追加、UnitType にダースを追加、在庫データ修復）
 
 ## 実装済み
 
@@ -14,7 +14,7 @@
 - [x] サービスプリンシパル `github-orderai-deploy` 作成済み
 
 ### バックエンド
-- [x] データモデル（8 Pydantic モデル）
+- [x] データモデル（9 Pydantic モデル：order, customer, product, picking, intelligence, inbound, message_history, session, tenant）
 - [x] Connector インターフェース（7 Protocol）
 - [x] Cosmos DB アダプタ（受注・セッション・メッセージ履歴・パターン学習）
 - [x] Azure SQL アダプタ（顧客・在庫）
@@ -31,7 +31,7 @@
 - [x] Learning Service（パターン記録・プロファイル更新）
 - [x] テナント解決サービス（LINE/電話→テナント紐付け）
 - [x] 認証（ID/パスワード + Microsoft SSO、HttpOnly CookieでJWT発行）
-- [x] FastAPI アプリ（REST API 10エンドポイント）
+- [x] FastAPI アプリ（REST API 30+ エンドポイント：認証・受注・在庫・顧客・Agent・LINE Tester・電話発注 等）
 - [x] 受注→会話セッション紐付け（Order.session_id）
 - [x] 会話メッセージ取得API（`GET /api/orders/{id}/messages`）
 - [x] 会話履歴を全チャネルで保存（`src/services/message_history_logger.py` で共通化）。従来 LINE のみだった `message-history` への保存を**メール・電話**にも拡張。メールは受注を会話セッションに紐付ける `session_id` も付与し、ダッシュボードの受注詳細でメール／電話のやり取りも表示可能に
@@ -61,6 +61,11 @@
 - [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能
 - [x] Cosmos DB 本番デモデータの未来日受注（`DEMO-20260527-*`）を2026-05-26基準へ補正し、再投入用シードJSONも同様に更新
 - [x] 受注ステータス更新 API `PUT /api/orders/{order_id}/status`（要対応→受注済み等、完了/キャンセル状態への戻し以外を許可、SSE `order_updated` を発火）
+- [x] LINE/メール未登録ユーザーからの受信時に新規顧客を自動作成（`ICustomerRepository.create` で SQL に即時登録、LINE は `line_user_id`・メールは `email` を紐付け）
+- [x] LINE Tester ページ（`/line-tester`）：ブラウザ上で LINE チャネルと同じ処理パスを通せるテスト画面。アクセスコード認証・顧客選択・デバッグログ表示付き
+- [x] セルフ登録 API `POST /api/auth/register`（`REGISTRATION_ENABLED=true` + `X-Invite-Token` ヘッダ必須）
+- [x] Graph API メール Webhook の subscription 自動作成（`lifespan` でアプリ起動時に登録、`GET /api/email-webhook` でサブスクリプション検証に対応）
+- [x] ダッシュボード SPA 配信（`/dashboard/{path}` でフロントエンド HTML を返却、Container Apps 単体でもダッシュボードにアクセス可能）
 
 ### フロントエンド
 - [x] ダッシュボード（React + Vite + Tailwind）
@@ -95,6 +100,12 @@
   - ログイン画面のサブコピーを「受注業務をスマートに」に変更
   - Dashboard Agent の「要対応」案件に「対応済みにする」2タップ式ボタンを追加（ExceptionModal フッター + 受注詳細モーダルの StatusBadge 下）。表示条件は **注文の `status == 要対応`**（needs_review に限らず、同一注文に紐づく在庫不足・数量異常などの例外を選択中でも表示）。押下するとステータスを「受注済み」に更新し、SSE 経由で例外パネルから当該注文の要対応タグ起因の案件が消える
   - セキュリティ上の理由でログイン画面のヘルプペインから「🔑 デモアカウント」コピー欄、フォーム下部の「🎮 デモでログイン」ボタン、`DEMO_EMAIL`/`DEMO_PASSWORD` 定数を削除。併せて DB（Azure SQL `users` テーブル）の `U-DEMO` / `demo@foogent.example.com` レコードも削除し、`scripts/seed_users.py` の `DEMO_USERS` から該当エントリを除外（マイグレーション: `infra/sql/008-remove-demo-user.sql`）
+  - サイドバーがページスクロールで流れる問題を修正（`fixed` ポジション化）
+  - ブラウザタブのタイトルを「受注業務をスマートに」に変更
+  - 受注詳細UIから未使用の「手配日」フィールドを削除
+  - 在庫一覧ページ（`/inventory`）
+  - 要対応ステータスの受注行を薄赤ハイライト表示
+  - 新着受注トースト通知（SSE 経由で自動表示）
 
 ### CI/CD
 - [x] `deploy-api.yml`: main push → ACR Build → Container Apps Deploy → Health Check
@@ -126,7 +137,7 @@
 | C-010 | 株式会社J | J社 | 四国便 | 自社便 | 中2日 | |
 | C-011 | 株式会社Zennハッカソン | Zenn社 | 北関東便 | 自社便 | 翌日 | メールデモモードのフォールバック先（`EMAIL_DEMO_CUSTOMER_ID=C-011`） |
 
-### 商品（T-001 配下・17品）
+### 商品（T-001 配下・19品）
 
 | product_id | 商品名 | 単位 | 温度帯 | 在庫数 |
 |---|---|---|---|---|
@@ -147,6 +158,8 @@
 | P-015 | アボカド | 個 | 冷蔵 | 30 |
 | P-016 | にんにく | kg | 常温 | 50 |
 | P-017 | ブルーベリー | 箱 | 冷凍 | 15 |
+| P-018 | キャベツ | kg | 常温 | 500 |
+| P-019 | 卵 | ダース | 冷蔵 | 100 |
 
 ### 配送ルート（T-001 配下・12路線）
 
@@ -172,10 +185,12 @@
 | タスク | 優先度 | 見積もり | 備考 |
 |---|---|---|---|
 | LINE E2Eテスト | 高 | 1h | LINE Developers Console でWebhook URL設定後、実際のLINEメッセージで動作確認 |
-| 顧客の LINE User ID 紐付け | 高 | 0.5h | `customers` テーブルの `line_user_id` にLINE User IDを登録（初回メッセージから取得） |
-| Orchestrator の Agent 呼び出し改善 | 高 | 2h | 現在は単一ChatCompletionAgent。マルチAgent（Intake→Exception→Inventory→Communication）のチェーン実装 |
-| Learning Service 非同期実行 | 中 | 1h | 注文確定後にバックグラウンドで `record_pattern` + `update_customer_profile` を呼ぶ |
 | テナント切り替えデモ | 中 | 1h | T-001/T-002 の切り替えUI + `tenant_resolver.py` の複数テナント対応 |
+
+> **以下は実装済み（旧 Must）**:
+> - ~~顧客の LINE User ID 紐付け~~ → LINE/メール未登録ユーザーの自動顧客作成で解決
+> - ~~Orchestrator の Agent 呼び出し改善~~ → マルチ Agent チェーン実装済み（`USE_MULTI_AGENT=true`）
+> - ~~Learning Service 非同期実行~~ → 注文確定後に `record_pattern` + `update_customer_profile` を呼び出し済み
 
 ### Should
 
@@ -183,7 +198,6 @@
 |---|---|---|
 | Embedding ベースのパターン検索 | 2h | `cosmos_intelligence_store.py` の `find_pattern_by_embedding` を AI Search ベクトル検索に置換 |
 | ピッキングリストPDF生成 | 2h | `src/models/picking.py` のモデルは定義済み。PDF生成ロジック + API エンドポイント追加 |
-| ダッシュボードにリアルタイム更新 | 1h | WebSocket or SSE で新規受注の自動反映 |
 
 ### Could
 
@@ -199,10 +213,10 @@
 3. **Dockerfileに `_templates/` のCOPY漏れ**: メールテンプレート外部化（#113）後、`COPY _templates/ _templates/` がDockerfileに含まれておらず、メール返信時にFileNotFoundErrorが発生していた。#115で修正済み
 4. **~~メールテンプレートの顧客名がNone表示~~（修正済み）**: `InboundMessage.customer_name` を追加し、デモモードフォールバック時にも顧客名を正しく設定。Intake Agentに `known_customer_id` / `known_customer_name` として渡すことで解決
 5. **SQL アダプタの `product_aliases` 運用未反映**: `SqlProductMaster.fuzzy_match` は `product_aliases` テーブルも検索する。`infra/sql/005-add-product-aliases.sql` を追加済みだが、各環境DBへの適用は別途実施が必要
-2. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
-3. **Container Apps のスケール設定**: APIは min=1, max=5 で常時1台を維持するよう設定済み（2026-05-24適用）。アイドル課金は月$5〜10程度だが、コールドスタートを完全に回避できる
-4. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある
-5. **`infra/modules/functions.bicep`**: Azure Functions は不使用（VM quota制約で断念）。ファイルは残存しているが `main.bicep` からの参照は削除済み
+6. **`aioodbc` の ODBC ドライバ**: Dockerfile で `msodbcsql18` をインストールしているが、SQL接続文字列のフォーマットが `pymssql` 形式（Key Vault格納値）。Container Apps 上での `aioodbc` 接続は未テスト。問題があれば `pymssql` ベースのアダプタに差し替える
+7. **Container Apps のスケール設定**: APIは min=1, max=5 で常時1台を維持するよう設定済み（2026-05-24適用）。アイドル課金は月$5〜10程度だが、コールドスタートを完全に回避できる
+8. **LINE reply token の有効期限**: LINE の `replyToken` は30秒で失効。Agent処理に時間がかかる場合は `push` メッセージにフォールバックする必要がある
+9. **`infra/modules/functions.bicep`**: Azure Functions は不使用（VM quota制約で断念）。ファイルは残存しているが `main.bicep` からの参照は削除済み
 
 ## ローカル開発
 
