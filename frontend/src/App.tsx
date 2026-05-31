@@ -16,6 +16,7 @@ const Orders = lazy(() => import("./pages/Orders"));
 const Customers = lazy(() => import("./pages/Customers"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const WebPhone = lazy(() => import("./pages/WebPhone"));
+const Help = lazy(() => import("./pages/Help"));
 
 type NavItem = { to: string; label: string; icon: ReactNode };
 
@@ -146,6 +147,7 @@ function DashboardLayout() {
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="customers" element={<Customers />} />
                 <Route path="web-phone" element={<WebPhone />} />
+                <Route path="help" element={<Help />} />
                 <Route path="*" element={<Navigate to="/orders" replace />} />
               </Routes>
             </Suspense>
