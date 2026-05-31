@@ -19,3 +19,5 @@ UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001'
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-015'; -- アボカド
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-016'; -- にんにく
 UPDATE inventory SET quantity = 1000, reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-017'; -- ブルーベリー
+UPDATE inventory SET quantity = 500,  reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-018'; -- キャベツ
+UPDATE inventory SET quantity = 100,  reserved_qty = 0 WHERE tenant_id = 'T-001' AND product_id = 'P-019'; -- 卵

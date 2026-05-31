@@ -209,9 +209,6 @@ export default function Inventory() {
                       <td className="px-5 py-3.5 font-mono text-xs text-gray-400">{item.product_id}</td>
                       <td className="px-5 py-3.5">
                         <span className="font-medium text-gray-900">{item.product_name}</span>
-                        {item.is_variable_weight && (
-                          <span className="ml-2 text-[10px] text-purple-600 bg-purple-50 border border-purple-200 rounded px-1 py-px font-medium">不定貫</span>
-                        )}
                       </td>
                       <td className="px-5 py-3.5"><TempBadge zone={item.temperature_zone} /></td>
                       <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-gray-900">{item.quantity.toLocaleString()}</td>

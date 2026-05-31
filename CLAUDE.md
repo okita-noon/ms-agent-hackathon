@@ -67,6 +67,7 @@ UI を変更したら **毎回** 以下を行うこと:
 | スクリプト | 用途 | 使うタイミング |
 |---|---|---|
 | `scripts/add_stock/run.py` | 在庫リセット・補充 | QC実行前・在庫起因のバグ調査時 |
+| `scripts/check_stock/run.py` | 在庫チェック・自動補正 | `line_qc/run.py` から自動呼び出し。手動でも実行可 |
 | `scripts/line_qc/run.py` | LINE QC 自動実行（40ケース） | LINE の動作確認・回帰テスト |
 | `scripts/seed_orders.py` | デモ受注データ投入 | Cosmos DB を初期状態に戻すとき |
 | `scripts/seed_users.py` | デモユーザー投入 | ユーザーテーブルを初期化するとき |
