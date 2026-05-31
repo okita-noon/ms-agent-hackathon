@@ -74,13 +74,7 @@ function HelpPane({ onClose }: { onClose: () => void }) {
           <div>
             <p className="text-xs font-bold text-gray-700 mb-1.5">📦 受注管理</p>
             <p className="text-xs text-gray-500 leading-relaxed">
-              LINE・電話・メールから届いた注文をAIが自動解析し、受注一覧に集約します。注文が確定すると受注済みとなり、その後「配送中 → 完了」と自動遷移します。
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-gray-700 mb-1.5">⚠️ AI例外・要対応</p>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              数量異常・在庫不足など担当者の判断が必要な受注を自動検出します。「高（急ぎ）」「中」の2段階でアラートを表示します。
+              LINE・電話・メールから届いた注文をAIが自動解析し、受注一覧に集約します。
             </p>
           </div>
           <div>
@@ -94,6 +88,12 @@ function HelpPane({ onClose }: { onClose: () => void }) {
             </div>
             <p className="text-[11px] text-gray-400">
               ※ <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">要対応</span> は数量異常・在庫不足など異常時のみ表示。担当者が確認後に受注済みへ移行します。
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-700 mb-1.5">⚠️ AI例外・要対応</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              数量異常・在庫不足など担当者の判断が必要な受注を自動検出します。「高（急ぎ）」「中」の2段階でアラートを表示します。
             </p>
           </div>
           <div>
