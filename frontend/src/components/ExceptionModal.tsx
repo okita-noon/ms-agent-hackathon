@@ -47,9 +47,28 @@ function formatTime(iso: string): string {
 /* ── Main modal ──────────────────────────────────────── */
 
 export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpdated }: ExceptionModalProps) {
-  const [selectedId, setSelectedId] = useState<string>(exceptions.length > 0 ? exceptions[0].id : "");
-  // 2タップ式: 同じ exception に対して1回目を踏むと confirmId にセットされ、
-  // 3秒以内に 2 回目を踏むと確定。タイムアウトで自動キャンセル。
+  // 注文単位に集約: order_id → { topSeverity, excs[] }
+  const orderGroups = (() => {
+    const map = new Map<string, { topSeverity: AgentExceptionSeverity; excs: AgentExceptionCase[] }>();
+    for (const exc of exceptions) {
+      const entry = map.get(exc.order_id);
+      if (!entry) {
+        map.set(exc.order_id, { topSeverity: exc.severity, excs: [exc] });
+      } else {
+        entry.excs.push(exc);
+        if (exc.severity === "high") entry.topSeverity = "high";
+      }
+    }
+    // high → medium の順でソート
+    return [...map.entries()].sort(([, a], [, b]) => {
+      const rank = { high: 0, medium: 1, low: 2 };
+      return (rank[a.topSeverity] ?? 9) - (rank[b.topSeverity] ?? 9);
+    });
+  })();
+
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(
+    orderGroups.length > 0 ? orderGroups[0][0] : ""
+  );
   const [resolveConfirmId, setResolveConfirmId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -63,34 +82,28 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // 選択が変わったら確認状態をリセット
   useEffect(() => {
     setResolveConfirmId(null);
     setResolveError(null);
-  }, [selectedId]);
+  }, [selectedOrderId]);
 
-  // confirm タイマーのクリーンアップ
   useEffect(() => {
     return () => {
-      if (confirmTimerRef.current !== null) {
-        window.clearTimeout(confirmTimerRef.current);
-      }
+      if (confirmTimerRef.current !== null) window.clearTimeout(confirmTimerRef.current);
     };
   }, []);
 
-  function armResolveConfirm(excId: string) {
+  function armResolveConfirm(orderId: string) {
     setResolveError(null);
-    setResolveConfirmId(excId);
-    if (confirmTimerRef.current !== null) {
-      window.clearTimeout(confirmTimerRef.current);
-    }
+    setResolveConfirmId(orderId);
+    if (confirmTimerRef.current !== null) window.clearTimeout(confirmTimerRef.current);
     confirmTimerRef.current = window.setTimeout(() => {
-      setResolveConfirmId((current) => (current === excId ? null : current));
+      setResolveConfirmId((cur) => (cur === orderId ? null : cur));
       confirmTimerRef.current = null;
     }, 3000);
   }
 
-  async function handleResolve(_excId: string, orderId: string) {
+  async function handleResolve(orderId: string) {
     if (confirmTimerRef.current !== null) {
       window.clearTimeout(confirmTimerRef.current);
       confirmTimerRef.current = null;
@@ -110,12 +123,15 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
   }
 
   const orderMap = new Map(orders.map((o) => [o.uid || o.id, o]));
-  const highCount = exceptions.filter((e) => e.severity === "high").length;
-  const mediumCount = exceptions.filter((e) => e.severity === "medium").length;
-  const selectedExc = exceptions.find((e) => e.id === selectedId);
-  const selectedOrder = selectedExc ? orderMap.get(selectedExc.order_id) : undefined;
 
-  if (exceptions.length === 0) return null;
+  // 注文単位のカウント（高＋中＝総数）
+  const highCount = orderGroups.filter(([, g]) => g.topSeverity === "high").length;
+  const mediumCount = orderGroups.filter(([, g]) => g.topSeverity === "medium").length;
+
+  const selectedGroup = orderGroups.find(([id]) => id === selectedOrderId);
+  const selectedOrder = selectedOrderId ? orderMap.get(selectedOrderId) : undefined;
+
+  if (orderGroups.length === 0) return null;
 
   return (
     <div
@@ -130,7 +146,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
             <div>
               <h3 className="font-bold text-gray-900 text-sm">確認が必要な受注</h3>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-xs text-gray-500">{exceptions.length}件</span>
+                <span className="text-xs text-gray-500">{orderGroups.length}件</span>
                 {highCount > 0 && (
                   <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
                     高 {highCount}
@@ -156,16 +172,17 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
 
         {/* 2-pane body */}
         <div className="flex flex-1 min-h-0">
-          {/* Left: exception list */}
+          {/* Left: 注文単位リスト */}
           <div className="w-80 shrink-0 border-r border-gray-100 overflow-y-auto p-3 space-y-2">
-            {exceptions.map((exc) => {
-              const order = orderMap.get(exc.order_id);
-              const isSelected = selectedId === exc.id;
+            {orderGroups.map(([orderId, group]) => {
+              const order = orderMap.get(orderId);
+              const isSelected = selectedOrderId === orderId;
+              const firstExc = group.excs[0];
               return (
                 <button
-                  key={exc.id}
+                  key={orderId}
                   type="button"
-                  onClick={() => setSelectedId(exc.id)}
+                  onClick={() => setSelectedOrderId(orderId)}
                   className={`w-full text-left rounded-xl p-3 transition-all border ${
                     isSelected
                       ? "bg-brand-50/60 border-brand-200 shadow-sm ring-1 ring-brand-200"
@@ -174,22 +191,28 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5">
-                      <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[group.topSeverity]}`}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
-                        {SEVERITY_LABEL[exc.severity]}
+                        {SEVERITY_LABEL[group.topSeverity]}
                       </span>
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[exc.severity]}`}>
-                        {TYPE_LABEL[exc.type] ?? exc.type}
-                      </span>
+                      {group.excs.length > 1 ? (
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[group.topSeverity]}`}>
+                          問題 {group.excs.length}件
+                        </span>
+                      ) : (
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BG[group.topSeverity]}`}>
+                          {TYPE_LABEL[firstExc.type] ?? firstExc.type}
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] text-gray-400 tabular-nums shrink-0 ml-2">
                       {order?.order_date ? order.order_date.slice(5, 10).replace("-", "/") : ""}
                       {order?.created_at ? ` ${formatTime(order.created_at)}` : ""}
                     </span>
                   </div>
-                  <p className="text-sm font-semibold text-gray-900 truncate">{exc.customer_name} 様</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{firstExc.customer_name} 様</p>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">
                     {order?.items.map((i) => `${i.product_name} ${i.quantity ?? ""}${i.unit ?? ""}`).join("、") ?? ""}
                   </p>
@@ -198,13 +221,13 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
             })}
           </div>
 
-          {/* Right: order detail (reuses OrderDetailContent) */}
+          {/* Right: order detail */}
           <div className="flex-1 min-w-0 flex flex-col">
-            {selectedExc && selectedOrder ? (
+            {selectedGroup && selectedOrder ? (
               <>
                 <div className="flex-1 overflow-y-auto p-5">
                   <OrderDetailContent
-                    key={selectedExc.id}
+                    key={selectedOrderId}
                     order={selectedOrder}
                     exceptions={exceptions}
                     onMemoUpdated={onMemoUpdated}
@@ -221,11 +244,11 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {selectedOrder.status === "要対応" && (
-                      resolveConfirmId === selectedExc.id ? (
+                      resolveConfirmId === selectedOrderId ? (
                         <button
                           type="button"
                           disabled={resolving}
-                          onClick={() => handleResolve(selectedExc.id, selectedExc.order_id)}
+                          onClick={() => handleResolve(selectedOrderId)}
                           className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed ring-2 ring-emerald-500 ring-offset-1"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,7 +260,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                         <button
                           type="button"
                           disabled={resolving}
-                          onClick={() => armResolveConfirm(selectedExc.id)}
+                          onClick={() => armResolveConfirm(selectedOrderId)}
                           className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 px-3 py-1.5 text-xs font-semibold shadow-xs transition-all disabled:opacity-60"
                           title="要対応タグを外し、受注済みに変更します"
                         >
@@ -258,7 +281,7 @@ export default function ExceptionModal({ exceptions, orders, onClose, onMemoUpda
                   </div>
                 </div>
               </>
-            ) : selectedExc && !selectedOrder ? (
+            ) : selectedGroup && !selectedOrder ? (
               <div className="flex items-center justify-center h-full text-sm text-gray-400">
                 受注データが見つかりません
               </div>
