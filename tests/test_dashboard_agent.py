@@ -334,8 +334,12 @@ class TestDashboardAgentClassification:
         cases = await DashboardAgentService(ctx).list_exception_cases("T-TEST", date(2026, 5, 20))
 
         types_by_order = {(c.order_id, c.type) for c in cases}
+        severity_by_type = {(c.order_id, c.type): c.severity for c in cases}
+        # inventory_shortage が検出されること
         assert ("ORD-B", "inventory_shortage") in types_by_order
-        assert ("ORD-B", "needs_review") not in types_by_order
+        # needs_review も出るが、inventory_shortage(high) があるため high に昇格していること
+        assert ("ORD-B", "needs_review") in types_by_order
+        assert severity_by_type[("ORD-B", "needs_review")] == "high"
 
 
 class TestDashboardAgentResolutionPreview:
