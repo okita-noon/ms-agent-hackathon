@@ -1,19 +1,18 @@
 name: Apply SQL Migration
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/sql/011-add-tomato.sql'
   workflow_dispatch:
     inputs:
       migration_file:
         description: 'Migration file path (relative to infra/sql/)'
         required: true
         default: '011-add-tomato.sql'
-      sync_search:
-        description: 'Sync products to AI Search after migration'
-        type: boolean
-        default: true
 
 env:
-  RESOURCE_GROUP: rg-orderai-dev2
   KEY_VAULT_NAME: kv-orderai-dev2
 
 jobs:
@@ -29,23 +28,13 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Get secrets from Key Vault
-        id: secrets
         run: |
           SQL_CONN=$(az keyvault secret show --vault-name ${{ env.KEY_VAULT_NAME }} --name sql-connection-string --query value -o tsv)
-          AI_SEARCH_ENDPOINT=$(az keyvault secret show --vault-name ${{ env.KEY_VAULT_NAME }} --name ai-search-key --query value -o tsv 2>/dev/null || echo "")
           AI_SEARCH_KEY=$(az keyvault secret show --vault-name ${{ env.KEY_VAULT_NAME }} --name ai-search-key --query value -o tsv 2>/dev/null || echo "")
           echo "::add-mask::$SQL_CONN"
           echo "::add-mask::$AI_SEARCH_KEY"
           echo "SQL_CONNECTION_STRING=$SQL_CONN" >> "$GITHUB_ENV"
           echo "AI_SEARCH_KEY=$AI_SEARCH_KEY" >> "$GITHUB_ENV"
-
-      - name: Install SQL tools
-        run: |
-          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-          curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-          sudo apt-get update -qq
-          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18 2>/dev/null || true
-          echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,16 +42,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install pymssql azure-search-documents python-dotenv
+        run: pip install pymssql azure-search-documents
 
       - name: Apply SQL migration
         run: |
-          python3 - <<'PYEOF'
+          MIGRATION_FILE="${{ github.event.inputs.migration_file || '011-add-tomato.sql' }}"
+          python3 - <<PYEOF
           import os, pymssql, re
 
           conn_str = os.environ["SQL_CONNECTION_STRING"]
 
-          # Parse pymssql-style: Server=...;Database=...;User ID=...;Password=...
           def parse(s):
               parts = dict(re.findall(r'(\w[\w ]+)=([^;]+)', s))
               return (
@@ -75,28 +64,23 @@ jobs:
           server, database, user, password = parse(conn_str)
           print(f"Connecting to {server}/{database} as {user}")
 
+          migration_file = "infra/sql/${MIGRATION_FILE}"
           with pymssql.connect(server, user, password, database, tds_version='7.4') as conn:
               with conn.cursor() as cur:
-                  with open('infra/sql/${{ github.event.inputs.migration_file }}', encoding='utf-8') as f:
+                  with open(migration_file, encoding='utf-8') as f:
                       sql = f.read()
-                  # Split on GO statements
                   statements = [s.strip() for s in re.split(r'\bGO\b', sql, flags=re.IGNORECASE) if s.strip()]
                   for stmt in statements:
                       cur.execute(stmt)
                   conn.commit()
                   print("Migration applied successfully")
 
-                  # Verify トマト was added
                   cur.execute("SELECT product_id, name, default_unit FROM products WHERE name = N'トマト'")
                   row = cur.fetchone()
-                  if row:
-                      print(f"Verified: {row}")
-                  else:
-                      print("WARNING: トマト not found after migration")
+                  print(f"Verified: {row}" if row else "WARNING: トマト not found after migration")
           PYEOF
 
       - name: Sync products to AI Search
-        if: ${{ github.event.inputs.sync_search == 'true' }}
         env:
           SQL_CONNECTION_STRING: ${{ env.SQL_CONNECTION_STRING }}
           AI_SEARCH_ENDPOINT: https://search-orderai-dev2.search.windows.net
