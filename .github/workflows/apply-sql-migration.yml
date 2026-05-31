@@ -1,0 +1,91 @@
+name: Apply SQL Migration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/sql/011-add-tomato.sql'
+  workflow_dispatch:
+    inputs:
+      migration_file:
+        description: 'Migration file path (relative to infra/sql/)'
+        required: true
+        default: '011-add-tomato.sql'
+
+env:
+  KEY_VAULT_NAME: kv-orderai-dev2
+
+jobs:
+  apply-migration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get secrets from Key Vault
+        run: |
+          SQL_CONN=$(az keyvault secret show --vault-name ${{ env.KEY_VAULT_NAME }} --name sql-connection-string --query value -o tsv)
+          AI_SEARCH_KEY=$(az keyvault secret show --vault-name ${{ env.KEY_VAULT_NAME }} --name ai-search-key --query value -o tsv 2>/dev/null || echo "")
+          echo "::add-mask::$SQL_CONN"
+          echo "::add-mask::$AI_SEARCH_KEY"
+          echo "SQL_CONNECTION_STRING=$SQL_CONN" >> "$GITHUB_ENV"
+          echo "AI_SEARCH_KEY=$AI_SEARCH_KEY" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install pymssql azure-search-documents
+
+      - name: Apply SQL migration
+        run: |
+          MIGRATION_FILE="${{ github.event.inputs.migration_file || '011-add-tomato.sql' }}"
+          python3 - <<PYEOF
+          import os, pymssql, re
+
+          conn_str = os.environ["SQL_CONNECTION_STRING"]
+
+          def parse(s):
+              parts = dict(re.findall(r'(\w[\w ]+)=([^;]+)', s))
+              return (
+                  parts.get('Server') or parts.get('server'),
+                  parts.get('Database') or parts.get('database'),
+                  parts.get('User ID') or parts.get('user id') or parts.get('UID') or parts.get('uid'),
+                  parts.get('Password') or parts.get('password') or parts.get('PWD') or parts.get('pwd'),
+              )
+
+          server, database, user, password = parse(conn_str)
+          print(f"Connecting to {server}/{database} as {user}")
+
+          migration_file = "infra/sql/${MIGRATION_FILE}"
+          with pymssql.connect(server, user, password, database, tds_version='7.4') as conn:
+              with conn.cursor() as cur:
+                  with open(migration_file, encoding='utf-8') as f:
+                      sql = f.read()
+                  statements = [s.strip() for s in re.split(r'\bGO\b', sql, flags=re.IGNORECASE) if s.strip()]
+                  for stmt in statements:
+                      cur.execute(stmt)
+                  conn.commit()
+                  print("Migration applied successfully")
+
+                  cur.execute("SELECT product_id, name, default_unit FROM products WHERE name = N'トマト'")
+                  row = cur.fetchone()
+                  print(f"Verified: {row}" if row else "WARNING: トマト not found after migration")
+          PYEOF
+
+      - name: Sync products to AI Search
+        env:
+          SQL_CONNECTION_STRING: ${{ env.SQL_CONNECTION_STRING }}
+          AI_SEARCH_ENDPOINT: https://search-orderai-dev2.search.windows.net
+          AI_SEARCH_KEY: ${{ env.AI_SEARCH_KEY }}
+        run: |
+          pip install -r requirements.txt -q
+          python scripts/sync_products_to_search.py --tenant-id T-001
+        continue-on-error: true
