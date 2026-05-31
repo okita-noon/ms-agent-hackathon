@@ -458,7 +458,7 @@ export default function OrderDetailContent({ order, exceptions, onMemoUpdated, h
           <h4 className="text-lg font-bold text-gray-900 truncate">{order.customer_name}</h4>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="text-xs font-semibold" style={{ color: SOURCE_COLORS[order.source] ?? "#64748b" }}>{order.source}</span>
-            <CopyableOrderId orderId={order.id} />
+            {order.id && <CopyableOrderId orderId={order.id} />}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
