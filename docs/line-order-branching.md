@@ -160,6 +160,7 @@ LINE メッセージ受信
 | B-12 | 品質不良 / 数量違い / 誤納品 | 「2箱しか来ていない」「傷みが多い」 | 新規受注ではなくトラブル受付 | 謝意 + 確認 + 次アクション | `要対応` |
 | B-13 | 請求確認 | 単価・明細差異 | 請求書 / 受注照合 | 担当確認中と案内 | `要対応` |
 | B-14 | 既読のみ・無応答 | 重要確認に返答なし | SLA 超過 | 電話 / 担当者連絡へ切替 | `要対応` |
+| B-15 | 在庫不足だが顧客強要望 | B-08/B-09 提示後に「どうしても」「なんとか」「至急」等の強要望 | 元の希望数量で NEEDS_REVIEW 注文を作成し、担当者の手配可否確認へエスカレーション | 「ご要望ありがとうございます。手配可能か担当者が確認のうえ、改めてご連絡いたします。」（テンプレート） | `要対応` |
 
 ## 5. LINE 会話テンプレート集
 
@@ -253,6 +254,17 @@ LINE メッセージ受信
 
 ※ 顧客がOK→部分数量で注文確定。顧客がNG→注文せず終了。勝手に部分数量で注文確定しない。
 
+### 5.8.1. 在庫不足だが顧客がどうしても元数量で必要（B-15）
+
+**飲食店 → 卸**
+> どうしても10kg必要なので、なんとかお願いします
+
+**卸 → 飲食店**（テンプレート返答、LLMを通さない）
+> ご要望ありがとうございます。  
+> 鶏むね 10kgについて、手配可能か担当者が確認のうえ、改めてご連絡いたします。
+
+※ 元の希望数量（10kg）で `要対応` ステータスの注文を作成し、remarks に「在庫不足だが顧客強要望のため担当者手配確認」を記録。担当者は緊急仕入れ・他倉庫転送・他便手配などの可否を判断する。確定表現（「承りました」「手配いたします」等）は使わない。
+
 ### 5.9. 変更対象が不明
 
 **飲食店 → 卸**
@@ -307,13 +319,15 @@ LINE メッセージ受信時に、少なくとも以下を判別できる必要
 8. **品質不良 / 数量違い / 誤納品**
 9. **請求確認**
 10. **肯定返信 / 否定返信 / 保留返信**
-11. **判別不能**
+11. **在庫不足提示後の強要望**（`insist_on_shortage`、直前メッセージで B-08/B-09 を返した直後限定）
+12. **判別不能**
 
 特に LINE では、以下の短文を個別に扱う。
 
 - 肯定: `OK`, `それで`, `お願いします`, `はい`
 - 否定: `やめます`, `不要です`, `今回はなしで`
 - 差分指示: `追加で`, `やっぱり`, `さっきの`, `それは明日で`
+- 強要望: `どうしても`, `なんとか`, `至急`, `緊急`, `ないと困る`, `間に合わない`, `急ぎで`, `必要なので`（在庫不足提示直後のみ `insist_on_shortage` として担当者エスカレーション）
 
 ### 6.2. 現在注文の解決要件
 
@@ -376,8 +390,9 @@ LINE メッセージ受信時に、少なくとも以下を判別できる必要
 | `order_revision_log` | 追加・変更・取消の履歴 |
 | `escalation_reason` | 人手対応に送った理由 |
 
-Intent は `src/services/intent_understanding.py` で、まず `new_order` / `modify_current_order` / `partial_cancel` / `full_cancel` / `repeat_previous_order` / `repeat_usual_order` / `inventory_inquiry` / `order_status_inquiry` / `unclear` に分類する。
+Intent は `src/services/intent_understanding.py` で、まず `new_order` / `modify_current_order` / `partial_cancel` / `full_cancel` / `repeat_previous_order` / `repeat_usual_order` / `inventory_inquiry` / `order_status_inquiry` / `insist_on_shortage` / `unclear` に分類する。
 明確な全体キャンセル文言は即時ルールで分類し、現在注文がある状態で「やめとこうかな」のようにルールだけでは曖昧な文言は LLM に JSON Intent 分類させる。
+`insist_on_shortage` は **直前メッセージで在庫不足を提示し `pending_order_draft.inventory_checked` が残っている場合のみ** ルール／LLM で判定する（`has_pending_shortage` フラグで scope）。元の希望数量で `要対応` 注文を作成し、テンプレ `stock_shortage_escalate.txt` で「担当者が手配可能か確認のうえ折り返します」と返す。
 LINE セッションの `pending_action_type` は、この分類済み Intent から導出する。`repeat_usual_order` / `repeat_previous_order` は `OrderMemoryService` で注文ドラフトへ復元し、在庫確認後に通常の受注確定フローへ流す。
 
 ### 6.5. 状態管理要件
@@ -412,6 +427,7 @@ _templates/
     order_no_current_order.txt
     stock_alternative.txt
     stock_partial_fulfillment.txt
+    stock_shortage_escalate.txt
     order_locked_need_review.txt
     trouble_ack.txt
 ```

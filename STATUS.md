@@ -56,6 +56,7 @@
 - [x] LINE 返信テンプレート基盤（`_templates/line/` + `line_template_renderer.py`）を追加。LINE では受注Noを表示せず、定型返信を優先
 - [x] LINE の現在注文コンテキスト（`current_order_id` / `current_order_snapshot`）をセッションとオーケストレータに追加。1顧客1オープン注文前提で追加・変更・取消へ寄せる
 - [x] LINE の欠品返信後に、需要把握用の `要対応` 受注を次メッセージの現在注文として扱わないよう修正。バナナ・桃など後続の新規注文が直前の欠品注文へ混入しないようにし、顧客が明示した単位（例: `1個`, `1kg`, `一キロ`）を保持しつつ内部処理は商品マスタ単位へ正規化、換算が業務推測になる場合は確認待ちにする補正と、確認待ち単品への数量だけ返信を LLM なしで反映する処理を追加
+- [x] LINE/メール/電話の在庫不足提示後、顧客が「どうしても」「なんとか」「至急」など強要望を示した場合の分岐（B-15）。`OrderIntent.INSIST_ON_SHORTAGE` をルール＋LLMで分類し、元の希望数量で `要対応` 注文を作成、テンプレ `stock_shortage_escalate.txt` で「担当者が手配可能か確認のうえ折り返します」と返す
 - [x] 受注作成時の業務日をJST基準に統一。Container Apps のUTC日付に引きずられて、JST深夜帯の注文が前日扱いになる問題を修正
 - [x] 注文・在庫・意図分類の業務サービス層（`OrderApplicationService`, `InventoryApplicationService`, `OrderMemoryService`, `IntentUnderstandingService`）を追加。自然文キャンセル、LLM Intent による曖昧キャンセル分類、在庫不足後の数量だけ返信（例:「じゃあ1kg」）、LINE/メール/電話の「いつもの」「前と同じ」注文復元をテスト付きで対応
 - [x] 既存受注データのJST日付補正スクリプト（`scripts/fix_order_dates_jst.py`）を追加。dry-runで差分確認後、`--apply` でCosmos DBの `order_date` と同日自動設定の `delivery_date` / `preparation_date` を補正可能

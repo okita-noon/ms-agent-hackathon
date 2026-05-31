@@ -62,6 +62,11 @@
       "variables": ["product_name", "available_quantity", "shortage_quantity", "next_delivery_date"],
       "branch": "B-09"
     },
+    "stock_shortage_escalate": {
+      "file": "stock_shortage_escalate.txt",
+      "variables": ["shortage_items_summary"],
+      "branch": "B-15"
+    },
     "trouble_ack": {
       "file": "trouble_ack.txt",
       "variables": [],
