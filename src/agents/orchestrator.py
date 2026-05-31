@@ -2929,11 +2929,8 @@ def _format_invalid_quantity_response(items: list[dict], *, source: OrderSource)
 def _extract_quantity_only_reply(message: str) -> tuple[float, str | None] | None:
     normalized = re.sub(r"\s+", "", _normalize_quantity_text(message))
     normalized = re.sub(r"^(じゃあ|では|それなら|なら|それでは|やっぱり)", "", normalized)
-    normalized = re.sub(
-        r"(にしてください|にして|でお願いします|お願いします|で|にします|に変更|ください|下さい|。|！|!)$",
-        "",
-        normalized,
-    )
+    normalized = re.sub(r"[。！!]+$", "", normalized)
+    normalized = re.sub(r"(にしてください|にして|でお願いします|お願いします|で|にします|に変更|ください|下さい)$", "", normalized)
     match = re.fullmatch(r"(?P<qty>\d+(?:\.\d+)?)(?P<unit>kg|キロ|箱|個|本|袋|ケース|パック|玉|枚)?", normalized)
     if not match:
         return None
