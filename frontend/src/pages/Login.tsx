@@ -46,7 +46,7 @@ function HelpPane({ onClose }: { onClose: () => void }) {
       <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
         <div>
           <h2 className="text-base font-bold text-gray-900">foogent の使い方</h2>
-          <p className="text-xs text-gray-400 mt-0.5">受注業務をfoogentでスマートに</p>
+          <p className="text-xs text-gray-400 mt-0.5">受注業務をスマートに</p>
         </div>
         <button
           type="button"
