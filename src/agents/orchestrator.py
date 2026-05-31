@@ -2157,6 +2157,7 @@ class OrderOrchestrator:
                 response_text,
                 needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
                 inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+                source=source,
             )
             if debug_log is not None and enforced != response_text:
                 debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
@@ -2343,6 +2344,7 @@ class OrderOrchestrator:
             response_text,
             needs_confirmation=processing_note is not None and "顧客確認が必要" in processing_note,
             inventory_needs_review=processing_note is not None and "在庫不足または引当不可" in processing_note,
+            source=source,
         )
         if debug_log is not None and enforced != response_text:
             debug_log.append("[ポリシー] 応答がポリシーにより書き換えられた")
@@ -3092,6 +3094,7 @@ def _enforce_response_policy(
     *,
     needs_confirmation: bool,
     inventory_needs_review: bool,
+    source: "OrderSource | None" = None,
 ) -> str:
     if not (needs_confirmation or inventory_needs_review):
         return response_text
@@ -3100,8 +3103,11 @@ def _enforce_response_policy(
     if not any(pattern in normalized for pattern in FORBIDDEN_UNCONFIRMED_RESPONSE_PATTERNS):
         return response_text
 
+    is_phone = source == OrderSource.PHONE
     if inventory_needs_review:
         replacement = "ご注文内容を確認しました。在庫状況の確認が必要なため、担当者が確認して折り返します。"
+    elif is_phone:
+        replacement = "ご注文内容を確認しました。数量や内容に確認が必要ですので、担当者が改めてご連絡いたします。"
     else:
         replacement = (
             "ご注文内容を確認しました。数量や内容に確認が必要です。よろしければ内容をご確認のうえ返信してください。"
