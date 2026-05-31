@@ -49,7 +49,10 @@ async def _run_once(tenant_id: str) -> None:
     try:
         ctx = resolve_tenant_by_id(tenant_id)
         repo = ctx.get_connector("IOrderRepository")
-        orders = await repo.list_by_date(tenant_id, today_jst)
+        orders = await repo.list_by_statuses(
+            tenant_id,
+            [OrderStatus.ACCEPTED.value, OrderStatus.SHIPPING.value],
+        )
     except Exception:
         logger.exception("Failed to fetch orders for status update (tenant=%s)", tenant_id)
         return
