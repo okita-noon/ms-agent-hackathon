@@ -48,7 +48,11 @@ _active_subscription_id: str | None = None
 
 
 async def _cleanup_duplicate_graph_subscriptions(token: str, callback_url: str) -> None:
-    """同じ notificationUrl を持つ既存 Subscription を全て削除する（重複蓄積防止）"""
+    """既存 Subscription を削除する（重複蓄積防止）。
+    - 現環境と同じURLのもの（自身の重複）
+    - 現環境と異なるURLのもの（旧環境の残骸）
+    どちらも削除して、この後の新規作成で1件だけにする。
+    """
     import httpx
 
     try:
@@ -61,18 +65,30 @@ async def _cleanup_duplicate_graph_subscriptions(token: str, callback_url: str) 
                 logger.warning("Graph Subscription 一覧取得失敗: %s", resp.status_code)
                 return
             subscriptions = resp.json().get("value", [])
-            duplicates = [s for s in subscriptions if s.get("notificationUrl") == callback_url]
-            if not duplicates:
+            # 現環境の重複 + 旧環境の残骸（URLが異なるもの）を両方削除
+            targets = [s for s in subscriptions if s.get("notificationUrl") == callback_url]
+            stale = [s for s in subscriptions if s.get("notificationUrl") and s.get("notificationUrl") != callback_url]
+            if stale:
+                logger.info("旧環境の Subscription %d 件を検出。削除します", len(stale))
+            all_targets = targets + stale
+            if not all_targets:
                 return
-            logger.info("既存 Graph Subscription %d 件を削除します", len(duplicates))
-            for sub in duplicates:
+            logger.info(
+                "既存 Graph Subscription %d 件を削除します（重複%d + 旧環境%d）",
+                len(all_targets),
+                len(targets),
+                len(stale),
+            )
+            for sub in all_targets:
                 sub_id = sub.get("id")
+                sub_url = sub.get("notificationUrl", "")
                 del_resp = await client.delete(
                     f"https://graph.microsoft.com/v1.0/subscriptions/{sub_id}",
                     headers={"Authorization": f"Bearer {token}"},
                 )
                 if del_resp.status_code in (200, 204):
-                    logger.info("Graph Subscription 削除完了: id=%s", sub_id)
+                    label = "旧環境" if sub_url != callback_url else "重複"
+                    logger.info("Graph Subscription 削除完了（%s）: id=%s", label, sub_id)
                 else:
                     logger.warning("Graph Subscription 削除失敗: id=%s status=%s", sub_id, del_resp.status_code)
     except Exception:
