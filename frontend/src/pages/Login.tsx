@@ -146,8 +146,33 @@ export default function Login() {
     }
   }
 
+  async function handleDemoLogin() {
+    setError("");
+    setPwLoading(true);
+    try {
+      await login(DEMO_EMAIL, DEMO_PASSWORD);
+      navigate("/orders", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center px-4">
+      {/* 右上固定「使い方」ボタン */}
+      <button
+        type="button"
+        onClick={() => setHelpOpen((v) => !v)}
+        className="fixed top-4 right-4 z-30 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 shadow-sm px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        使い方
+      </button>
+
       {/* ログインカード: 常に中央固定 */}
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           {/* Logo */}
@@ -223,16 +248,14 @@ export default function Login() {
             Microsoft アカウントでログイン
           </button>
 
-          {/* 使い方ボタン */}
+          {/* デモでログインボタン */}
           <button
             type="button"
-            onClick={() => setHelpOpen((v) => !v)}
-            className="w-full mt-4 flex items-center justify-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 transition-colors"
+            onClick={handleDemoLogin}
+            disabled={pwLoading || msLoading}
+            className="w-full mt-3 py-2.5 border border-brand-200 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-50"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {helpOpen ? "閉じる" : "使い方・デモアカウント情報"}
+            {pwLoading ? "ログイン中..." : "🎮 デモでログイン"}
           </button>
 
           <p className="text-center text-[11px] text-gray-400 mt-3">foogent v1.0</p>
