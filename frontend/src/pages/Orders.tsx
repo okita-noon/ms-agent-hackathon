@@ -269,10 +269,6 @@ export default function Orders() {
   const acceptedOrderCount = orders.filter((o) =>
     ACCEPTED_ORDER_STATUSES.has(normalizeStatus(o.status))
   ).length;
-  // キャンセルを除外し、status=要対応 のみ正確にカウント
-  const reviewOrderCount = orders.filter(
-    (o) => normalizeStatus(o.status) === "要対応"
-  ).length;
   const hasFilters = Boolean(dateFilterEnabled || statusFilter || query.trim());
   const pageStart = totalOrders === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + orders.length, totalOrders);
