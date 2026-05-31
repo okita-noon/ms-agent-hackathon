@@ -2275,6 +2275,28 @@ class TestClassifyAdditionalOrder:
         plan = _classify_additional_order(order, draft, editable=True)
         assert plan.mode == "add"
 
+    def test_add_mode_overlap_accumulates_quantity(self):
+        """「追加で3箱」→ 既存5箱に3箱を加算して合計8箱になること。"""
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001", quantity=5.0, unit="箱")
+        draft = self._make_draft(delivery_date=today_jst(), product_id="P-001", quantity=3.0, unit="箱")
+        plan = _classify_additional_order(order, draft, editable=True, is_modify_mode=True, is_add_mode=True)
+        assert plan.mode == "add"
+        assert plan.use_existing_order is True
+        merged_by_pid = {it["product_id"]: it for it in plan.merged_items}
+        assert merged_by_pid["P-001"]["quantity"] == 8.0
+
+    def test_add_mode_no_overlap_adds_new_item(self):
+        """「バナナ追加で3kg」→ 既存りんご5箱 + バナナ3kgになること。"""
+        from src.utils.business_date import today_jst
+
+        order = self._make_order(delivery_date=today_jst(), product_id="P-001", quantity=5.0, unit="箱")
+        draft = self._make_draft(delivery_date=today_jst(), product_id="P-002", quantity=3.0, unit="kg")
+        plan = _classify_additional_order(order, draft, editable=True, is_modify_mode=True, is_add_mode=True)
+        assert plan.mode == "add"
+        assert len(plan.merged_items) == 2
+
 
 class TestIsNegativeReply:
     def test_negative_words(self):

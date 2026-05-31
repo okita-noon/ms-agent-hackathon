@@ -1502,13 +1502,16 @@ class OrderOrchestrator:
 
                     # LINE: 追加注文パターン判定（new/add/confirm_overlap）
                     if source == OrderSource.LINE:
+                        _ADD_EXPLICIT_KEYWORDS = ("追加", "増やし", "追加で", "追加して")
+                        _is_add_mode = any(kw in message for kw in _ADD_EXPLICIT_KEYWORDS)
                         add_plan = _classify_additional_order(
                             current_order,
                             draft,
                             editable=current_order_editable,
                             is_modify_mode=intent == OrderIntent.MODIFY_CURRENT_ORDER,
+                            is_add_mode=_is_add_mode,
                         )
-                        debug_log.append(f"[追加判定] mode={add_plan.mode}")
+                        debug_log.append(f"[追加判定] mode={add_plan.mode} is_add_mode={_is_add_mode}")
                         if add_plan.mode == "confirm_overlap":
                             # パターンC: 合計確認待ち（保存しない）
                             overlap_lines = [
@@ -2060,13 +2063,16 @@ class OrderOrchestrator:
 
                     # LINE: 追加注文パターン判定（new/add/confirm_overlap）
                     if source == OrderSource.LINE:
+                        _ADD_EXPLICIT_KEYWORDS = ("追加", "増やし", "追加で", "追加して")
+                        _is_add_mode = any(kw in message for kw in _ADD_EXPLICIT_KEYWORDS)
                         add_plan = _classify_additional_order(
                             current_order,
                             draft,
                             editable=current_order_editable,
                             is_modify_mode=intent == OrderIntent.MODIFY_CURRENT_ORDER,
+                            is_add_mode=_is_add_mode,
                         )
-                        debug_log.append(f"[追加判定] mode={add_plan.mode}")
+                        debug_log.append(f"[追加判定] mode={add_plan.mode} is_add_mode={_is_add_mode}")
                         if add_plan.mode == "confirm_overlap":
                             # パターンC: 合計確認待ち（保存しない）
                             overlap_lines = [
@@ -3888,12 +3894,13 @@ def _classify_additional_order(
     *,
     editable: bool,
     is_modify_mode: bool = False,
+    is_add_mode: bool = False,
 ) -> _AdditionalOrderPlan:
     """current_order と draft から追加注文の処理モードを判定する。
 
     Returns _AdditionalOrderPlan:
         mode: "new"            → 新規注文として別建て
-              "add"            → 同配送日・被りなし → 積み増し
+              "add"            → 同配送日・被りなし → 積み増し（または明示追加）
               "replace"        → 変更モードかつ被りあり → 差し替え
               "confirm_overlap"→ 同配送日・被りあり → 合計確認待ち
     """
@@ -3966,9 +3973,29 @@ def _classify_additional_order(
             use_existing_order=True,
         )
 
+    if is_modify_mode and is_add_mode:
+        # 追加モード（「追加で」「増やして」等）: 被り商品も数量を合算し確認なしで直接適用
+        merged_by_pid: dict[str, dict] = {pid: dict(info) for pid, info in existing_by_pid.items()}
+        for item in new_items:
+            pid = item.get("product_id")
+            if not pid:
+                continue
+            if pid in merged_by_pid:
+                merged_by_pid[pid]["quantity"] = (merged_by_pid[pid]["quantity"] or 0) + (item.get("quantity") or 0)
+            else:
+                merged_by_pid[pid] = dict(item)
+
+        return _AdditionalOrderPlan(
+            mode="add",
+            merged_items=list(merged_by_pid.values()),
+            added_items=new_items,
+            overlap_items=[],
+            use_existing_order=True,
+        )
+
     if is_modify_mode:
         # 変更モードでは被り商品を合算せず、新しい明細で差し替える。
-        merged_by_pid: dict[str, dict] = {pid: dict(info) for pid, info in existing_by_pid.items()}
+        merged_by_pid = {pid: dict(info) for pid, info in existing_by_pid.items()}
         for item in new_items:
             pid = item.get("product_id")
             if pid:
