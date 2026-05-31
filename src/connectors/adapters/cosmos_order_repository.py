@@ -142,6 +142,15 @@ class CosmosOrderRepository:
         items = self._container.query_items(query, parameters=params)
         return [Order.model_validate(doc) async for doc in items]
 
+    async def list_by_statuses(self, tenant_id: str, statuses: list[str]) -> list[Order]:
+        placeholders = ", ".join(f"@s{i}" for i in range(len(statuses)))
+        query = f"SELECT * FROM c WHERE c.tenant_id = @tid AND c.status IN ({placeholders})"
+        params: list[dict[str, object]] = [{"name": "@tid", "value": tenant_id}]
+        for i, s in enumerate(statuses):
+            params.append({"name": f"@s{i}", "value": s})
+        items = self._container.query_items(query, parameters=params)
+        return [Order.model_validate(doc) async for doc in items]
+
     async def update_status(self, tenant_id: str, order_id: str, status: OrderStatus) -> None:
         for attempt in range(3):
             doc = await self._container.read_item(order_id, partition_key=tenant_id)
