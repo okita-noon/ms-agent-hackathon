@@ -4,7 +4,6 @@ import {
   fetchAgentExceptions,
   fetchAgentFeatures,
   fetchOrders,
-  fetchReviewSummary,
   type AgentExceptionCase,
   type AgentFeatures,
   type Order,
@@ -67,7 +66,6 @@ export default function Orders() {
   const [recentOrderIds, setRecentOrderIds] = useState<Set<string>>(() => new Set());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
-  const [reviewTotalCount, setReviewTotalCount] = useState(0);
 
   const triageAvailable = Boolean(agentFeatures?.dashboard_agent && agentFeatures.exception_triage);
 
@@ -82,25 +80,53 @@ export default function Orders() {
     return map;
   }, [agentExceptions]);
 
-  // 注文ごとの最重ランク: order_id → "high" | "medium"
+  const modalExceptions = useMemo<AgentExceptionCase[]>(() => {
+    const exceptionOrderIds = new Set(agentExceptions.map((e) => e.order_id));
+    const pseudoCases: AgentExceptionCase[] = orders
+      .filter(
+        (o) =>
+          normalizeStatus(o.status) === "要対応" &&
+          !exceptionOrderIds.has(o.uid ?? o.id ?? "")
+      )
+      .map((o) => ({
+        id: `pseudo-needs-review-${o.uid ?? o.id ?? ""}`,
+        order_id: o.uid ?? o.id ?? "",
+        customer_id: o.customer_id ?? "",
+        customer_name: o.customer_name ?? "",
+        type: "needs_review",
+        severity: "medium",
+        title: "担当者確認が必要な受注",
+        summary: "AIが自動処理できず「要対応」となっています。",
+        suggested_action:
+          "注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
+        evidence: [{ label: "ステータス", value: "要対応" }],
+        metadata: {},
+      }));
+    return [...agentExceptions, ...pseudoCases];
+  }, [agentExceptions, orders]);
+
+  const reviewExceptionOrderIds = useMemo(
+    () => new Set(modalExceptions.map((exc) => exc.order_id).filter((id): id is string => Boolean(id))),
+    [modalExceptions]
+  );
+  const reviewExceptionCount = reviewExceptionOrderIds.size;
+
+  // 注文ごとの最重ランク: order_id → severity
   const orderSeverityMap = useMemo(() => {
-    const map = new Map<string, "high" | "medium">();
-    for (const exc of agentExceptions) {
+    const map = new Map<string, AgentExceptionCase["severity"]>();
+    for (const exc of modalExceptions) {
       const cur = map.get(exc.order_id);
-      if (!cur || exc.severity === "high") map.set(exc.order_id, exc.severity as "high" | "medium");
+      if (!cur || exc.severity === "high" || (exc.severity === "medium" && cur === "low")) {
+        map.set(exc.order_id, exc.severity);
+      }
     }
     return map;
-  }, [agentExceptions]);
+  }, [modalExceptions]);
 
-  // 要対応ステータスの受注に紐づく注文単位カウント（バナー表示用）
-  const reviewOrderIds = useMemo(
-    () => new Set(orders.filter((o) => normalizeStatus(o.status) === "要対応").map((o) => o.id).filter((id): id is string => !!id)),
-    [orders]
-  );
-  // 急ぎ = 要対応かつ注文の最重ランクが high の注文数（注文単位・重複排除）
+  // 急ぎ = AI検知の最重ランクが high の注文数（注文単位・重複排除）
   const highExceptionCount = useMemo(
-    () => [...reviewOrderIds].filter((id) => orderSeverityMap.get(id) === "high").length,
-    [reviewOrderIds, orderSeverityMap]
+    () => [...reviewExceptionOrderIds].filter((id) => orderSeverityMap.get(id) === "high").length,
+    [reviewExceptionOrderIds, orderSeverityMap]
   );
 
   const load = useCallback(async () => {
@@ -151,17 +177,6 @@ export default function Orders() {
     };
   }, []);
 
-  // 要対応の全件数を定期取得（バナー表示用・ページングに依存しない）
-  const loadReviewSummary = useCallback(() => {
-    fetchReviewSummary()
-      .then((data) => setReviewTotalCount(data.needs_review_total))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadReviewSummary();
-  }, [loadReviewSummary]);
-
   const loadAgentExceptions = useCallback(async () => {
     if (!triageAvailable) {
       setAgentExceptions([]);
@@ -190,7 +205,6 @@ export default function Orders() {
 
   useEffect(() => {
     const events = createOrderEventSource();
-    setLiveStatus("connecting");
 
     function handleConnected() {
       setLiveStatus("live");
@@ -231,7 +245,6 @@ export default function Orders() {
         }
         void load();
         void loadAgentExceptions();
-        loadReviewSummary();
       };
     }
 
@@ -250,7 +263,7 @@ export default function Orders() {
       events.close();
       setLiveStatus("offline");
     };
-  }, [dateFilterEnabled, date, dateField, load, loadAgentExceptions, loadReviewSummary]);
+  }, [dateFilterEnabled, date, dateField, load, loadAgentExceptions]);
 
   const displayOrders = useMemo(() => {
     const result = [...orders];
@@ -311,7 +324,7 @@ export default function Orders() {
           </span>
           <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            要対応 <span className="tabular-nums">{reviewTotalCount}</span>
+            確認が必要 <span className="tabular-nums">{reviewExceptionCount}</span>
           </span>
           <span className="text-xs text-gray-400">
             {loading && orders.length === 0
@@ -368,13 +381,13 @@ export default function Orders() {
       {triageAvailable && agentLoading && agentExceptions.length === 0 && (
         <AgentLoadingBanner />
       )}
-      {triageAvailable && !agentLoading && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
+      {triageAvailable && !agentLoading && reviewExceptionCount > 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3 fade-in">
           <img src="/favicon.png" alt="foogent" className="w-8 h-8 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-amber-900">
-                foogent AI: 要対応 {reviewTotalCount} 件
+                foogent AI: 確認が必要 {reviewExceptionCount} 件
               </span>
               {highExceptionCount > 0 ? (
                 <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
@@ -585,33 +598,9 @@ export default function Orders() {
         exceptions={agentExceptions}
       />
 
-      {exceptionModalOpen && (reviewTotalCount > 0 || agentExceptions.length > 0) && (
+      {exceptionModalOpen && reviewExceptionCount > 0 && (
         <ExceptionModal
-          exceptions={(() => {
-            // AI例外に紐づかない要対応注文を擬似ケースとして後続に追加
-            const exceptionOrderIds = new Set(agentExceptions.map((e) => e.order_id));
-            const pseudoCases = orders
-              .filter(
-                (o) =>
-                  normalizeStatus(o.status) === "要対応" &&
-                  !exceptionOrderIds.has(o.uid ?? o.id ?? "")
-              )
-              .map((o) => ({
-                id: `pseudo-needs-review-${o.uid ?? o.id ?? ""}`,
-                order_id: o.uid ?? o.id ?? "",
-                customer_id: o.customer_id ?? "",
-                customer_name: o.customer_name ?? "",
-                type: "needs_review" as const,
-                severity: "medium" as const,
-                title: "担当者確認が必要な受注",
-                summary: "AIが自動処理できず「要対応」となっています。",
-                suggested_action:
-                  "注文内容と会話履歴を確認し、必要なら顧客へ問い合わせてください。",
-                evidence: [{ label: "ステータス", value: "要対応" }],
-                metadata: {},
-              }));
-            return [...agentExceptions, ...pseudoCases];
-          })()}
+          exceptions={modalExceptions}
           orders={orders}
           onClose={() => setExceptionModalOpen(false)}
           onMemoUpdated={(updated) => {
