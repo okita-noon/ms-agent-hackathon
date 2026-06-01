@@ -672,7 +672,7 @@ class OrderOrchestrator:
                     await self._send_line_message(response_text, reply_token, line_user_id)
                 return result
 
-            if source == OrderSource.LINE and not current_order_editable and _looks_like_order_update_request(message):
+            if not current_order_editable and _looks_like_order_update_request(message):
                 debug_log.append("[判定] 変更要求だが注文ロック済み → 変更不可")
                 response_text = _build_order_locked_response(source, current_order)
                 result.update(
@@ -690,9 +690,9 @@ class OrderOrchestrator:
                     await self._send_line_message(response_text, reply_token, line_user_id)
                 return result
 
-        if source == OrderSource.LINE and not current_order and _looks_like_change_only_message(message):
+        if not current_order and _looks_like_change_only_message(message):
             debug_log.append("[判定] 変更/取消要求だが現在注文なし")
-            response_text = _build_line_from_template("order_no_current_order.txt")
+            response_text = _build_no_current_order_response(source, customer_name=known_customer_name)
             result.update({"response": response_text, "pending_action_type": line_action_type})
             if response_callback:
                 await response_callback(response_text)
@@ -1207,7 +1207,7 @@ class OrderOrchestrator:
                 f"まず {lookup_instruction}"
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
             )
-        elif source == OrderSource.LINE and current_order:
+        elif current_order and _should_apply_current_order_plan(source, intent):
             intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
@@ -1487,8 +1487,8 @@ class OrderOrchestrator:
                         save_remarks = "; ".join(anomaly_eval["remarks_lines"])
                         debug_log.append(f"[保存] 数量警告あり: {save_remarks}")
 
-                    # LINE: 追加注文パターン判定（new/add/confirm_overlap）
-                    if source == OrderSource.LINE:
+                    # 既存注文がある場合の追加/差し替え判定
+                    if _should_apply_current_order_plan(source, intent):
                         _ADD_EXPLICIT_KEYWORDS = ("追加", "増やし", "追加で", "追加して")
                         _is_add_mode = any(kw in message for kw in _ADD_EXPLICIT_KEYWORDS)
                         add_plan = _classify_additional_order(
@@ -1769,7 +1769,7 @@ class OrderOrchestrator:
                 f"まず {lookup_instruction}"
                 f"次にドラフトに回答を反映し、更新後のJSON形式で注文ドラフトを返してください。"
             )
-        elif source == OrderSource.LINE and current_order:
+        elif current_order and _should_apply_current_order_plan(source, intent):
             intake_mode = "現在注文更新"
             intake_prompt = (
                 "この顧客には現在注文があります。新規注文ではなく、原則として現在注文への追加・変更・取消として解釈してください。\n"
@@ -2045,8 +2045,8 @@ class OrderOrchestrator:
                         save_remarks = "; ".join(anomaly_eval["remarks_lines"])
                         debug_log.append(f"[保存] 数量警告あり: {save_remarks}")
 
-                    # LINE: 追加注文パターン判定（new/add/confirm_overlap）
-                    if source == OrderSource.LINE:
+                    # 既存注文がある場合の追加/差し替え判定
+                    if _should_apply_current_order_plan(source, intent):
                         _ADD_EXPLICIT_KEYWORDS = ("追加", "増やし", "追加で", "追加して")
                         _is_add_mode = any(kw in message for kw in _ADD_EXPLICIT_KEYWORDS)
                         add_plan = _classify_additional_order(
@@ -3906,25 +3906,26 @@ def _classify_additional_order(
             use_existing_order=False,
         )
 
-    # パターンA: 配送日が違う
-    draft_delivery = draft.get("delivery_date")
-    if draft_delivery is not None:
-        from datetime import date as _date
+    # パターンA: 配送日が違う。明示的な変更モードでは、後段の配送日推定で入った日付差だけで新規扱いにしない。
+    if not is_modify_mode:
+        draft_delivery = draft.get("delivery_date")
+        if draft_delivery is not None:
+            from datetime import date as _date
 
-        if isinstance(draft_delivery, str):
-            try:
-                draft_delivery = _date.fromisoformat(draft_delivery)
-            except ValueError:
-                draft_delivery = None
-    current_delivery = current_order.delivery_date
-    if draft_delivery is not None and current_delivery is not None and draft_delivery != current_delivery:
-        return _AdditionalOrderPlan(
-            mode="new",
-            merged_items=new_items,
-            added_items=new_items,
-            overlap_items=[],
-            use_existing_order=False,
-        )
+            if isinstance(draft_delivery, str):
+                try:
+                    draft_delivery = _date.fromisoformat(draft_delivery)
+                except ValueError:
+                    draft_delivery = None
+        current_delivery = current_order.delivery_date
+        if draft_delivery is not None and current_delivery is not None and draft_delivery != current_delivery:
+            return _AdditionalOrderPlan(
+                mode="new",
+                merged_items=new_items,
+                added_items=new_items,
+                overlap_items=[],
+                use_existing_order=False,
+            )
 
     # 同配送日: product_id で被りチェック
     existing_by_pid: dict[str, dict] = {}
@@ -4044,3 +4045,9 @@ def _classify_additional_order(
         overlap_items=overlap_items,
         use_existing_order=True,
     )
+
+
+def _should_apply_current_order_plan(source: OrderSource, intent: OrderIntent | None) -> bool:
+    if source == OrderSource.LINE:
+        return True
+    return source in {OrderSource.PHONE, OrderSource.EMAIL} and intent == OrderIntent.MODIFY_CURRENT_ORDER
