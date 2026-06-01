@@ -282,6 +282,58 @@ class TestOrderMessages:
         assert result["session_id"] == "sess-1"
         assert [message["id"] for message in result["messages"]] == ["hist-user"]
 
+    @pytest.mark.asyncio
+    async def test_get_order_messages_includes_related_sessions(self):
+        from src.api.main import get_order_messages
+
+        order = Order(
+            uid="ORD-001",
+            tenant_id="T-001",
+            order_date=date(2026, 5, 18),
+            customer_id="C-001",
+            customer_name="ビストロ青葉",
+            source=OrderSource.PHONE,
+            session_id="sess-original",
+            related_session_ids=["sess-change"],
+        )
+        original_message = MessageHistory(
+            id="hist-original",
+            tenant_id="T-001",
+            session_id="sess-original",
+            channel="phone",
+            channel_user_id="+81312345678",
+            role="user",
+            text="りんご10箱",
+            created_at=datetime(2026, 5, 18, 9, 0),
+        )
+        change_message = MessageHistory(
+            id="hist-change",
+            tenant_id="T-001",
+            session_id="sess-change",
+            channel="phone",
+            channel_user_id="+81312345678",
+            role="user",
+            text="りんごを5箱に変更",
+            created_at=datetime(2026, 5, 18, 10, 0),
+        )
+
+        order_repo = MagicMock()
+        order_repo.find_by_id = AsyncMock(return_value=order)
+        history_repo = MagicMock()
+        history_repo.list_by_session_id = AsyncMock(side_effect=[[original_message], [change_message]])
+        tenant_ctx = MagicMock()
+        tenant_ctx.get_connector.side_effect = {
+            "IOrderRepository": order_repo,
+            "IMessageHistoryRepository": history_repo,
+        }.__getitem__
+
+        with patch("src.api.main.resolve_tenant_by_id", return_value=tenant_ctx):
+            result = await get_order_messages("ORD-001", tenant_id="T-001")
+
+        assert history_repo.list_by_session_id.await_args_list[0].args == ("T-001", "sess-original")
+        assert history_repo.list_by_session_id.await_args_list[1].args == ("T-001", "sess-change")
+        assert [message["id"] for message in result["messages"]] == ["hist-original", "hist-change"]
+
 
 class TestUpdateOrderStatus:
     """PUT /api/orders/{order_id}/status の動作テスト."""

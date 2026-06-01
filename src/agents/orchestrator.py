@@ -66,6 +66,17 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "_templates"
 _email_config_cache: dict | None = None
 
 
+def _link_order_session(order: Order, session_id: str | None) -> None:
+    if not session_id:
+        return
+    if not order.session_id:
+        order.session_id = session_id
+        return
+    if order.session_id == session_id or session_id in order.related_session_ids:
+        return
+    order.related_session_ids.append(session_id)
+
+
 def _load_template(name: str) -> Template:
     path = _TEMPLATES_DIR / name
     return Template(path.read_text(encoding="utf-8"))
@@ -2591,7 +2602,7 @@ class OrderOrchestrator:
             order.delivery_time_slot = draft.get("delivery_time_slot") or order.delivery_time_slot
             order.status = status
             order.remarks = remarks if remarks is not None else order.remarks
-            order.session_id = session_id or order.session_id
+            _link_order_session(order, session_id)
         else:
             order = Order(
                 uid="",

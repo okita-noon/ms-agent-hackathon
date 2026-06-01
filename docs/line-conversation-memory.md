@@ -70,6 +70,7 @@ LINE Webhook
   → assistant reply を message-history に保存
   → awaiting_reply の場合 pending_order_draft / pending_action_type を session に保存
   → 確定更新の場合 current_order_snapshot を更新
+       - 別セッションから既存受注を変更した場合は Order.related_session_ids に変更時セッションを追加
   → 確定注文の場合 session を completed に更新
 ```
 
@@ -94,6 +95,10 @@ Cosmos DB `orders.message-history`:
 ```
 
 TTL は初期値30日。長期記憶は会話全文ではなく、確定注文と Learning Service の発注パターンに集約する。
+
+既存受注を後続の電話・LINE・メール会話で変更した場合、受注の主 `session_id` は元の注文会話を指したままにし、
+変更時のセッションは `Order.related_session_ids` に追加する。受注詳細の会話履歴 API は主セッションと関連セッションを
+まとめて取得し、`created_at` の時系列で並べるため、変更前・変更後のログを同じ受注上で確認できる。
 
 `order-sessions` には、確認待ちだけでなく現在注文の参照情報も保持する。
 
