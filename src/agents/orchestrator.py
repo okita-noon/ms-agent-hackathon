@@ -4088,9 +4088,9 @@ def _should_confirm_pending_on_current_order(
 ) -> bool:
     if not current_order_editable:
         return False
+    if source == OrderSource.LINE:
+        return True
     if pending_order_draft.get("pending_kind") == "overlap_merge":
         return True
     pending_action_type = pending_order_draft.get("pending_action_type")
-    if pending_action_type:
-        return pending_action_type == "update"
-    return source == OrderSource.LINE
+    return pending_action_type == "update"
