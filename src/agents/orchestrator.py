@@ -546,7 +546,11 @@ class OrderOrchestrator:
                 return result
         if pending_order_draft and _affirmative:
             # overlap_merge の「はい」→ existing_order に合算済みitemsで更新
-            _existing_for_affirm = current_order if (source == OrderSource.LINE and current_order_editable) else None
+            _existing_for_affirm = (
+                current_order
+                if _should_confirm_pending_on_current_order(source, pending_order_draft, current_order_editable)
+                else None
+            )
             saved_order = await self.create_order_from_draft(
                 pending_order_draft,
                 source=source,
@@ -734,8 +738,7 @@ class OrderOrchestrator:
                 intent=intent_result.intent,
                 shortage_review_order_id=shortage_review_order_id,
             )
-        if source == OrderSource.LINE:
-            agent_result.setdefault("pending_action_type", line_action_type)
+        agent_result.setdefault("pending_action_type", line_action_type)
         agent_debug = agent_result.pop("debug_log", [])
         debug_log.extend(agent_debug)
         result.update(agent_result)
@@ -1417,7 +1420,9 @@ class OrderOrchestrator:
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=current_order
+                        if _should_update_current_order(source, intent, current_order)
+                        else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
@@ -1443,7 +1448,9 @@ class OrderOrchestrator:
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=current_order
+                        if _should_update_current_order(source, intent, current_order)
+                        else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"一部在庫不足: {shortage_remarks}" if shortage_remarks else "一部在庫不足のため要対応",
                     )
@@ -1697,6 +1704,11 @@ class OrderOrchestrator:
             debug_log.append("[セッション] 確認待ち → awaiting_reply")
             result["session_status"] = "awaiting_reply"
             draft = _build_draft_from_intake(intake_draft)
+            if draft:
+                draft["pending_action_type"] = _line_action_type_from_intent(
+                    intent or OrderIntent.NEW_ORDER,
+                    current_order=current_order,
+                )
             if has_partial_stock and draft:
                 draft["inventory_checked"] = checked_items
             result["pending_order_draft"] = draft
@@ -1975,7 +1987,9 @@ class OrderOrchestrator:
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=current_order
+                        if _should_update_current_order(source, intent, current_order)
+                        else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"在庫切れ: {shortage_remarks}" if shortage_remarks else "在庫切れのため受付不可",
                     )
@@ -2001,7 +2015,9 @@ class OrderOrchestrator:
                         draft,
                         source=source,
                         session_id=session_id,
-                        existing_order=current_order if source == OrderSource.LINE and current_order else None,
+                        existing_order=current_order
+                        if _should_update_current_order(source, intent, current_order)
+                        else None,
                         status=OrderStatus.NEEDS_REVIEW,
                         remarks=f"一部在庫不足: {shortage_remarks}" if shortage_remarks else "一部在庫不足のため要対応",
                     )
@@ -2246,6 +2262,11 @@ class OrderOrchestrator:
             debug_log.append("[セッション] 確認待ち → awaiting_reply")
             result["session_status"] = "awaiting_reply"
             draft = _build_draft_from_intake(intake_draft)
+            if draft:
+                draft["pending_action_type"] = _line_action_type_from_intent(
+                    intent or OrderIntent.NEW_ORDER,
+                    current_order=current_order,
+                )
             if has_partial_stock and draft:
                 draft["inventory_checked"] = checked_items
             result["pending_order_draft"] = draft
@@ -2369,8 +2390,7 @@ class OrderOrchestrator:
             current_order = await repo.find_by_id(self._ctx.tenant_id, session.current_order_id)
         if not current_order and inbound.customer_id:
             orders = await repo.list_by_customer(inbound.customer_id, limit=10)
-            open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
-            candidates = [o for o in orders if o.status in open_statuses]
+            candidates = [o for o in orders if o.status == OrderStatus.ACCEPTED]
             if candidates:
 
                 def _safe_updated_at(o: Order) -> datetime:
@@ -4051,3 +4071,26 @@ def _should_apply_current_order_plan(source: OrderSource, intent: OrderIntent | 
     if source == OrderSource.LINE:
         return True
     return source in {OrderSource.PHONE, OrderSource.EMAIL} and intent == OrderIntent.MODIFY_CURRENT_ORDER
+
+
+def _should_update_current_order(
+    source: OrderSource,
+    intent: OrderIntent | None,
+    current_order: Order | None,
+) -> bool:
+    return bool(current_order and _should_apply_current_order_plan(source, intent))
+
+
+def _should_confirm_pending_on_current_order(
+    source: OrderSource,
+    pending_order_draft: dict,
+    current_order_editable: bool,
+) -> bool:
+    if not current_order_editable:
+        return False
+    if pending_order_draft.get("pending_kind") == "overlap_merge":
+        return True
+    pending_action_type = pending_order_draft.get("pending_action_type")
+    if pending_action_type:
+        return pending_action_type == "update"
+    return source == OrderSource.LINE

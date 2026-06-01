@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
 from src.services.phone_handler import (
     GOODBYE_MESSAGE,
     GREETING_MESSAGE,
@@ -12,6 +14,7 @@ from src.services.phone_handler import (
     RETRY_MESSAGE,
     CallState,
     PhoneCallHandler,
+    _pick_current_order,
 )
 
 
@@ -96,10 +99,59 @@ def _register_call_state(handler: PhoneCallHandler, mock_tenant_ctx, conn_id: st
     return state
 
 
+def _make_order(
+    uid: str,
+    *,
+    status: OrderStatus,
+    updated_at: datetime | None = None,
+) -> Order:
+    return Order(
+        uid=uid,
+        tenant_id="T-TEST",
+        customer_id="C-001",
+        customer_name="ビストロ青葉",
+        order_date=date.today(),
+        source=OrderSource.PHONE,
+        status=status,
+        updated_at=updated_at or datetime.now(timezone.utc),
+        items=[
+            OrderItem(
+                product_id="P-001",
+                product_name="りんご",
+                quantity=10,
+                unit="箱",
+                temperature_zone=TemperatureZone.CHILLED,
+            )
+        ],
+    )
+
+
 def _mock_orchestrator_result(**overrides) -> dict:
     base = {"response": "テスト応答", "order_id": None, "order_saved": False}
     base.update(overrides)
     return base
+
+
+class TestPickCurrentOrder:
+    def test_skips_shipping_orders_so_changes_do_not_lock_on_processed_order(self):
+        shipping_order = _make_order("ORD-SHIPPING", status=OrderStatus.SHIPPING)
+
+        assert _pick_current_order([shipping_order]) is None
+
+    def test_prefers_accepted_order_over_newer_shipping_order(self):
+        now = datetime.now(timezone.utc)
+        accepted_order = _make_order(
+            "ORD-ACCEPTED",
+            status=OrderStatus.ACCEPTED,
+            updated_at=now - timedelta(minutes=30),
+        )
+        shipping_order = _make_order(
+            "ORD-SHIPPING",
+            status=OrderStatus.SHIPPING,
+            updated_at=now,
+        )
+
+        assert _pick_current_order([shipping_order, accepted_order]).id == "ORD-ACCEPTED"
 
 
 class TestHandleIncomingCall:
