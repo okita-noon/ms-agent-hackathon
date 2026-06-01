@@ -200,9 +200,9 @@ export default function WebPhone() {
       ]);
 
       if (res.order_id) {
-        addSystemTurn(`受注確定 — 受注ID: ${res.order_id}`);
+        addSystemTurn("受注確定");
       } else if (res.review_order_id) {
-        addSystemTurn(`要対応 — 受注ID: ${res.review_order_id}`);
+        addSystemTurn("要対応");
       }
 
       setPhase("connected");
