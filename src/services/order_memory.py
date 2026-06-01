@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
-from datetime import date
+from datetime import datetime, timezone
 from typing import Any
 
 from src.connectors.context import TenantContext
@@ -31,16 +31,13 @@ class OrderMemoryService:
     async def resolve_previous_order(self, customer_id: str) -> dict[str, Any] | None:
         repo = self._ctx.get_connector("IOrderRepository")
         orders = await repo.list_by_customer(customer_id, limit=10)
+        # 「前と同じ」= 直前に確定した注文。配送日ではなく作成時刻で最新を選ぶ。
         candidates = [
-            order
-            for order in orders
-            if order.status in {OrderStatus.ACCEPTED, OrderStatus.COMPLETED}
-            and order.items
-            and (order.delivery_date is None or order.delivery_date <= today_jst())
+            order for order in orders if order.status in {OrderStatus.ACCEPTED, OrderStatus.COMPLETED} and order.items
         ]
         if not candidates:
             return None
-        order = sorted(candidates, key=_order_sort_key, reverse=True)[0]
+        order = sorted(candidates, key=_order_created_at_key, reverse=True)[0]
         return _draft_from_order(order)
 
     async def _draft_from_pattern(self, customer_id: str, pattern: OrderPattern) -> dict[str, Any]:
@@ -92,5 +89,11 @@ def _normalize_expression(expr: str) -> str:
     return expr.replace(" ", "").replace("　", "")
 
 
-def _order_sort_key(order: Order) -> tuple[date, str]:
-    return (order.delivery_date or order.order_date, order.updated_at.isoformat())
+def _order_created_at_key(order: Order) -> datetime:
+    """作成時刻をソート用に正規化（naive は UTC とみなして aware に揃える）。"""
+    dt = order.created_at
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt

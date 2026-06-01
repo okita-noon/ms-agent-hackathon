@@ -1,6 +1,6 @@
 """
 Created: 2026-05-17
-Updated: 2026-05-25 09:39
+Updated: 2026-06-01 19:34
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 
 import httpx
@@ -307,7 +307,7 @@ class EmailIngestionService:
         if isinstance(received_at_raw, str):
             received_at = datetime.fromisoformat(received_at_raw.replace("Z", "+00:00"))
         else:
-            received_at = datetime.utcnow()
+            received_at = datetime.now(timezone.utc)
 
         return InboundMessage(
             tenant_id=tenant_id,
@@ -398,7 +398,7 @@ class EmailIngestionService:
 
         if session:
             session.last_external_message_id = inbound.external_message_id
-            session.last_message_at = datetime.utcnow()
+            session.last_message_at = datetime.now(timezone.utc)
             if inbound.customer_id and not session.customer_id:
                 session.customer_id = inbound.customer_id
             if inbound.conversation_id and not session.conversation_id:
@@ -406,7 +406,7 @@ class EmailIngestionService:
             await session_repo.update_session(session)
         else:
             session = OrderSession(
-                id=f"email-{self._ctx.tenant_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                id=f"email-{self._ctx.tenant_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                 tenant_id=self._ctx.tenant_id,
                 channel="email",
                 channel_user_id=inbound.channel_user_id,
@@ -414,7 +414,7 @@ class EmailIngestionService:
                 conversation_id=inbound.conversation_id,
                 last_external_message_id=inbound.external_message_id,
                 status="active",
-                expires_at=datetime.utcnow() + timedelta(hours=EMAIL_SESSION_TIMEOUT_HOURS),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=EMAIL_SESSION_TIMEOUT_HOURS),
             )
             session = await session_repo.create_session(session)
 
@@ -472,13 +472,13 @@ class EmailIngestionService:
             if order and order.session_id and order.session_id != session.id:
                 if session.id not in (order.related_session_ids or []):
                     order.related_session_ids = list(order.related_session_ids or []) + [session.id]
-                    order.updated_at = datetime.utcnow()
+                    order.updated_at = datetime.now(timezone.utc)
                     await order_repo.save(order)
 
         if result.get("session_status") == "awaiting_reply":
             session.status = "awaiting_reply"
             session.pending_order_draft = result.get("pending_order_draft") or session.pending_order_draft
-            session.expires_at = datetime.utcnow() + timedelta(hours=EMAIL_SESSION_TIMEOUT_HOURS)
+            session.expires_at = datetime.now(timezone.utc) + timedelta(hours=EMAIL_SESSION_TIMEOUT_HOURS)
             await session_repo.update_session(session)
         elif order_id:
             session.status = "completed"

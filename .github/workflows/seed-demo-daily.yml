@@ -20,8 +20,7 @@ on:
           - 'true'
 
 env:
-  COSMOS_ACCOUNT: cosmos-orderai-dev2
-  RESOURCE_GROUP: rg-orderai-dev2
+  KEY_VAULT: kv-orderai-dev2
 
 jobs:
   seed:
@@ -43,14 +42,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get Cosmos DB connection string
+      - name: Get Cosmos DB connection string from Key Vault
         run: |
-          CONN=$(az cosmosdb keys list \
-            --name ${{ env.COSMOS_ACCOUNT }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --type connection-strings \
-            --query "connectionStrings[?description=='Primary SQL Connection String'].connectionString" \
-            -o tsv)
+          CONN=$(az keyvault secret show \
+            --vault-name ${{ env.KEY_VAULT }} \
+            --name cosmos-connection-string \
+            --query value -o tsv)
+          if [ -z "$CONN" ]; then
+            echo "::error::Failed to retrieve cosmos-connection-string from Key Vault"
+            exit 1
+          fi
           echo "COSMOS_CONNECTION_STRING=$CONN" >> "$GITHUB_ENV"
 
       - name: Seed demo orders

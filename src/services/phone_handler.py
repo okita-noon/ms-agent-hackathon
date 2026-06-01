@@ -598,8 +598,18 @@ class PhoneCallHandler:
             return await session_repo.create_session(session)
 
 
+def _order_updated_at_key(order: Order) -> datetime:
+    """updated_at をソート用に正規化（naive は UTC とみなして aware に揃える）。"""
+    dt = order.updated_at
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _pick_current_order(orders: list[Order]) -> Order | None:
     candidates = [order for order in orders if order.status == OrderStatus.ACCEPTED]
     if not candidates:
         return None
-    return sorted(candidates, key=lambda order: order.updated_at, reverse=True)[0]
+    return sorted(candidates, key=_order_updated_at_key, reverse=True)[0]
