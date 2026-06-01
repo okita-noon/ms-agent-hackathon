@@ -18,17 +18,25 @@ class CosmosSessionRepository:
     def _container(self) -> ContainerProxy:
         return self._db.get_container_client("order-sessions")
 
+    @staticmethod
+    def _active_session_clause() -> str:
+        return (
+            "AND c.status IN ('active', 'awaiting_reply') "
+            "AND (NOT IS_DEFINED(c.expires_at) OR IS_NULL(c.expires_at) OR c.expires_at > @now) "
+        )
+
     async def find_active_session(self, tenant_id: str, channel: str, channel_user_id: str) -> OrderSession | None:
         query = (
             "SELECT * FROM c WHERE c.tenant_id = @tid "
             "AND c.channel = @ch AND c.channel_user_id = @uid "
-            "AND c.status IN ('active', 'awaiting_reply') "
+            f"{self._active_session_clause()}"
             "ORDER BY c.created_at DESC OFFSET 0 LIMIT 1"
         )
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@ch", "value": channel},
             {"name": "@uid", "value": channel_user_id},
+            {"name": "@now", "value": datetime.now(timezone.utc).isoformat()},
         ]
         items = self._container.query_items(query, parameters=params)
         async for doc in items:
@@ -39,12 +47,13 @@ class CosmosSessionRepository:
         query = (
             "SELECT * FROM c WHERE c.tenant_id = @tid "
             "AND c.conversation_id = @cid "
-            "AND c.status IN ('active', 'awaiting_reply') "
+            f"{self._active_session_clause()}"
             "ORDER BY c.created_at DESC OFFSET 0 LIMIT 1"
         )
         params = [
             {"name": "@tid", "value": tenant_id},
             {"name": "@cid", "value": conversation_id},
+            {"name": "@now", "value": datetime.now(timezone.utc).isoformat()},
         ]
         items = self._container.query_items(query, parameters=params)
         async for doc in items:
