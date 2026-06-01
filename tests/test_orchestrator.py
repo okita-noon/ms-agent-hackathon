@@ -797,6 +797,196 @@ class TestPhoneOrderUnified:
         assert "ORD-PREV" not in result["response"]
         assert "受注No" not in result["response"]
 
+    @pytest.mark.asyncio
+    async def test_phone_modify_current_order_replaces_quantity_instead_of_creating_new_order(
+        self, mock_tenant_ctx, sample_product
+    ):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        current_order = _make_current_order()
+        current_order.id = "ORD-E35B0ECE"
+        current_order.items[0].quantity = 10
+
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = sample_product
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=100,
+            unit="箱",
+            is_sufficient=True,
+        )
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-E35B0ECE")
+        store = mock_tenant_ctx.get_connector("IOrderIntelligenceStore")
+        store.get_customer_profile.return_value = None
+        captured = []
+
+        async def capture(text):
+            captured.append(text)
+
+        intake_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.side_effect = [
+                (json.dumps(intake_draft, ensure_ascii=False), 0.5),
+                (json.dumps({"confirmation_needed": False}, ensure_ascii=False), 0.2),
+                ("りんごを5箱に変更しました。", 0.2),
+            ]
+            result = await orch.process_order_message(
+                message="りんごを5箱に変更してください",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+                response_callback=capture,
+                known_customer_id="C-001",
+                known_customer_name="テスト社",
+                current_order=current_order,
+            )
+
+        saved_order = order_repo.save.call_args.args[0]
+        assert saved_order.id == "ORD-E35B0ECE"
+        assert saved_order.items[0].product_name == "りんご"
+        assert saved_order.items[0].quantity == 5
+        assert result["order_id"] == "ORD-E35B0ECE"
+        assert result["current_order_id"] == "ORD-E35B0ECE"
+        inventory.release.assert_awaited_once_with("T-TEST", "P-001", 5)
+        inventory.reserve.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_email_modify_current_order_replaces_quantity_instead_of_creating_new_order(
+        self, mock_tenant_ctx, sample_product
+    ):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        current_order = _make_current_order()
+        current_order.id = "ORD-E35B0ECE"
+        current_order.items[0].quantity = 10
+
+        product_master = mock_tenant_ctx.get_connector("IProductMaster")
+        product_master.fuzzy_match.return_value = sample_product
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        inventory.check.return_value = InventoryStatus(
+            product_id="P-001",
+            product_name="りんご",
+            available_qty=100,
+            unit="箱",
+            is_sufficient=True,
+        )
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-E35B0ECE")
+        store = mock_tenant_ctx.get_connector("IOrderIntelligenceStore")
+        store.get_customer_profile.return_value = None
+        captured = []
+
+        async def capture(text):
+            captured.append(text)
+
+        intake_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+            "needs_confirmation": False,
+        }
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.side_effect = [
+                (json.dumps(intake_draft, ensure_ascii=False), 0.5),
+                (json.dumps({"confirmation_needed": False}, ensure_ascii=False), 0.2),
+            ]
+            result = await orch.process_order_message(
+                message="りんごを5箱に変更してください",
+                line_user_id="buyer@example.com",
+                source=OrderSource.EMAIL,
+                response_callback=capture,
+                known_customer_id="C-001",
+                known_customer_name="テスト社",
+                current_order=current_order,
+            )
+
+        saved_order = order_repo.save.call_args.args[0]
+        assert saved_order.id == "ORD-E35B0ECE"
+        assert saved_order.items[0].product_name == "りんご"
+        assert saved_order.items[0].quantity == 5
+        assert result["order_id"] == "ORD-E35B0ECE"
+        assert result["current_order_id"] == "ORD-E35B0ECE"
+        assert captured
+        assert "受注No: ORD-E35B0ECE" in captured[0]
+        inventory.release.assert_awaited_once_with("T-TEST", "P-001", 5)
+        inventory.reserve.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_email_change_request_without_current_order_does_not_create_new_order(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        captured = []
+
+        async def capture(text):
+            captured.append(text)
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_order_message(
+                message="りんごを5箱に変更してください",
+                line_user_id="buyer@example.com",
+                source=OrderSource.EMAIL,
+                response_callback=capture,
+                known_customer_id="C-001",
+                known_customer_name="テスト社",
+                current_order=None,
+            )
+
+        order_repo.save.assert_not_called()
+        mock_invoke.assert_not_called()
+        assert "変更対象の現在注文が見当たりませんでした" in result["response"]
+        assert captured == [result["response"]]
+
+    @pytest.mark.asyncio
+    async def test_phone_change_request_for_locked_current_order_does_not_create_new_order(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        current_order = _make_current_order(status=OrderStatus.SHIPPING)
+        current_order.id = "ORD-SHIPPING"
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        captured = []
+
+        async def capture(text):
+            captured.append(text)
+
+        with patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke:
+            result = await orch.process_order_message(
+                message="りんごを5箱に変更してください",
+                line_user_id="+81312345678",
+                source=OrderSource.PHONE,
+                response_callback=capture,
+                known_customer_id="C-001",
+                known_customer_name="テスト社",
+                current_order=current_order,
+            )
+
+        order_repo.save.assert_not_called()
+        mock_invoke.assert_not_called()
+        assert "自動で変更・キャンセルできません" in result["response"]
+        assert result["current_order_id"] == "ORD-SHIPPING"
+        assert captured == [result["response"]]
+
 
 class TestKnownCustomerOrderSave:
     @pytest.mark.asyncio
