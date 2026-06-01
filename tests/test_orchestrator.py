@@ -759,6 +759,8 @@ class TestPhoneOrderUnified:
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 2.0)
         assert result.get("order_saved") is True
         assert "りんご" in result["response"]
+        assert "ORD-USUAL" not in result["response"]
+        assert "受注No" not in result["response"]
 
     @pytest.mark.asyncio
     async def test_phone_previous_order_resolves_without_llm(self, mock_tenant_ctx):
@@ -792,6 +794,8 @@ class TestPhoneOrderUnified:
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 1.0)
         assert result.get("order_saved") is True
         assert "りんご" in result["response"]
+        assert "ORD-PREV" not in result["response"]
+        assert "受注No" not in result["response"]
 
 
 class TestKnownCustomerOrderSave:
@@ -848,6 +852,8 @@ class TestKnownCustomerOrderSave:
         assert saved_order.customer_id == "C-001"
         assert saved_order.customer_name == "ビストロ青葉"
         assert result["order_id"] == "ORD-KIWI"
+        assert "ORD-KIWI" not in result["response"]
+        assert "受注No" not in result["response"]
         inventory.check.assert_awaited_once_with("T-TEST", "P-001", 10.0)
         mock_send.assert_awaited_once()
 

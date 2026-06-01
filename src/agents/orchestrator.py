@@ -101,11 +101,6 @@ def _build_email_subject(base_subject: str | None, order_id: str | None = None) 
     return subject
 
 
-def _insert_order_id(response_text: str, order_id: str) -> str:
-    """電話の返信テキスト末尾に受注Noを付与する。LINEでは使わない。"""
-    return f"{response_text}\n\n受注No: {order_id}"
-
-
 def _source_to_channel(source: OrderSource) -> str:
     """OrderSource をナレッジチャネル名に変換する。"""
     if source == OrderSource.EMAIL:
@@ -590,8 +585,6 @@ class OrderOrchestrator:
                     delivery_estimate=affirm_delivery_estimate,
                     time_slot=saved_order.delivery_time_slot,
                 )
-            elif source != OrderSource.EMAIL:
-                response_text = _insert_order_id(response_text, saved_order.id)
             result["response"] = response_text
             debug_log.append(f"[確定] ドラフト受注確定: {saved_order.id}")
             result["order_id"] = saved_order.id
@@ -924,10 +917,7 @@ class OrderOrchestrator:
                 time_slot=saved_order.delivery_time_slot,
             )
         else:
-            response_text = _insert_order_id(
-                _format_phone_inventory_response(checked_items, needs_confirmation=False),
-                saved_order.id,
-            )
+            response_text = _format_phone_inventory_response(checked_items, needs_confirmation=False)
 
         result = {
             "response": response_text,
@@ -1136,10 +1126,7 @@ class OrderOrchestrator:
                 time_slot=saved_order.delivery_time_slot,
             )
         else:
-            response_text = _insert_order_id(
-                _format_phone_inventory_response(checked_items, needs_confirmation=False),
-                saved_order.id,
-            )
+            response_text = _format_phone_inventory_response(checked_items, needs_confirmation=False)
 
         result = {
             "response": response_text,
@@ -1696,9 +1683,6 @@ class OrderOrchestrator:
                         delivery_estimate=delivery_estimate_text,
                         time_slot=saved_order.delivery_time_slot,
                     )
-            elif source == OrderSource.PHONE and saved_order:
-                debug_log.append("[応答] 電話応答に受注No挿入")
-                response_text = _insert_order_id(response_text, saved_order.id)
         result.pop("_add_plan", None)  # 未使用の場合もクリーンアップ
         debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
@@ -2248,9 +2232,6 @@ class OrderOrchestrator:
                         delivery_estimate=delivery_estimate_text,
                         time_slot=saved_order.delivery_time_slot,
                     )
-            elif source == OrderSource.PHONE and saved_order:
-                debug_log.append("[応答] 電話応答に受注No挿入")
-                response_text = _insert_order_id(response_text, saved_order.id)
         result.pop("_add_plan", None)
         debug_log.append(f"[応答] 最終応答 ({len(response_text)}文字)")
         result["response"] = response_text
