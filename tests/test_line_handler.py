@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 import time
 from unittest.mock import ANY, AsyncMock, patch
 
@@ -134,6 +134,35 @@ class TestPickCurrentOrder:
             ],
         )
         assert _pick_current_order([shipping_order]) is None
+
+    def test_sorts_when_updated_at_mixes_naive_and_aware(self):
+        # updated_at に naive と aware が混在してもクラッシュせず最新を選べること
+        def _make(uid: str, updated_at: datetime) -> Order:
+            o = Order(
+                uid=uid,
+                tenant_id="T-TEST",
+                customer_id="C-001",
+                customer_name="株式会社テスト",
+                order_date=date.today(),
+                source=OrderSource.LINE,
+                status=OrderStatus.ACCEPTED,
+                items=[
+                    OrderItem(
+                        product_id="P-001",
+                        product_name="りんご",
+                        quantity=1,
+                        unit="箱",
+                        temperature_zone=TemperatureZone.CHILLED,
+                    )
+                ],
+            )
+            o.updated_at = updated_at
+            return o
+
+        naive_old = _make("ORD-NAIVE", datetime(2026, 5, 30, 1, 0, 0))
+        aware_new = _make("ORD-AWARE", datetime(2026, 5, 31, 1, 0, 0, tzinfo=timezone.utc))
+        # naive/aware混在でも TypeError を出さず、新しい aware 側を返す
+        assert _pick_current_order([naive_old, aware_new]).id == "ORD-AWARE"
 
 
 class TestHandleWebhook:
