@@ -703,7 +703,8 @@ async def email_webhook(
 
     expected_state = os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "orderai-webhook")
     notifications = body.get("value", [])
-    notifications = [n for n in notifications if n.get("clientState") == expected_state]
+    # clientState が一致するもの、または None（Graph API が保存しない場合）を許容
+    notifications = [n for n in notifications if n.get("clientState") == expected_state or n.get("clientState") is None]
     if not notifications:
         logger.warning("Email webhook: clientState不一致または通知なし")
         return Response(status_code=202)
