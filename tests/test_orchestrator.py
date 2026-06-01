@@ -1875,6 +1875,55 @@ class TestProcessOrderMessageSendsOnce:
             assert "受注No:" not in result["response"]
 
     @pytest.mark.asyncio
+    async def test_line_affirmative_pending_keeps_existing_order_even_with_new_action_type(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock(return_value="ORD-CURRENT")
+        inventory = mock_tenant_ctx.get_connector("IInventoryService")
+        current_order = _make_current_order()
+        current_order.id = "ORD-CURRENT"
+        current_order.items[0].quantity = 10
+
+        pending_draft = {
+            "customer_id": "C-001",
+            "customer_name": "テスト社",
+            "pending_action_type": "new_order",
+            "items": [
+                {
+                    "product_id": "P-001",
+                    "product_name": "りんご",
+                    "quantity": 5,
+                    "unit": "箱",
+                    "temperature_zone": "冷蔵",
+                }
+            ],
+        }
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock) as mock_invoke,
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            mock_invoke.return_value = ("ご注文を確定しました。", 0.5)
+
+            result = await orch.process_order_message(
+                message="OK",
+                line_user_id="U123",
+                reply_token="tok",
+                source=OrderSource.LINE,
+                pending_order_draft=pending_draft,
+                current_order=current_order,
+                session_id="sess-confirm",
+            )
+
+        saved_order = order_repo.save.call_args.args[0]
+        assert saved_order.id == "ORD-CURRENT"
+        assert saved_order.items[0].quantity == 5
+        assert result["order_id"] == "ORD-CURRENT"
+        inventory.release.assert_awaited_once_with("T-TEST", "P-001", 5)
+        inventory.reserve.assert_not_awaited()
+        mock_send.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_full_cancel_updates_current_order_without_agent_call(self, mock_tenant_ctx):
         orch = _make_orchestrator(mock_tenant_ctx)
         order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
