@@ -454,11 +454,17 @@ export default function WebPhone() {
 
         {phase === "processing" && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+            <div className="max-w-[70%]">
+              <div className="text-xs text-gray-400 mb-1">{now()} · AI応答</div>
+              <div className="bg-gray-100 text-gray-700 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed" role="status">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0">AIが注文内容を確認しています...</span>
+                  <span className="flex gap-1" aria-hidden="true">
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                  </span>
+                </div>
               </div>
             </div>
           </div>
