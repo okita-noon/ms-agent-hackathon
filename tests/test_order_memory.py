@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from src.models.intelligence import OrderPattern, ResolvedItem
 from src.models.order import Order, OrderItem, OrderSource, OrderStatus, TemperatureZone
@@ -61,3 +61,44 @@ class TestOrderMemoryService:
         assert draft["customer_id"] == "C-001"
         assert draft["items"][0]["product_name"] == "りんご"
         assert draft["items"][0]["quantity"] == 2
+
+    async def test_resolve_previous_order_picks_latest_created_even_if_delivery_future(self, mock_tenant_ctx):
+        # 「前と同じ」は配送日でなく作成時刻で直前の注文を選ぶ。
+        # 古いが配送日が今日の注文(りんご200箱)より、直前に作った配送日が未来の注文(りんご3箱)を選ぶこと。
+        def _order(uid, items_qty, order_date, delivery_date, created_at):
+            return Order(
+                uid=uid,
+                tenant_id="T-TEST",
+                customer_id="C-001",
+                customer_name="ビストロ青葉",
+                order_date=order_date,
+                delivery_date=delivery_date,
+                source=OrderSource.LINE,
+                status=OrderStatus.ACCEPTED,
+                items=[
+                    OrderItem(
+                        product_id="P-001",
+                        product_name="りんご",
+                        quantity=items_qty,
+                        unit="箱",
+                        temperature_zone=TemperatureZone.CHILLED,
+                    )
+                ],
+                created_at=created_at,
+            )
+
+        repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        repo.list_by_customer.return_value = [
+            # 配送日は今日だが作成は古い（旧データ・naive datetime）
+            _order("ORD-OLD", 200, date(2026, 6, 1), date(2026, 6, 1), datetime(2026, 5, 31, 10, 0, 0)),
+            # 直前に作成（配送日は未来）
+            _order(
+                "ORD-NEW", 3, date(2026, 6, 1), date(2026, 6, 3), datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+            ),
+        ]
+
+        draft = await OrderMemoryService(mock_tenant_ctx).resolve_previous_order("C-001")
+
+        assert draft is not None
+        # 直前に作成した3箱が選ばれること（200箱ではない）
+        assert draft["items"][0]["quantity"] == 3
