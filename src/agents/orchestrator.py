@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime, timezone
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from string import Template
@@ -2391,7 +2391,16 @@ class OrderOrchestrator:
             open_statuses = {OrderStatus.ACCEPTED, OrderStatus.SHIPPING}
             candidates = [o for o in orders if o.status in open_statuses]
             if candidates:
-                current_order = sorted(candidates, key=lambda o: o.updated_at, reverse=True)[0]
+
+                def _safe_updated_at(o: Order) -> datetime:
+                    dt = o.updated_at
+                    if dt is None:
+                        return datetime.min.replace(tzinfo=timezone.utc)
+                    if dt.tzinfo is None:
+                        return dt.replace(tzinfo=timezone.utc)
+                    return dt
+
+                current_order = sorted(candidates, key=_safe_updated_at, reverse=True)[0]
         conversation_history = await self._list_recent_history(
             channel="email",
             channel_user_id=inbound.channel_user_id,
