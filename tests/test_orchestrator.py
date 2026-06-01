@@ -805,6 +805,7 @@ class TestPhoneOrderUnified:
         current_order = _make_current_order()
         current_order.id = "ORD-E35B0ECE"
         current_order.items[0].quantity = 10
+        current_order.session_id = "sess-original"
 
         product_master = mock_tenant_ctx.get_connector("IProductMaster")
         product_master.fuzzy_match.return_value = sample_product
@@ -854,12 +855,15 @@ class TestPhoneOrderUnified:
                 known_customer_id="C-001",
                 known_customer_name="テスト社",
                 current_order=current_order,
+                session_id="sess-change",
             )
 
         saved_order = order_repo.save.call_args.args[0]
         assert saved_order.id == "ORD-E35B0ECE"
         assert saved_order.items[0].product_name == "りんご"
         assert saved_order.items[0].quantity == 5
+        assert saved_order.session_id == "sess-original"
+        assert saved_order.related_session_ids == ["sess-change"]
         assert result["order_id"] == "ORD-E35B0ECE"
         assert result["current_order_id"] == "ORD-E35B0ECE"
         inventory.release.assert_awaited_once_with("T-TEST", "P-001", 5)
