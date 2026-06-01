@@ -156,7 +156,7 @@ class CosmosOrderRepository:
             doc = await self._container.read_item(order_id, partition_key=tenant_id)
             etag = doc.get("_etag")
             doc["status"] = status.value
-            doc["updated_at"] = datetime.utcnow().isoformat()
+            doc["updated_at"] = datetime.now(timezone.utc).isoformat()
             try:
                 await self._container.replace_item(
                     order_id,
