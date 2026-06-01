@@ -69,7 +69,6 @@
 - [x] LINE Tester ページ（`/line-tester`）：ブラウザ上で LINE チャネルと同じ処理パスを通せるテスト画面。アクセスコード認証・顧客選択・デバッグログ表示付き
 - [x] セルフ登録 API `POST /api/auth/register`（`REGISTRATION_ENABLED=true` + `X-Invite-Token` ヘッダ必須）
 - [x] Graph API メール Webhook の subscription 自動作成（`lifespan` でアプリ起動時に登録、`GET /api/email-webhook` でサブスクリプション検証に対応）
-- [x] Cosmos セッション検索で期限切れメール/LINE/電話セッションを再利用しないよう修正。`expires_at` を見て `active` / `awaiting_reply` を絞り込み、古い確認待ち文脈に新規注文が巻き込まれる問題を防止
 - [x] ダッシュボード SPA 配信（`/dashboard/{path}` でフロントエンド HTML を返却、Container Apps 単体でもダッシュボードにアクセス可能）
 
 ### フロントエンド
