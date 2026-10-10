@@ -1303,6 +1303,20 @@ class OrderOrchestrator:
         if await _normalize_explicit_message_items_to_master_units(self._ctx, intake_draft, message, debug_log):
             intake_text = json.dumps(intake_draft, ensure_ascii=False, default=str)
 
+        invalid_quantity_items = _find_non_positive_quantity_items(intake_draft)
+        if invalid_quantity_items:
+            response_text = _format_invalid_quantity_response(invalid_quantity_items, source=source)
+            result.update(
+                response=response_text,
+                pending_order_draft=intake_draft,
+                session_status="awaiting_reply",
+            )
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
+
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
         needs_confirmation = intake_draft.get("needs_confirmation", False)
@@ -1862,6 +1876,20 @@ class OrderOrchestrator:
             return result
         if await _normalize_explicit_message_items_to_master_units(self._ctx, intake_draft, message, debug_log):
             intake_text = json.dumps(intake_draft, ensure_ascii=False, default=str)
+
+        invalid_quantity_items = _find_non_positive_quantity_items(intake_draft)
+        if invalid_quantity_items:
+            response_text = _format_invalid_quantity_response(invalid_quantity_items, source=source)
+            result.update(
+                response=response_text,
+                pending_order_draft=intake_draft,
+                session_status="awaiting_reply",
+            )
+            if response_callback:
+                await response_callback(response_text)
+            else:
+                await self._send_line_message(response_text, reply_token, line_user_id)
+            return result
 
         items = intake_draft.get("items", [])
         customer_id = intake_draft.get("customer_id", "")
@@ -2568,6 +2596,9 @@ class OrderOrchestrator:
         remarks: str | None = None,
         existing_order: Order | None = None,
     ) -> Order:
+        if _find_non_positive_quantity_items(draft):
+            raise ValueError("Order quantities must be positive")
+
         # delivery_date が文字列で渡された場合は date に変換
         raw_delivery_date = draft.get("delivery_date")
         if isinstance(raw_delivery_date, str):
