@@ -50,6 +50,7 @@
 - [x] 配送予定日の自動確定（顧客リードタイム・締め時間・定休日・臨時休業を考慮）。幅でなく確定日を受注確定メッセージに含める（#82）
 - [x] 休眠顧客への販促営業メッセージ自動送信サービス（`src/services/dormant_customer_service.py`）。テンプレート3パターン × 変数埋め込み、LINE プッシュ・メール両チャネル対応、dry_run 可。テンプレートは `_templates/` で外部管理
 - [x] メールチャネル（Graph API Webhook）で注文メールを受信・AI処理・自動返信（`src/services/email_handler.py`）
+- [x] SMTP返信の差出人表示名を `SMTP_FALLBACK_FROM_NAME` で指定可能にした
 - [x] メール返信をビジネスメール形式に整形。テンプレート（`_templates/メール返信_*.txt`）+ 設定JSON（`_templates/メール設定.json`）で管理。署名・件名ルールを設定JSONに一元化
 - [x] 受注No をメール本文（`ご注文を承りました。（受注No: ORD-xxx）`）と件名（`Re: 件名 【受注No: ORD-xxx】`）に自動付与
 - [x] 未登録メールアドレスのデモモード（`EMAIL_DEMO_MODE=true` + `EMAIL_DEMO_CUSTOMER_ID` で切替可能。既存の未登録対応は維持）
@@ -72,6 +73,7 @@
 - [x] ダッシュボード SPA 配信（`/dashboard/{path}` でフロントエンド HTML を返却、Container Apps 単体でもダッシュボードにアクセス可能）
 
 ### フロントエンド
+- [x] 使い方ページ（`/help`）の仮文を操作説明に置き換え、ヘッダーとログイン画面のヘルプ内容に合わせた
 - [x] ダッシュボード（React + Vite + Tailwind）
   - ログイン画面（ID/パスワード + Microsoft SSO）
   - サイドバーナビゲーション（受注・在庫・顧客・電話発注）

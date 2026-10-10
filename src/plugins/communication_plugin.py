@@ -7,6 +7,7 @@ import ssl
 import threading
 import time
 from email.message import EmailMessage
+from email.utils import formataddr
 from typing import Annotated
 
 import httpx
@@ -224,6 +225,7 @@ class CommunicationPlugin:
         username = os.environ.get("SMTP_FALLBACK_USERNAME", "").strip()
         password = os.environ.get("SMTP_FALLBACK_PASSWORD", "").strip()
         from_address = os.environ.get("SMTP_FALLBACK_FROM_ADDRESS", "").strip() or self._ctx.config.email_address or ""
+        from_name = os.environ.get("SMTP_FALLBACK_FROM_NAME", "").strip()
         starttls_enabled = os.environ.get("SMTP_FALLBACK_STARTTLS", "true").strip().lower() == "true"
 
         if not host or not from_address:
@@ -231,7 +233,7 @@ class CommunicationPlugin:
 
         try:
             msg = EmailMessage()
-            msg["From"] = from_address
+            msg["From"] = formataddr((from_name, from_address)) if from_name else from_address
             msg["To"] = to_address
             msg["Subject"] = subject if subject.upper().startswith("RE:") else f"RE: {subject}"
             msg.set_content(body)

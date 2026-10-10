@@ -87,6 +87,7 @@ export default function WebPhone() {
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [interimText, setInterimText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoListen, setAutoListen] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -160,6 +161,11 @@ export default function WebPhone() {
 
   async function handleDisconnect() {
     if (!callConnectionId || loading) return;
+    setAutoListen(false);
+    if (recognizerRef.current) {
+      try { recognizerRef.current.close(); } catch { /* ignore */ }
+      recognizerRef.current = null;
+    }
     setPhase("processing");
     setError(null);
     try {
@@ -175,6 +181,7 @@ export default function WebPhone() {
   }
 
   function handleReset() {
+    setAutoListen(false);
     if (recognizerRef.current) {
       try { recognizerRef.current.close(); } catch { /* ignore */ }
       recognizerRef.current = null;
@@ -274,7 +281,9 @@ export default function WebPhone() {
 
       recognizer.recognizeOnceAsync(
         async (result: any) => {
+          if (recognizerRef.current !== recognizer) return;
           recognizerRef.current = null;
+          recognizer.close();
           setInterimText("");
 
           const text = result.text?.trim();
@@ -306,7 +315,10 @@ export default function WebPhone() {
           }
         },
         (err: string) => {
+          if (recognizerRef.current !== recognizer) return;
           recognizerRef.current = null;
+          recognizer.close();
+          setAutoListen(false);
           setInterimText("");
           setError(`音声認識エラー: ${err}`);
           setPhase("connected");
@@ -314,10 +326,31 @@ export default function WebPhone() {
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      setAutoListen(false);
       setError(`マイク初期化エラー: ${msg}`);
       setPhase("connected");
     }
   }, [phase, callConnectionId, selectedCustomerId, ensureSpeechToken, processResponse]);
+
+  useEffect(() => {
+    if (autoListen && isActive && phase === "connected" && !isSpeaking && !recognizerRef.current) {
+      void startListening();
+    }
+  }, [autoListen, isActive, phase, isSpeaking, startListening]);
+
+  function handleVoiceToggle() {
+    if (autoListen) {
+      setAutoListen(false);
+      if (recognizerRef.current) {
+        try { recognizerRef.current.close(); } catch { /* ignore */ }
+        recognizerRef.current = null;
+      }
+      setInterimText("");
+      if (phase === "listening") setPhase("connected");
+    } else {
+      setAutoListen(true);
+    }
+  }
 
 
   function handleDraftSubmit() {
@@ -489,10 +522,10 @@ export default function WebPhone() {
         ) : (
           <>
             <button
-              onClick={startListening}
-              disabled={phase !== "connected" && phase !== "listening"}
+              onClick={handleVoiceToggle}
+              disabled={!autoListen && phase !== "connected"}
               className={`flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-xl transition-all ${
-                phase === "listening"
+                autoListen
                   ? "bg-red-500 text-white scale-105 shadow-lg shadow-red-200 animate-pulse"
                   : "bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
               }`}
@@ -500,7 +533,7 @@ export default function WebPhone() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
-              {phase === "listening" ? "聞き取り中..." : "音声で注文する"}
+              {autoListen ? "聞き取りを停止" : "音声で注文する"}
             </button>
 
             <button
@@ -540,7 +573,7 @@ export default function WebPhone() {
                   }
                 }}
                 disabled={loading}
-                placeholder="例: りんご10箱お願いします"
+                placeholder="例: りんご10箱を来週金曜日に納品してください"
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
               />
               <button
@@ -555,8 +588,8 @@ export default function WebPhone() {
 
           <div className="flex flex-wrap gap-2 mb-3">
             {[
-              "りんご10箱お願いします",
-              "バナナ20kgとみかん50個",
+              "りんご10箱を来週金曜日に納品してください",
+              "バナナ20kgとみかん50個を来週金曜日に納品してください",
               "在庫確認したい",
               "キャンセルしたい",
             ].map((msg) => (

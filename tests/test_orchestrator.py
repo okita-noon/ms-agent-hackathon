@@ -27,6 +27,7 @@ from src.agents.orchestrator import (
     _is_inventory_inquiry,
     _is_negative_reply,
     _parse_order_items,
+    _requested_phone_delivery_date,
     _resolve_line_action_type,
 )
 from src.connectors.interfaces.inventory_service import InventoryStatus
@@ -197,6 +198,16 @@ class TestBuildDraftFromIntake:
 
         assert draft is not None
         assert draft["delivery_date"] == date(2026, 5, 26)
+
+
+class TestRequestedPhoneDeliveryDate:
+    def test_uses_date_only_when_caller_mentions_it(self):
+        draft = {"delivery_date": "2026-06-05"}
+        assert _requested_phone_delivery_date("りんご10箱を6月5日に納品", draft) == date(2026, 6, 5)
+        assert _requested_phone_delivery_date("りんご10箱をお願いします", draft) is None
+
+    def test_rejects_invalid_extracted_date(self):
+        assert _requested_phone_delivery_date("明日納品", {"delivery_date": "未定"}) is None
 
 
 class TestApplyKnownCustomerToIntake:
@@ -1548,6 +1559,52 @@ class TestMemoryContext:
 
 class TestProcessOrderMessageSendsOnce:
     """Verify that process_order_message sends exactly one LINE message — no more, no less."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("use_multi_agent", [False, True])
+    async def test_zero_quantity_asks_for_correction_without_saving(self, mock_tenant_ctx, use_multi_agent):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        orch._use_multi_agent = use_multi_agent
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock()
+        intake_json = json.dumps(
+            {
+                "customer_id": "C-001",
+                "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 0, "unit": "個"}],
+                "needs_confirmation": False,
+            },
+            ensure_ascii=False,
+        )
+
+        with (
+            patch.object(orch, "_invoke_agent", new_callable=AsyncMock, return_value=(intake_json, 0.1)),
+            patch.object(orch, "_send_line_message", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await orch.process_order_message(
+                message="りんご0個お願いします",
+                line_user_id="U123",
+                reply_token="tok",
+                known_customer_id="C-001",
+            )
+
+        assert "数量が0以下" in result["response"]
+        assert result["session_status"] == "awaiting_reply"
+        order_repo.save.assert_not_awaited()
+        mock_send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_create_order_from_draft_rejects_zero_quantity(self, mock_tenant_ctx):
+        orch = _make_orchestrator(mock_tenant_ctx)
+        order_repo = mock_tenant_ctx.get_connector("IOrderRepository")
+        order_repo.save = AsyncMock()
+        with pytest.raises(ValueError, match="quantities must be positive"):
+            await orch.create_order_from_draft(
+                {
+                    "customer_id": "C-001",
+                    "items": [{"product_id": "P-001", "product_name": "りんご", "quantity": 0, "unit": "個"}],
+                }
+            )
+        order_repo.save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_order_from_draft_uses_jst_business_date(self, mock_tenant_ctx):
