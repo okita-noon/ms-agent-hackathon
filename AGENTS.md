@@ -160,6 +160,7 @@ PR を作成する前に以下を**必ず**実行し、全てパスすること�
 | `SMTP_FALLBACK_USERNAME` | SMTP使用時 | SMTP 認証ユーザー名 |
 | `SMTP_FALLBACK_PASSWORD` | SMTP使用時 | SMTP 認証パスワード |
 | `SMTP_FALLBACK_FROM_ADDRESS` | 任意 | SMTP 送信元アドレス |
+| `SMTP_FALLBACK_FROM_NAME` | 任意 | SMTP 返信の差出人表示名 |
 | `SMTP_FALLBACK_STARTTLS` | 任意 | STARTTLS 使用。既定 `true` |
 
 **AI Search**

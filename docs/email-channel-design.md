@@ -104,7 +104,11 @@ Key Vault secret と Container Apps 環境変数に、以下を追加する。
 | `SMTP_FALLBACK_USERNAME` | SMTPフォールバックのユーザー名 |
 | `SMTP_FALLBACK_PASSWORD` | SMTPフォールバックのパスワード |
 | `SMTP_FALLBACK_FROM_ADDRESS` | SMTPフォールバックのFromアドレス |
+| `SMTP_FALLBACK_FROM_NAME` | SMTP送信時のFrom表示名（例: foogent 受注窓口） |
 | `SMTP_FALLBACK_STARTTLS` | SMTPフォールバックで STARTTLS を使うか |
+
+SMTP送信では `SMTP_FALLBACK_FROM_NAME` を設定すると、返信の差出人に名前とアドレスを併記する。
+Graph `sendMail` の差出人表示名は Microsoft 365 の送信元メールボックスの表示名に従うため、メールボックス側でも名前を設定する。
 | `EMAIL_POLL_INTERVAL_SECONDS` | polling 間隔。デモでは 30-60 秒程度 |
 | `EMAIL_REPLY_FROM_ADDRESS` | 表示・ルーティング用の送信元メールアドレス |
 
