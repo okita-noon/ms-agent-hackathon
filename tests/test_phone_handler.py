@@ -163,7 +163,9 @@ class TestHandleCallConnected:
 class TestHandleRecognizeCompleted:
     @pytest.mark.asyncio
     async def test_spoken_business_name_identifies_caller_without_ending_call(
-        self, mock_tenant_ctx, sample_customer,
+        self,
+        mock_tenant_ctx,
+        sample_customer,
     ):
         handler = _make_handler()
         state = _register_call_state(handler, mock_tenant_ctx)
