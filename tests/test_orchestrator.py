@@ -27,6 +27,7 @@ from src.agents.orchestrator import (
     _is_inventory_inquiry,
     _is_negative_reply,
     _parse_order_items,
+    _requested_phone_delivery_date,
     _resolve_line_action_type,
 )
 from src.connectors.interfaces.inventory_service import InventoryStatus
@@ -197,6 +198,16 @@ class TestBuildDraftFromIntake:
 
         assert draft is not None
         assert draft["delivery_date"] == date(2026, 5, 26)
+
+
+class TestRequestedPhoneDeliveryDate:
+    def test_uses_date_only_when_caller_mentions_it(self):
+        draft = {"delivery_date": "2026-06-05"}
+        assert _requested_phone_delivery_date("りんご10箱を6月5日に納品", draft) == date(2026, 6, 5)
+        assert _requested_phone_delivery_date("りんご10箱をお願いします", draft) is None
+
+    def test_rejects_invalid_extracted_date(self):
+        assert _requested_phone_delivery_date("明日納品", {"delivery_date": "未定"}) is None
 
 
 class TestApplyKnownCustomerToIntake:

@@ -162,6 +162,36 @@ class TestHandleCallConnected:
 
 class TestHandleRecognizeCompleted:
     @pytest.mark.asyncio
+    async def test_spoken_business_name_identifies_caller_without_ending_call(
+        self, mock_tenant_ctx, sample_customer,
+    ):
+        handler = _make_handler()
+        state = _register_call_state(handler, mock_tenant_ctx)
+        customer_repo = mock_tenant_ctx.get_connector("ICustomerRepository")
+        customer_repo.list_all.return_value = [sample_customer]
+        customer_repo.get_by_id.return_value = sample_customer
+        session_repo = mock_tenant_ctx.get_connector("ISessionRepository")
+        session_repo.find_active_session.return_value = None
+        session_repo.create_session.side_effect = lambda s: s
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_order_message.return_value = _mock_orchestrator_result(
+            response="青葉様、ご注文内容をお聞かせください。",
+        )
+
+        with (
+            patch("src.services.phone_handler.OrderOrchestrator", return_value=mock_orchestrator),
+            patch.object(handler, "_play_tts", new_callable=AsyncMock),
+        ):
+            result = await handler.handle_event(_make_recognize_completed_event(speech="ビストロ青葉の山田です"))
+
+        assert state.known_customer_id == "C-001"
+        assert state.order_confirmed is False
+        assert result["status"] == "processed"
+        call_kwargs = mock_orchestrator.process_order_message.call_args.kwargs
+        assert call_kwargs["known_customer_id"] == "C-001"
+        assert call_kwargs["known_customer_name"] == "ビストロ青葉"
+
+    @pytest.mark.asyncio
     async def test_processes_speech_through_unified_orchestrator(self, mock_tenant_ctx):
         handler = _make_handler()
         state = _register_call_state(handler, mock_tenant_ctx)
@@ -264,7 +294,7 @@ class TestHandleRecognizeCompleted:
 
         assert result["error"] == "agent_failed"
         mock_play.assert_called_once()
-        assert "担当者が確認" in mock_play.call_args[0][1]
+        assert "もう一度お話しください" in mock_play.call_args[0][1]
 
     @pytest.mark.asyncio
     async def test_saves_user_and_assistant_history(self, mock_tenant_ctx):
@@ -318,6 +348,10 @@ class TestHandleRecognizeCompleted:
         saved = [c.args[0] for c in history_repo.create_message.call_args_list]
         assert [m.role for m in saved] == ["user", "assistant"]
         assert saved[1].text == PHONE_SYNC_FALLBACK_MESSAGE
+        with patch.object(handler, "_start_recognize", new_callable=AsyncMock) as recognize:
+            follow_up = await handler.handle_event(_make_play_completed_event())
+        assert follow_up["status"] == "recognizing"
+        recognize.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_saves_fallback_history_on_agent_error(self, mock_tenant_ctx):
@@ -341,7 +375,11 @@ class TestHandleRecognizeCompleted:
         assert result["error"] == "agent_failed"
         saved = [c.args[0] for c in history_repo.create_message.call_args_list]
         assert [m.role for m in saved] == ["user", "assistant"]
-        assert "担当者が確認" in saved[1].text
+        assert "もう一度お話しください" in saved[1].text
+        with patch.object(handler, "_start_recognize", new_callable=AsyncMock) as recognize:
+            follow_up = await handler.handle_event(_make_play_completed_event())
+        assert follow_up["status"] == "recognizing"
+        recognize.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_retries_on_empty_speech(self, mock_tenant_ctx):

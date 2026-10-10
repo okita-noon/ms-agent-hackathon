@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -34,7 +36,7 @@ GOODBYE_MESSAGE = "ご注文ありがとうございました。失礼いたし�
 RETRY_MESSAGE = "すみません、聞き取れませんでした。もう一度お願いいたします。"
 TTS_VOICE = "ja-JP-NanamiNeural"
 PHONE_SYNC_AI_TIMEOUT_SECONDS = 20.0
-PHONE_SYNC_FALLBACK_MESSAGE = "ご注文内容を確認しています。受付は完了していますので、確認でき次第登録いたします。"
+PHONE_SYNC_FALLBACK_MESSAGE = "ご注文内容を確認できませんでした。恐れ入りますが、もう一度お話しください。"
 
 
 def _get_float_env(name: str, default: float) -> float:
@@ -272,6 +274,7 @@ class PhoneCallHandler:
         await self._save_call_message(state, "user", transcribed_text)
         conversation_history = await self._list_recent_history(state)
 
+        await self._resolve_spoken_customer(state, transcribed_text)
         known_customer_name = await self._resolve_customer_name(state)
         current_order = await self._resolve_current_order(state, session)
         if current_order:
@@ -317,7 +320,6 @@ class PhoneCallHandler:
             )
             await self._play_tts(state, PHONE_SYNC_FALLBACK_MESSAGE)
             await self._save_call_message(state, "assistant", PHONE_SYNC_FALLBACK_MESSAGE)
-            state.order_confirmed = True
             return {
                 "call_connection_id": call_connection_id,
                 "status": "phone_sync_timeout",
@@ -325,10 +327,9 @@ class PhoneCallHandler:
             }
         except Exception:
             logger.exception("Agent processing failed for call %s", call_connection_id)
-            fallback_message = "ご注文を受け付けました。担当者が確認いたします。"
+            fallback_message = "ご注文内容を確認できませんでした。恐れ入りますが、もう一度お話しください。"
             await self._play_tts(state, fallback_message)
             await self._save_call_message(state, "assistant", fallback_message)
-            state.order_confirmed = True
             return {"call_connection_id": call_connection_id, "error": "agent_failed"}
 
         order_id = result.get("order_id")
@@ -404,6 +405,28 @@ class PhoneCallHandler:
         except Exception:
             logger.warning("Failed to resolve customer name for %s", state.known_customer_id)
             return None
+
+    async def _resolve_spoken_customer(self, state: CallState, message: str) -> None:
+        """Identify an otherwise unknown caller from an unambiguous spoken business name."""
+        if state.known_customer_id or not re.search(r"です|申します", message):
+            return
+        normalized_message = re.sub(r"\s+", "", unicodedata.normalize("NFKC", message))
+        try:
+            repo = state.tenant_ctx.get_connector("ICustomerRepository")
+            customers = await repo.list_all(state.tenant_ctx.tenant_id)
+        except Exception:
+            logger.warning("Failed to resolve spoken customer for call %s", state.call_connection_id)
+            return
+        matches = {}
+        for customer in customers:
+            if not customer.active:
+                continue
+            for candidate in (customer.name, customer.short_name):
+                normalized_name = re.sub(r"\s+", "", unicodedata.normalize("NFKC", candidate or ""))
+                if len(normalized_name) >= 2 and normalized_name in normalized_message:
+                    matches[customer.id] = customer
+        if len(matches) == 1:
+            state.known_customer_id = next(iter(matches))
 
     async def _handle_recognize_failed(self, event: dict) -> dict | None:
         data = event.get("data", {})

@@ -1419,6 +1419,28 @@ class OrderOrchestrator:
             )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
             estimated_delivery_date = min_d
+            if source == OrderSource.PHONE:
+                requested_date = _requested_phone_delivery_date(message, intake_draft)
+                if requested_date and requested_date < min_d:
+                    response_text = (
+                        f"ご指定の{requested_date.month}月{requested_date.day}日はお届けできません。"
+                        f"最短の{min_d.month}月{min_d.day}日でよろしいでしょうか？"
+                    )
+                    pending_draft = _build_draft_from_intake(intake_draft)
+                    if pending_draft:
+                        pending_draft["delivery_date"] = min_d.isoformat()
+                    result.update(
+                        response=response_text,
+                        session_status="awaiting_reply",
+                        pending_order_draft=pending_draft,
+                        customer_id=customer_id,
+                    )
+                    if response_callback:
+                        await response_callback(response_text)
+                    return result
+                if requested_date:
+                    estimated_delivery_date = requested_date
+                    delivery_estimate_text = delivery_estimator.format_estimate(requested_date, requested_date)
             debug_log.append(f"[配送] 推定配送日: {delivery_estimate_text}")
         else:
             debug_log.append("[配送] 配送日推定スキップ（確認待ち or 在庫不足）")
@@ -1992,6 +2014,28 @@ class OrderOrchestrator:
             )
             delivery_estimate_text = delivery_estimator.format_estimate(min_d, max_d)
             estimated_delivery_date = min_d
+            if source == OrderSource.PHONE:
+                requested_date = _requested_phone_delivery_date(message, intake_draft)
+                if requested_date and requested_date < min_d:
+                    response_text = (
+                        f"ご指定の{requested_date.month}月{requested_date.day}日はお届けできません。"
+                        f"最短の{min_d.month}月{min_d.day}日でよろしいでしょうか？"
+                    )
+                    pending_draft = _build_draft_from_intake(intake_draft)
+                    if pending_draft:
+                        pending_draft["delivery_date"] = min_d.isoformat()
+                    result.update(
+                        response=response_text,
+                        session_status="awaiting_reply",
+                        pending_order_draft=pending_draft,
+                        customer_id=customer_id,
+                    )
+                    if response_callback:
+                        await response_callback(response_text)
+                    return result
+                if requested_date:
+                    estimated_delivery_date = requested_date
+                    delivery_estimate_text = delivery_estimator.format_estimate(requested_date, requested_date)
             debug_log.append(f"[配送] 推定配送日: {delivery_estimate_text}")
         else:
             debug_log.append("[配送] 配送日推定スキップ（確認待ち or 在庫不足）")
@@ -2923,6 +2967,27 @@ def _build_draft_from_intake(intake_draft: dict) -> dict | None:
         "delivery_carrier": intake_draft.get("delivery_carrier"),
         "delivery_time_slot": intake_draft.get("delivery_time_slot"),
     }
+
+
+_DELIVERY_DATE_EXPRESSION = re.compile(
+    r"明後日|明日|今日|本日|来週|再来週|\d{1,2}月\d{1,2}日|"
+    r"\d{4}[-/]\d{1,2}[-/]\d{1,2}|[月火水木金土日]曜(?:日)?"
+)
+
+
+def _requested_phone_delivery_date(message: str, intake_draft: dict) -> date | None:
+    """Only trust an extracted date when the caller actually mentioned a date."""
+    if not _DELIVERY_DATE_EXPRESSION.search(message):
+        return None
+    raw_date = intake_draft.get("delivery_date")
+    if isinstance(raw_date, date):
+        return raw_date
+    if isinstance(raw_date, str):
+        try:
+            return date.fromisoformat(raw_date)
+        except ValueError:
+            return None
+    return None
 
 
 def _apply_known_customer_to_intake(
